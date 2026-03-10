@@ -1,22 +1,24 @@
 -- THE Brain: Consolidation schema (Phase 3.3/3.4)
--- consolidation_runs: audit trail for nightly cron runs
--- consolidation_gaps: open questions for Chief of Staff
+-- consolidation_runs: audit trail for nightly cron runs (v2: 4 passes)
+-- consolidation_gaps: open questions for morning brief
 
 CREATE TABLE IF NOT EXISTS consolidation_runs (
-  id              TEXT PRIMARY KEY,
-  tenant_id       TEXT NOT NULL,
-  started_at      INTEGER NOT NULL,
-  completed_at    INTEGER,
-  status          TEXT NOT NULL DEFAULT 'running',
-  pass1_facts     INTEGER NOT NULL DEFAULT 0,
-  pass2_contradictions INTEGER NOT NULL DEFAULT 0,
-  pass3_bridges   INTEGER NOT NULL DEFAULT 0,
-  pass4_patterns  INTEGER NOT NULL DEFAULT 0,
-  pass5_domains   INTEGER NOT NULL DEFAULT 0,
-  pass6_gaps      INTEGER NOT NULL DEFAULT 0,
-  error_message   TEXT,
+  id                    TEXT PRIMARY KEY,
+  tenant_id             TEXT NOT NULL,
+  started_at            INTEGER NOT NULL,
+  completed_at          INTEGER,
+  status                TEXT NOT NULL DEFAULT 'running',
+  trigger               TEXT NOT NULL DEFAULT 'cron',
+  pass1_contradictions  INTEGER NOT NULL DEFAULT 0,
+  pass2_bridges         INTEGER NOT NULL DEFAULT 0,
+  pass3_patterns        INTEGER NOT NULL DEFAULT 0,
+  pass4_gaps            INTEGER NOT NULL DEFAULT 0,
+  error_message         TEXT,
   FOREIGN KEY (tenant_id) REFERENCES tenants(id)
 );
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_consolidation_runs_dedup
+  ON consolidation_runs(tenant_id, started_at / 86400000);
 
 CREATE INDEX IF NOT EXISTS idx_consolidation_runs_tenant
   ON consolidation_runs(tenant_id, started_at DESC);

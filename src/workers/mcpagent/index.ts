@@ -1,8 +1,4 @@
-// src/workers/mcpagent/index.ts
-// Hono app — route registrations only
-// LESSON: Security headers in try/finally — skip on WebSocket 101 responses
-// LESSON: Queue consumers export queue() alongside fetch() — no separate Worker needed
-
+// src/workers/mcpagent/index.ts — Hono app route registrations
 import { Hono } from 'hono'
 import { McpAgentDO } from './do/McpAgent'
 import { authMiddleware } from '../../middleware/auth'
@@ -20,6 +16,7 @@ import { handleObsidianPoll } from '../../cron/obsidian-poll'
 import { handleMorningBrief } from '../../cron/morning-brief'
 import { runPredictiveHeartbeat } from '../../cron/heartbeat'
 import { runWeeklySynthesis } from '../../cron/weekly-synthesis'
+import { runConsolidationPasses, handleNightlyConsolidation } from '../../cron/consolidation'
 import type { Env } from '../../types/env'
 import type { ActionQueueMessage } from '../../types/action'
 import type { IngestionQueueMessage } from '../../types/ingestion'
@@ -55,6 +52,25 @@ app.post('/telegram/webhook', async (c) => {
   const secret = c.req.header('X-Telegram-Bot-Api-Secret-Token')
   if (secret !== c.env.TELEGRAM_WEBHOOK_SECRET) return c.json({}, 403)
   return c.json({ ok: true }) // Phase 3.4: ack only — full /start flow Phase 5+
+})
+
+// Hindsight webhook — Law 1 exception: HMAC-SHA256 validated, not CF Access
+app.post('/hindsight/webhook', async (c) => {
+  const sig = c.req.header('X-Hindsight-Signature')
+  const body = await c.req.text()
+  const key = await crypto.subtle.importKey(
+    'raw', new TextEncoder().encode(c.env.HINDSIGHT_WEBHOOK_SECRET),
+    { name: 'HMAC', hash: 'SHA-256' }, false, ['sign'],
+  )
+  const expected = btoa(String.fromCharCode(
+    ...new Uint8Array(await crypto.subtle.sign('HMAC', key, new TextEncoder().encode(body))),
+  ))
+  if (sig !== expected) return c.json({}, 403)
+  const payload = JSON.parse(body) as { event_type?: string; bank_id?: string }
+  if (payload.event_type === 'consolidation.completed' && payload.bank_id) {
+    c.executionCtx.waitUntil(runConsolidationPasses(payload.bank_id, c.env, c.executionCtx))
+  }
+  return c.json({ ok: true })
 })
 
 // Auth on all remaining routes — Law 1: no route bypasses JWT validation
@@ -126,6 +142,7 @@ export default {
       case '0 7 * * *':     return handleMorningBrief(env, ctx)
       case '*/30 * * * *':  return runPredictiveHeartbeat(env, ctx)
       case '0 17 * * 5':    return runWeeklySynthesis(env, ctx)
+      case '0 2 * * *':     return handleNightlyConsolidation(env, ctx)
     }
   },
 }

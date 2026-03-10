@@ -421,6 +421,14 @@
   When a file exceeds 150 lines, extract helpers to a separate module file.
   Ref: Phase 3.4 — morning-brief.ts split into morning-brief.ts (93) + brief-sections.ts (91).
 
+- **Postflight Counts Trailing Newline — 149 Content Lines, Not 150.**
+  `postflight-check.ts` uses `content.split('\n').length`, which counts a trailing
+  newline as an extra line. `wc -l` counts newline-terminated lines. A file with
+  150 content lines + trailing newline reads as 151 in postflight but 150 in `wc -l`.
+  Target 149 content lines (148 lines of code + closing brace) to stay safely under
+  the 150-line postflight limit.
+  Ref: Phase 3.3 — base-agent.ts showed 150 in `wc -l` but 151 in postflight.
+
 - **Browser WebSocket Env Vars Are Separate From Pages Function Env Vars.**
   `WORKER_URL` is server-side only inside Pages Functions. Browser code cannot
   read it. If the SPA needs to open a direct WebSocket to the Worker DO, add a

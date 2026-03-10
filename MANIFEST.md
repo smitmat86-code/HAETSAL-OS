@@ -18,16 +18,21 @@ Last updated: 2026-03-10 | Session: 1.4 (pages ui + approval flow)
 
 | File | Lines | Key Exports | Status |
 |------|-------|------------|--------|
-| src\agents\base-agent.ts | 149 | — | ✅ |
+| src\agents\base-agent.ts | 147 | — | ✅ |
 | src\agents\career-coach.ts | 105 | CareerCoach | ✅ |
 | src\agents\chief-of-staff.ts | 69 | ChiefOfStaff | ✅ |
 | src\agents\helpers.ts | 49 | MODEL_CONTEXT_LIMIT, FLUSH_THRESHOLD, shouldFlush | ✅ |
 | src\agents\types.ts | 73 | EpistemicMemoryType, AgentType, AgentContext... | ✅ |
 | src\cron\brief-sections.ts | 92 | — | ✅ |
+| src\cron\consolidation.ts | 80 | — | ✅ |
 | src\cron\heartbeat.ts | 62 | — | ✅ |
-| src\cron\kek.ts | 43 | — | ✅ |
+| src\cron\kek.ts | 61 | — | ✅ |
 | src\cron\morning-brief.ts | 93 | — | ✅ |
 | src\cron\obsidian-poll.ts | 41 | — | ✅ |
+| src\cron\passes\pass1-contradiction.ts | 69 | — | ✅ |
+| src\cron\passes\pass2-bridges.ts | 81 | — | ✅ |
+| src\cron\passes\pass3-patterns.ts | 63 | — | ✅ |
+| src\cron\passes\pass4-gaps.ts | 62 | — | ✅ |
 | src\cron\weekly-synthesis.ts | 82 | — | ✅ |
 | src\middleware\audit.ts | 45 | auditMiddleware | ✅ |
 | src\middleware\auth.ts | 140 | authMiddleware | ✅ |
@@ -73,7 +78,7 @@ Last updated: 2026-03-10 | Session: 1.4 (pages ui + approval flow)
 | src\tools\retain.ts | 58 | — | ✅ |
 | src\types\action.ts | 105 | CapabilityClass, AuthorizationLevel, AUTH_LEVEL_ORDINAL... | ✅ |
 | src\types\bootstrap.ts | 76 | BootstrapStatus, BootstrapParams, InterviewDomain... | ✅ |
-| src\types\env.ts | 53 | Env | ✅ |
+| src\types\env.ts | 54 | Env | ✅ |
 | src\types\google.ts | 53 | GoogleOAuthTokens, GoogleThread, GoogleMessage... | ✅ |
 | src\types\hindsight.ts | 38 | HindsightRetainRequest, HindsightRetainResponse, HindsightRecallRequest... | ✅ |
 | src\types\ingestion.ts | 46 | IngestionSource, IngestionArtifact, SalienceResult... | ✅ |
@@ -84,7 +89,7 @@ Last updated: 2026-03-10 | Session: 1.4 (pages ui + approval flow)
 | src\workers\ingestion\consumer.ts | 91 | — | ✅ |
 | src\workers\ingestion\handlers.ts | 103 | — | ✅ |
 | src\workers\mcpagent\do\McpAgent.ts | 136 | McpAgentDO | ✅ |
-| src\workers\mcpagent\index.ts | 132 | — | ✅ |
+| src\workers\mcpagent\index.ts | 149 | — | ✅ |
 | src\workers\mcpagent\routes\actions.ts | 79 | actions | ✅ |
 | src\workers\mcpagent\routes\approval.ts | 73 | approval | ✅ |
 | src\workers\mcpagent\routes\audit.ts | 51 | audit | ✅ |

@@ -49,4 +49,5 @@ export interface Env {
   TELEGRAM_BOT_TOKEN: string   // Bot API token from BotFather
   TELEGRAM_WEBHOOK_SECRET: string // Secret token for webhook validation
   BRAVE_API_KEY: string        // Brave Search API key for news headlines
+  HINDSIGHT_WEBHOOK_SECRET: string // HMAC-SHA256 for Hindsight webhook validation
 }

@@ -386,3 +386,35 @@
 **Next:** Phase 3.3 (redesigned) or Phase 4.1
 
 ---
+
+## Session 3.3 — 2026-03-10
+
+**Spec:** Phase 3.3 — Nightly Consolidation v2
+**Built:**
+- src/cron/consolidation.ts (80 lines) — orchestrator: webhook + cron entry, dedup, 4-pass sequential
+- src/cron/passes/pass1-contradiction.ts (69 lines) — /memories/list + /history structural signal + LLM
+- src/cron/passes/pass2-bridges.ts (81 lines) — /graph structural hole detection, max 5 bridges
+- src/cron/passes/pass3-patterns.ts (63 lines) — sole procedural write path, confidence > 0.6, max 3
+- src/cron/passes/pass4-gaps.ts (62 lines) — /reflect with response_schema, D1 only, max 3
+- src/cron/kek.ts (57 lines) — added encryptWithKek/decryptWithKek (AES-256-GCM)
+- src/agents/base-agent.ts (148 lines) — mental model load via Hindsight /mental-models API
+- src/types/env.ts (54 lines) — added HINDSIGHT_WEBHOOK_SECRET
+- src/workers/mcpagent/index.ts (149 lines) — /hindsight/webhook route + 0 2 cron dispatch
+- migrations/1008_brain_consolidation.sql (38 lines) — rewritten v1→v2 (4 passes, trigger, dedup index)
+- 7 test files, 30 tests
+**Decisions:**
+- **Migration 1008 rewritten from v1 to v2:** 6-pass columns replaced with 4-pass + trigger + dedup unique index.
+- **KV key kept as `cron_kek:{tenantId}`** (not spec's `cron_kek_raw:{tenantId}`): consistency with existing 3.4 implementation.
+- **Pass 1 uses subquery for tenant_id in anomaly_signals:** Pass receives bankId (Hindsight), not tenantId — subquery from consolidation_runs resolves it.
+- **2.4 bootstrap addendum deferred:** observations_mission, mental models, webhook registration need manual 2.4 update since 2.4 is already completed.
+- **Postflight counts trailing newline:** `split('\n').length` counts +1 vs `wc -l`. Files need 149 content lines, not 150.
+**Verification:**
+- `npm test` — 242 passed (37 files, 0 failures)
+- `npm run postflight` — passed
+- `npm run manifest` — regenerated
+**Hindsight Pin:** unchanged (v0.4.16 @ 58fdac4)
+**Fixture Data:** Tests seed tenants, anomaly_signals, consolidation_runs, consolidation_gaps
+**Blockers:** 2.4 bootstrap addendum (observations_mission, mental models, webhook) needs manual update
+**Next:** Phase 4.1 or next reviewed active spec
+
+---

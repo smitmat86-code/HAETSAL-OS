@@ -1,4 +1,4 @@
-// src/agents/base-agent.ts — Abstract BaseAgent with lifecycle, doom loop, context budget, Law 3
+// src/agents/base-agent.ts — Abstract BaseAgent: lifecycle, doom loop, context budget, Law 3
 import type { Env } from '../types/env'
 import type { IngestionArtifact } from '../types/ingestion'
 import type {
@@ -13,7 +13,6 @@ import {
 } from './helpers'
 
 export { checkDoomLoop } from './helpers'
-
 export abstract class BaseAgent {
   abstract readonly domain: string
   abstract readonly agentIdentity: string
@@ -37,15 +36,19 @@ export abstract class BaseAgent {
   }
 
   protected async open(): Promise<void> {
-    const mentalModel = await recallViaService(
-      { query: `${this.domain} mental model goals context`, domain: this.domain, limit: 10 },
-      this.hindsightTenantId, this.tmk, this.env,
+    // Mental model from Hindsight API (plaintext — synthesized, no KEK needed)
+    const mmRes = await this.env.HINDSIGHT.fetch(
+      `http://hindsight/v1/default/banks/${this.hindsightTenantId}/mental-models/mental-model-${this.domain}`,
     )
+    if (mmRes.ok) {
+      const mm = await mmRes.json() as { content?: string }
+      if (mm.content) this.context.memories.push({ content: mm.content, memory_type: 'semantic' })
+    }
     const episodic = await recallViaService(
       { query: `recent events decisions ${this.domain}`, domain: this.domain, limit: 5 },
       this.hindsightTenantId, this.tmk, this.env,
     )
-    this.context.memories = [...mentalModel.results, ...episodic.results]
+    this.context.memories = [...this.context.memories, ...episodic.results]
     const pending = await this.env.D1_US.prepare(
       `SELECT id, tool_name, integration, capability_class, state, proposed_at
        FROM pending_actions WHERE tenant_id = ? AND state IN ('awaiting_approval', 'queued')
@@ -134,15 +137,10 @@ export abstract class BaseAgent {
   }
 
   protected abstract systemPrompt(): string
-  protected contextSummary(): string {
-    return this.context.memories.map(m => m.content.slice(0, 200)).join('\n')
-  }
-  protected activeDomains(): string[] {
-    return [...new Set(this.context.memories.map(m => m.memory_type))]
-  }
+  protected contextSummary(): string { return this.context.memories.map(m => m.content.slice(0, 200)).join('\n') }
+  protected activeDomains(): string[] { return [...new Set(this.context.memories.map(m => m.memory_type))] }
   private freshTrace(): ReasoningTrace {
     return { traceId: '', agentIdentity: '', domain: '', tenantId: '',
-      startedAt: Date.now(), entries: [], totalTokens: 0,
-      doomLoopWarnings: 0, contextFlushes: 0 }
+      startedAt: Date.now(), entries: [], totalTokens: 0, doomLoopWarnings: 0, contextFlushes: 0 }
   }
 }

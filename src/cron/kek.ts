@@ -33,6 +33,24 @@ export async function fetchAndValidateKek(
   )
 }
 
+export async function encryptWithKek(plaintext: string, kek: CryptoKey): Promise<string> {
+  const iv = crypto.getRandomValues(new Uint8Array(12))
+  const data = new TextEncoder().encode(plaintext)
+  const ciphertext = await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, kek, data)
+  const combined = new Uint8Array(iv.length + ciphertext.byteLength)
+  combined.set(iv)
+  combined.set(new Uint8Array(ciphertext), iv.length)
+  return btoa(String.fromCharCode(...combined))
+}
+
+export async function decryptWithKek(ciphertext: string, kek: CryptoKey): Promise<string> {
+  const combined = Uint8Array.from(atob(ciphertext), c => c.charCodeAt(0))
+  const iv = combined.slice(0, 12)
+  const data = combined.slice(12)
+  const plaintext = await crypto.subtle.decrypt({ name: 'AES-GCM', iv }, kek, data)
+  return new TextDecoder().decode(plaintext)
+}
+
 async function writeDeferredAnomaly(tenantId: string, env: Env): Promise<void> {
   await env.D1_US.prepare(
     `INSERT OR IGNORE INTO anomaly_signals

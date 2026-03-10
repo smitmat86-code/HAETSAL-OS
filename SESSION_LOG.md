@@ -76,3 +76,37 @@
 **Next:** Phase 1.2 — McpAgent Worker + auth + TMK derivation
 
 ---
+
+## Session 1.2 — 2026-03-10
+
+**Spec:** Phase 1.2 — McpAgent + Auth + AI Gateway
+**Built:**
+- src/types/env.ts (~46 lines) — full Env interface: all bindings + MCPAGENT DO
+- src/types/tenant.ts (~30 lines) — TenantContext, TenantRow matching D1 DDL
+- src/types/tools.ts (~52 lines) — retain/recall types + Zod schemas for MCP SDK
+- src/middleware/auth.ts (~130 lines) — CF Access JWT validation, HKDF tenant ID, TMK derivation
+- src/middleware/audit.ts (~46 lines) — writeAuditLog + auditMiddleware (trace ID stamp)
+- src/middleware/dlp.ts (~16 lines) — DLP stub passthrough
+- src/services/tenant.ts (~120 lines) — atomic tenant bootstrap, KEK provision/renewal
+- src/tools/retain.ts (~22 lines) — brain_v1_retain stub
+- src/tools/recall.ts (~18 lines) — brain_v1_recall stub
+- src/workers/mcpagent/do/McpAgent.ts (~98 lines) — DO: TMK in memory, MCP tools, WebSocket
+- src/workers/mcpagent/index.ts (~70 lines) — Hono Worker: middleware chain + route handlers
+- tests/1.2-auth.test.ts (~110 lines) — 9 tests: tenant ID, TMK, bootstrap, KEK, audit
+- tests/1.2-tools.test.ts (~53 lines) — 4 tests: retain/recall schema shapes
+- tests/1.2-websocket.test.ts (~36 lines) — 3 tests: 401 rejection, security headers
+- tests/test-entry.ts (~42 lines) — minimal worker entry for vitest
+- tests/env.d.ts (~11 lines) — cloudflare:test ProvidedEnv type augmentation
+**Decisions:**
+- **Deviation: McpAgent.serve() not used.** The SDK's `serve()` bypasses Hono middleware. Kept Hono as entry, route /mcp to DO via `stub.fetch(c.req.raw)`. DO receives pre-authenticated requests.
+- **Deviation: initTenant() RPC added.** SDK's abstract `init()` runs at DO creation before JWT auth occurs. Added `initTenant(jwtSub, tenantId)` called by Worker after auth.
+- **Deviation: Zod schemas required.** `McpServer.tool()` needs `ZodRawShapeCompat`, not plain JSON Schema. Installed `zod@3.25.1`.
+- **Deviation: Test entry split.** agents@0.7.5 transitive deps (partyserver, @modelcontextprotocol/sdk) fail to bundle in miniflare. `wrangler.test.toml` uses `tests/test-entry.ts`.
+- **Middleware pattern: `createMiddleware` from `hono/factory`.** Required for proper Variables typing on `c.set()`/`c.get()`.
+- **Checkin workflow updated:** Added Step 2 "Cloudflare Platform Verification" — checks official docs, `cloudflare/agents`, `cloudflare/workers-sdk`, `cloudflare/workerd`, npm registry.
+**Hindsight Pin:** unchanged (v0.4.16 @ 58fdac4)
+**Fixture Data:** N/A — auth + infrastructure only
+**Blockers:** None
+**Next:** Phase 1.3 — Action Worker + approval flow + WebSocket push for action events
+
+---

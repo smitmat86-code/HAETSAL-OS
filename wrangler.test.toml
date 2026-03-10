@@ -2,7 +2,9 @@
 # Stripped to only bindings supported by miniflare
 # Full production config is in wrangler.toml
 name = "the-brain-test"
-main = "src/workers/health/index.ts"
+# Minimal test entry — avoids agents SDK bundling issues in miniflare
+# Full McpAgent DO export is in src/workers/mcpagent/index.ts (production)
+main = "tests/test-entry.ts"
 compatibility_date = "2025-01-01"
 compatibility_flags = ["nodejs_compat"]
 
@@ -23,3 +25,5 @@ bucket_name = "brain-observability-test"
 [[kv_namespaces]]
 binding = "KV_SESSION"
 id = "test-kv-session"
+
+

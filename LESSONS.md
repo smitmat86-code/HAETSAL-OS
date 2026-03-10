@@ -360,3 +360,21 @@
   fragile. Cross-test dependency (e.g., `let tenantId` set in test 1, used
   in test 2) produces invisible failures when tests run out of order.
   Ref: Schema V2 Session 1.4, team tests restructured as self-contained.
+
+- **Containers Are Private by Platform Design, Not Config.**
+  There is no `workers_dev = false` config key for Containers. Containers
+  are *always* private — accessible only via service binding (`env.HINDSIGHT`).
+  The platform enforces this, not wrangler.toml. Don't try to add
+  `workers_dev = false` to container configs; wrangler will error on unknown keys.
+  Ref: Phase 1.2, confirmed via Cloudflare docs.
+
+- **Agents SDK (`agents/mcp`) Cannot Bundle in vitest-pool-workers.**
+  The `agents@0.7.5` SDK has complex transitive deps (partyserver,
+  @modelcontextprotocol/sdk) that fail to bundle inside Miniflare's workerd
+  runtime during tests. Solution: create a minimal `tests/test-entry.ts`
+  that reproduces the Hono middleware chain without importing `agents/mcp`,
+  and point `wrangler.test.toml` at this test entry. Production
+  `wrangler.toml` still points at the real entry with the DO export.
+  The McpAgent DO components (auth, tenant service, tools) are tested
+  individually via their imported functions.
+  Ref: Phase 1.2, `agents@0.7.5` + `@cloudflare/vitest-pool-workers`.

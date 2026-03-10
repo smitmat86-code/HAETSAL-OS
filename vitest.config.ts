@@ -15,6 +15,10 @@ export default defineWorkersConfig(async () => {
           miniflare: {
             bindings: {
               TEST_MIGRATIONS: migrations,
+              // Test secrets — NOT production values
+              CF_ACCESS_AUD: 'test-aud-brain-access',
+              CF_ACCESS_TEAM: 'test-team',
+              HMAC_SECRET: 'test-hmac-secret-not-production',
             },
             // Stub HINDSIGHT service binding — Container not running locally
             serviceBindings: {

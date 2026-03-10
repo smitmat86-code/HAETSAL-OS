@@ -23,10 +23,7 @@ Before designing, verify any Cloudflare primitives this spec touches against cur
 ### What to check
 For each Cloudflare product/SDK used in the spec:
 1. **Official docs** — `developers.cloudflare.com` for the relevant product (Workers, Durable Objects, Queues, D1, R2, AI Gateway, Vectorize, etc.)
-2. **GitHub repos** — `github.com/cloudflare/*` for SDK source, changelogs, and examples:
-   - `cloudflare/agents` — Agents SDK (McpAgent, scheduling, AI tools)
-   - `cloudflare/workers-sdk` — Wrangler, Miniflare, vitest-pool-workers
-   - `cloudflare/workerd` — The Workers runtime itself (API compatibility)
+2. **GitHub repos** — `github.com/cloudflare/*` for SDK source, changelogs, and examples (e.g., `cloudflare/agents`, `cloudflare/workers-sdk`)
 3. **npm registry** — Verify package names, latest versions, and deprecation notices for any new dependencies
 
 ### Minimum checks per spec

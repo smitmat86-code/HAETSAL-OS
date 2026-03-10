@@ -18,7 +18,17 @@ Last updated: 2026-03-10 | Session: 1.1 (infrastructure bedrock)
 
 | File | Lines | Key Exports | Status |
 |------|-------|------------|--------|
-| src\workers\health\index.ts | 70 | — | ✅ |
+| src\middleware\audit.ts | 45 | auditMiddleware | ✅ |
+| src\middleware\auth.ts | 140 | authMiddleware | ✅ |
+| src\middleware\dlp.ts | 17 | dlpMiddleware | ✅ |
+| src\services\tenant.ts | 137 | — | ✅ |
+| src\tools\recall.ts | 20 | — | ✅ |
+| src\tools\retain.ts | 22 | — | ✅ |
+| src\types\env.ts | 46 | Env | ✅ |
+| src\types\tenant.ts | 30 | TenantContext, TenantRow | ✅ |
+| src\types\tools.ts | 53 | RetainInput, RetainOutput, RecallInput... | ✅ |
+| src\workers\mcpagent\do\McpAgent.ts | 102 | McpAgentDO | ✅ |
+| src\workers\mcpagent\index.ts | 72 | — | ✅ |
 
 <!-- END AUTO-GENERATED -->
 

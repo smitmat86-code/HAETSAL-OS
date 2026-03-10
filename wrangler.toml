@@ -1,5 +1,5 @@
 name = "the-brain"
-main = "src/workers/health/index.ts"
+main = "src/workers/mcpagent/index.ts"
 compatibility_date = "2025-01-01"
 compatibility_flags = ["nodejs_compat"]
 
@@ -11,6 +11,15 @@ max_instances = 3              # Concurrent tenant requests; scale-to-zero betwe
 # NOTE: workers_dev is not a valid field on containers in wrangler v4.
 # Containers are service-binding-only by platform design — no public URL possible.
 # The spec's intent ("workers_dev = false") is enforced by the platform, not config.
+
+# ── Durable Objects ───────────────────────────────────────────────────────────
+[[durable_objects.bindings]]
+name = "MCPAGENT"
+class_name = "McpAgentDO"
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["McpAgentDO"]
 
 # ── D1 Databases (regional naming for DLS stub) ───────────────────────────────
 [[d1_databases]]

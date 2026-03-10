@@ -123,6 +123,12 @@ dataset = "BRAIN_ANALYTICS"
 binding = "BROWSER"
 # Used by Action Worker for brain_v1_act_browse (Phase 2.3)
 
+# ── Workflows ────────────────────────────────────────────────────────────────
+[[workflows]]
+name = "brain-bootstrap"
+binding = "BOOTSTRAP_WORKFLOW"
+class_name = "BootstrapWorkflow"
+
 # ── Cron Triggers (Phase 2.2 — Obsidian polling) ─────────────────────────────
 [triggers]
 crons = ["*/1 * * * *", "*/15 * * * *"]

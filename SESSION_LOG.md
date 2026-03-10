@@ -240,3 +240,36 @@
 **Next:** Phase 2.4 — Bootstrap Import
 
 ---
+
+## Session 2.4 — 2026-03-10
+
+**Spec:** Phase 2.4 — Bootstrap Import
+**Built:**
+- src/types/bootstrap.ts (75 lines) — BootstrapParams, InterviewState, INTERVIEW_DOMAINS (5 domains, 12 questions)
+- src/services/bootstrap/interview.ts (79 lines) — question flow, answer retention as semantic/user_authored
+- src/services/bootstrap/historical-import.ts (139 lines) — Gmail/Calendar/Drive batch to QUEUE_BULK, date weighting
+- src/workflows/bootstrap.ts (104 lines) — BootstrapWorkflow: 3-phase durable import via step.do()
+- src/tools/bootstrap.ts (103 lines) — MCP tools: brain_v1_bootstrap_start + brain_v1_bootstrap_interview_next
+- src/workers/ingestion/bootstrap-handlers.ts (90 lines) — QUEUE_BULK consumer handlers for bootstrap imports
+- migrations/1007_brain_bootstrap.sql (12 lines) — ALTER TABLE tenants: bootstrap_status, workflow_id, items_imported
+- src/types/env.ts (49 lines) — Added BOOTSTRAP_WORKFLOW: Workflow binding
+- src/workers/mcpagent/do/McpAgent.ts (150 lines) — bootstrap tool registration via extracted module
+- src/workers/mcpagent/index.ts (146 lines) — re-export BootstrapWorkflow
+- src/workers/ingestion/consumer.ts (90 lines) — bootstrap message type dispatch
+- src/workers/ingestion/handlers.ts (102 lines) — re-export bootstrap handlers
+- wrangler.toml (142 lines) — [[workflows]] binding: brain-bootstrap
+- tests/2.4-interview.test.ts (105 lines) — 6 tests
+- tests/2.4-import.test.ts (113 lines) — 10 tests
+**Decisions:**
+- **Bootstrap tools extracted to src/tools/bootstrap.ts:** McpAgent.ts hit 241 lines. Context-injection pattern via `BootstrapContext` interface cleanly separates DO state from tool logic.
+- **Bootstrap handlers extracted to bootstrap-handlers.ts:** handlers.ts hit 179 lines. Re-exported via handlers.ts for backward-compatible imports from consumer.ts.
+- **Functional InterviewState over class:** Serializable state object for DO SQLite persistence. Pure functions are easier to test and persist than class instances.
+- **step.do() polling for interview vs step.waitForEvent():** Polling D1 for `interview_completed_at` with retry config is simpler than coordinating external `instance.sendEvent()` calls. Interview completes in minutes.
+- **Workflow type is global:** `Workflow` type doesn't need importing — it's a global Workers type like `D1Database`.
+- **Miniflare doesn't support Workflows:** Tests exercise service functions directly. Workflow orchestration validated manually.
+**Hindsight Pin:** unchanged (v0.4.16 @ 58fdac4)
+**Fixture Data:** N/A — infrastructure only
+**Blockers:** None
+**Next:** Phase 3.1 or next build sequence phase
+
+---

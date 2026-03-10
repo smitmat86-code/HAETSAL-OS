@@ -7,7 +7,6 @@ import { retainContent } from '../../services/ingestion/retain'
 import { getGoogleToken } from '../../services/google/oauth'
 import { fetchAndExtractThread } from '../../services/google/gmail'
 import { fetchAndExtractEvent } from '../../services/google/calendar'
-
 export async function handleSmsInbound(
   tenantId: string,
   payload: Record<string, unknown>,
@@ -94,3 +93,10 @@ export async function handleObsidianNote(
     ctx,
   )
 }
+
+// Re-export bootstrap handlers from separate module (postflight line limit)
+export {
+  handleBootstrapGmailThread,
+  handleBootstrapCalendarEvent,
+  handleBootstrapDriveFile,
+} from './bootstrap-handlers'

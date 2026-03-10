@@ -38,6 +38,9 @@ export interface Env {
   // Durable Objects
   MCPAGENT: DurableObjectNamespace
 
+  // Workflows
+  BOOTSTRAP_WORKFLOW: Workflow
+
   // Secrets (from .dev.vars / CF secrets)
   CF_ACCESS_AUD: string   // CF Access audience tag
   CF_ACCESS_TEAM: string  // CF Access team domain (for JWKs URL)

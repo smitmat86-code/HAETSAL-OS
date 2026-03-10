@@ -11,6 +11,9 @@ import {
   handleGmailThread,
   handleCalendarEvent,
   handleObsidianNote,
+  handleBootstrapGmailThread,
+  handleBootstrapCalendarEvent,
+  handleBootstrapDriveFile,
 } from './handlers'
 
 /**
@@ -69,6 +72,15 @@ async function processIngestionMessage(
       break
     case 'obsidian_note':
       await handleObsidianNote(tenantId, payload, tmk, env, ctx)
+      break
+    case 'bootstrap_gmail_thread':
+      await handleBootstrapGmailThread(tenantId, payload, tmk, env, ctx)
+      break
+    case 'bootstrap_calendar_event':
+      await handleBootstrapCalendarEvent(tenantId, payload, tmk, env, ctx)
+      break
+    case 'bootstrap_drive_file':
+      await handleBootstrapDriveFile(tenantId, payload, tmk, env, ctx)
       break
     default:
       break

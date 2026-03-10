@@ -21,17 +21,27 @@ import { searchSchema, searchStub } from '../../../tools/act/search'
 import { browseSchema, browseStub } from '../../../tools/act/browse'
 import { remindSchema, remindStub } from '../../../tools/act/remind'
 import { runPlaybookSchema, runPlaybookStub } from '../../../tools/act/run-playbook'
+import type { InterviewState } from '../../../types/bootstrap'
+import { registerBootstrapTools } from '../../../tools/bootstrap'
 
 export class McpAgentDO extends BaseMcpAgent<Env> {
   private tmk: CryptoKey | null = null
   private _tenantId: string | null = null
   private wsConnections: Set<WebSocket> = new Set()
+  private interviewState: InterviewState | null = null
 
-  server = new McpServer({ name: 'the-brain', version: '2.2.0' })
+  server = new McpServer({ name: 'the-brain', version: '2.4.0' })
 
   async init() {
     this.registerMemoryTools()
     this.registerActTools()
+    registerBootstrapTools(this.server, {
+      getEnv: () => this.env,
+      getTenantId: () => this._tenantId!,
+      getTmk: () => this.tmk,
+      getInterviewState: () => this.interviewState,
+      setInterviewState: (s) => { this.interviewState = s },
+    })
   }
 
   private registerMemoryTools() {
@@ -63,8 +73,6 @@ export class McpAgentDO extends BaseMcpAgent<Env> {
     )
   }
 
-  // Register action tool stubs — each publishes to QUEUE_ACTIONS
-  // LESSON (1.2): McpServer.tool() requires ZodRawShapeCompat — pass schema.shape
   private registerActTools() {
     const doEnv = this.env
     const self = this
@@ -115,7 +123,6 @@ export class McpAgentDO extends BaseMcpAgent<Env> {
     await provisionOrRenewKek(tenant, this.tmk, this.env)
   }
 
-  // LESSON: WebSocket 101 headers are immutable in workerd
   async handleWebSocket(_request: Request): Promise<Response> {
     const [client, server] = Object.values(new WebSocketPair())
     server.accept()
@@ -133,13 +140,9 @@ export class McpAgentDO extends BaseMcpAgent<Env> {
     }
   }
 
-  // DO RPC methods for ingestion queue consumer (Phase 2.1)
-  // Returns TMK if DO is warm (tenant authenticated), null if cold
   getTmk(): CryptoKey | null {
     return this.tmk
   }
-
-  // Returns Hindsight tenant ID for this DO's tenant
   getHindsightTenantId(): string | null {
     return this._tenantId
   }

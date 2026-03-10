@@ -85,6 +85,7 @@ app.get('/ws', async (c) => {
 })
 
 export { McpAgentDO }
+export { BootstrapWorkflow } from '../../workflows/bootstrap'
 export default {
   fetch: app.fetch,
   // LESSON: Queue consumers don't require a separate Worker — export alongside fetch

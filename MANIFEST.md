@@ -28,6 +28,8 @@ Last updated: 2026-03-10 | Session: 1.1 (infrastructure bedrock)
 | src\services\action\integrations\episodic.ts | 48 | — | ✅ |
 | src\services\action\router.ts | 111 | — | ✅ |
 | src\services\action\toctou.ts | 23 | — | ✅ |
+| src\services\bootstrap\historical-import.ts | 140 | historicalSalienceMultiplier | ✅ |
+| src\services\bootstrap\interview.ts | 80 | createInitialState, currentQuestion, currentDomain... | ✅ |
 | src\services\google\calendar.ts | 62 | — | ✅ |
 | src\services\google\drive.ts | 74 | ObsidianFrontmatter, parseObsidianFrontmatter, extractWikilinks | ✅ |
 | src\services\google\gmail.ts | 84 | — | ✅ |
@@ -48,23 +50,27 @@ Last updated: 2026-03-10 | Session: 1.1 (infrastructure bedrock)
 | src\tools\act\run-playbook.ts | 32 | runPlaybookSchema | ✅ |
 | src\tools\act\search.ts | 33 | searchSchema | ✅ |
 | src\tools\act\send-message.ts | 33 | sendMessageSchema | ✅ |
+| src\tools\bootstrap.ts | 104 | registerBootstrapTools | ✅ |
 | src\tools\recall.ts | 97 | — | ✅ |
 | src\tools\retain.ts | 58 | — | ✅ |
 | src\types\action.ts | 101 | CapabilityClass, AuthorizationLevel, AUTH_LEVEL_ORDINAL... | ✅ |
-| src\types\env.ts | 47 | Env | ✅ |
+| src\types\bootstrap.ts | 76 | BootstrapStatus, BootstrapParams, InterviewDomain... | ✅ |
+| src\types\env.ts | 50 | Env | ✅ |
 | src\types\google.ts | 53 | GoogleOAuthTokens, GoogleThread, GoogleMessage... | ✅ |
 | src\types\hindsight.ts | 38 | HindsightRetainRequest, HindsightRetainResponse, HindsightRecallRequest... | ✅ |
 | src\types\ingestion.ts | 46 | IngestionSource, IngestionArtifact, SalienceResult... | ✅ |
 | src\types\tenant.ts | 30 | TenantContext, TenantRow | ✅ |
 | src\types\tools.ts | 53 | RetainInput, RetainOutput, RecallInput... | ✅ |
 | src\workers\action\index.ts | 105 | — | ✅ |
-| src\workers\ingestion\consumer.ts | 79 | — | ✅ |
-| src\workers\ingestion\handlers.ts | 97 | — | ✅ |
-| src\workers\mcpagent\do\McpAgent.ts | 147 | McpAgentDO | ✅ |
-| src\workers\mcpagent\index.ts | 145 | — | ✅ |
+| src\workers\ingestion\bootstrap-handlers.ts | 91 | — | ✅ |
+| src\workers\ingestion\consumer.ts | 91 | — | ✅ |
+| src\workers\ingestion\handlers.ts | 103 | — | ✅ |
+| src\workers\mcpagent\do\McpAgent.ts | 150 | McpAgentDO | ✅ |
+| src\workers\mcpagent\index.ts | 146 | — | ✅ |
 | src\workers\mcpagent\routes\actions.ts | 79 | actions | ✅ |
 | src\workers\mcpagent\routes\auth.ts | 45 | — | ✅ |
 | src\workers\mcpagent\routes\ingest.ts | 120 | — | ✅ |
+| src\workflows\bootstrap.ts | 105 | BootstrapWorkflow | ✅ |
 
 <!-- END AUTO-GENERATED -->
 

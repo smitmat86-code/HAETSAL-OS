@@ -22,8 +22,11 @@ Last updated: 2026-03-10 | Session: 1.1 (infrastructure bedrock)
 | src\middleware\auth.ts | 140 | authMiddleware | ✅ |
 | src\middleware\dlp.ts | 17 | dlpMiddleware | ✅ |
 | src\services\action\authorization.ts | 131 | AuthGateResult | ✅ |
-| src\services\action\executor.ts | 46 | — | ✅ |
-| src\services\action\router.ts | 110 | — | ✅ |
+| src\services\action\executor.ts | 116 | — | ✅ |
+| src\services\action\integrations\browser.ts | 39 | BrowseResult | ✅ |
+| src\services\action\integrations\calendar.ts | 101 | CalendarResult | ✅ |
+| src\services\action\integrations\episodic.ts | 48 | — | ✅ |
+| src\services\action\router.ts | 111 | — | ✅ |
 | src\services\action\toctou.ts | 23 | — | ✅ |
 | src\services\google\calendar.ts | 62 | — | ✅ |
 | src\services\google\drive.ts | 74 | ObsidianFrontmatter, parseObsidianFrontmatter, extractWikilinks | ✅ |
@@ -37,28 +40,29 @@ Last updated: 2026-03-10 | Session: 1.1 (infrastructure bedrock)
 | src\services\ingestion\write-policy.ts | 74 | WritePolicyResult | ✅ |
 | src\services\telnyx.ts | 39 | — | ✅ |
 | src\services\tenant.ts | 137 | — | ✅ |
-| src\tools\act\browse.ts | 32 | browseSchema | ✅ |
-| src\tools\act\create-event.ts | 35 | createEventSchema | ✅ |
+| src\tools\act\browse.ts | 31 | browseSchema | ✅ |
+| src\tools\act\create-event.ts | 34 | createEventSchema | ✅ |
 | src\tools\act\draft.ts | 33 | draftSchema | ✅ |
-| src\tools\act\modify-event.ts | 35 | modifyEventSchema | ✅ |
+| src\tools\act\modify-event.ts | 34 | modifyEventSchema | ✅ |
 | src\tools\act\remind.ts | 33 | remindSchema | ✅ |
 | src\tools\act\run-playbook.ts | 32 | runPlaybookSchema | ✅ |
 | src\tools\act\search.ts | 33 | searchSchema | ✅ |
 | src\tools\act\send-message.ts | 33 | sendMessageSchema | ✅ |
 | src\tools\recall.ts | 97 | — | ✅ |
 | src\tools\retain.ts | 58 | — | ✅ |
-| src\types\action.ts | 87 | CapabilityClass, AuthorizationLevel, AUTH_LEVEL_ORDINAL... | ✅ |
+| src\types\action.ts | 101 | CapabilityClass, AuthorizationLevel, AUTH_LEVEL_ORDINAL... | ✅ |
 | src\types\env.ts | 47 | Env | ✅ |
 | src\types\google.ts | 53 | GoogleOAuthTokens, GoogleThread, GoogleMessage... | ✅ |
 | src\types\hindsight.ts | 38 | HindsightRetainRequest, HindsightRetainResponse, HindsightRecallRequest... | ✅ |
 | src\types\ingestion.ts | 46 | IngestionSource, IngestionArtifact, SalienceResult... | ✅ |
 | src\types\tenant.ts | 30 | TenantContext, TenantRow | ✅ |
 | src\types\tools.ts | 53 | RetainInput, RetainOutput, RecallInput... | ✅ |
-| src\workers\action\index.ts | 91 | — | ✅ |
+| src\workers\action\index.ts | 105 | — | ✅ |
 | src\workers\ingestion\consumer.ts | 79 | — | ✅ |
 | src\workers\ingestion\handlers.ts | 97 | — | ✅ |
 | src\workers\mcpagent\do\McpAgent.ts | 147 | McpAgentDO | ✅ |
-| src\workers\mcpagent\index.ts | 141 | — | ✅ |
+| src\workers\mcpagent\index.ts | 145 | — | ✅ |
+| src\workers\mcpagent\routes\actions.ts | 79 | actions | ✅ |
 | src\workers\mcpagent\routes\auth.ts | 45 | — | ✅ |
 | src\workers\mcpagent\routes\ingest.ts | 120 | — | ✅ |
 

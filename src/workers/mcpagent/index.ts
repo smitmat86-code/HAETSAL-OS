@@ -13,6 +13,7 @@ import { auditMiddleware } from '../../middleware/audit'
 import { dlpMiddleware } from '../../middleware/dlp'
 import { ingest } from './routes/ingest'
 import { auth } from './routes/auth'
+import { actions } from './routes/actions'
 import { handleActionBatch } from '../action/index'
 import { handleIngestionBatch } from '../ingestion/consumer'
 import type { Env } from '../../types/env'
@@ -56,6 +57,9 @@ app.use('/mcp', dlpMiddleware())
 // Auth routes (Google OAuth — Phase 2.2)
 app.route('/auth', auth)
 
+// Action routes (undo — Phase 2.3)
+app.route('/actions', actions)
+
 // MCP Streamable HTTP — delegate to DO
 app.all('/mcp', async (c) => {
   const tenantId = c.get('tenantId')
@@ -92,7 +96,7 @@ export default {
     // Dispatch by queue name — actions vs ingestion
     const queueName = batch.queue
     if (queueName === 'brain-actions') {
-      await handleActionBatch(batch as MessageBatch<ActionQueueMessage>, env)
+      await handleActionBatch(batch as MessageBatch<ActionQueueMessage>, env, ctx)
     } else {
       // QUEUE_HIGH, QUEUE_NORMAL, QUEUE_BULK → ingestion consumer
       await handleIngestionBatch(

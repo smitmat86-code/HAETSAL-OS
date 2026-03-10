@@ -211,3 +211,32 @@
 **Next:** Phase 2.3 — Browser Rendering + Write Surfaces
 
 ---
+
+## Session 2.3 — 2026-03-10
+
+**Spec:** Phase 2.3 — Browser Rendering + First Write Surfaces
+**Built:**
+- src/services/action/integrations/browser.ts (36 lines) — executeBrowse via @cloudflare/puppeteer + BROWSER binding
+- src/services/action/integrations/calendar.ts (97 lines) — executeCreateEvent, executeModifyEvent, executeDeleteEvent (undo)
+- src/services/action/integrations/episodic.ts (44 lines) — writeActionEpisodicMemory via retainContent
+- src/services/action/executor.ts (113 lines) — executeAction dispatch by tool_name; stub fallback for unwired tools
+- src/services/action/router.ts (111 lines) — routeGreen now passes TMK + ctx to executeAction
+- src/workers/action/index.ts (104 lines) — TMK fetch from DO, optional ctx, no-op ExecutionContext for tests
+- src/workers/mcpagent/routes/actions.ts (76 lines) — POST /:id/undo route (5-min window, calendar delete)
+- src/workers/mcpagent/index.ts (144 lines) — mounted /actions route, ctx passed to handleActionBatch
+- src/types/action.ts (97 lines) — ActionState union type, UNDO_WINDOW_MS constant
+- tests/2.3-browse.test.ts (78 lines) — 5 tests: routing, capability class, Law 1
+- tests/2.3-calendar.test.ts (100 lines) — 6 tests: routing, state, audit records
+- tests/2.3-undo.test.ts (119 lines) — 6 tests: window check, state transitions, result_summary
+**Decisions:**
+- **TMK made nullable in executeAction:** browse (READ) doesn't need TMK for execution — only for episodic memory (non-fatal skip). Calendar tools require TMK (throw if null). This maintains backward compatibility with 1.3 tests.
+- **ctx made optional in processAction:** Existing 1.3 tests call `processAction(msg, env)` without ctx. Added noopCtx fallback with no-op waitUntil/passThroughOnException.
+- **Episodic memory extracted to integrations/episodic.ts:** executor.ts hit 157 lines (limit 150). writeActionEpisodicMemory is logically cohesive and extracted cleanly.
+- **@vitest/snapshot added as devDependency:** `@cloudflare/puppeteer` install with `--legacy-peer-deps` broke vitest module hoisting. Explicit devDependency fixes.
+- **BROWSER binding not testable in vitest-pool-workers:** Tests verify routing and state transitions, not actual browser navigation. Real browse validated manually with `wrangler dev`.
+**Hindsight Pin:** unchanged (v0.4.16 @ 58fdac4)
+**Fixture Data:** N/A — integration wiring only
+**Blockers:** None
+**Next:** Phase 2.4 — Bootstrap Import
+
+---

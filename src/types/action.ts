@@ -44,6 +44,20 @@ export interface ActionQueueMessage {
   payload_stub: string      // Phase 1 only — plaintext stub for TOCTOU test
 }
 
+// ── Action state machine ──────────────────────────────────────────────────────
+export type ActionState =
+  | 'pending'
+  | 'queued'
+  | 'awaiting_approval'
+  | 'completed'
+  | 'completed_reversible'   // 5-min undo window (Phase 2.3)
+  | 'undone'                 // Undo executed within window (Phase 2.3)
+  | 'failed'
+  | 'rejected'
+
+// Undo window duration in ms (5 minutes)
+export const UNDO_WINDOW_MS = 5 * 60 * 1000
+
 // ── D1 row shapes (column names match 1004_brain_action_layer.sql) ────────────
 export interface PendingActionRow {
   id: string
@@ -53,7 +67,7 @@ export interface PendingActionRow {
   capability_class: CapabilityClass
   integration: string
   action_type: string
-  state: string
+  state: ActionState
   authorization_level: AuthorizationLevel
   send_delay_seconds: number
   execute_after: number | null

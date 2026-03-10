@@ -1,7 +1,6 @@
 // src/tools/act/modify-event.ts
 // brain_v1_act_modify_event — WRITE_EXTERNAL_REVERSIBLE
-// Phase 1: stub — publishes to QUEUE_ACTIONS
-// Phase 2.3: wire Google Calendar API
+// Publishes to QUEUE_ACTIONS → Action Worker executes via Google Calendar API (2.3)
 
 import { z } from 'zod'
 import { hashPayload } from '../../services/action/toctou'

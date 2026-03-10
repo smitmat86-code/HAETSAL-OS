@@ -1,7 +1,6 @@
 // src/tools/act/browse.ts
 // brain_v1_act_browse — READ
-// Phase 1: stub — publishes to QUEUE_ACTIONS
-// Phase 2.3: wire Cloudflare Browser Rendering via BROWSER binding
+// Publishes to QUEUE_ACTIONS → Action Worker executes via BROWSER binding (2.3)
 
 import { z } from 'zod'
 import { hashPayload } from '../../services/action/toctou'

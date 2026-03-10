@@ -4,10 +4,11 @@
 
 import type { Env } from '../../types/env'
 import type { ActionQueueMessage } from '../../types/action'
-import { executeStub, broadcastEvent } from './executor'
+import { executeAction, broadcastEvent } from './executor'
 
 export async function routeGreen(
-  msg: ActionQueueMessage, sendDelay: number, env: Env, now: number
+  msg: ActionQueueMessage, sendDelay: number, env: Env, now: number,
+  tmk: CryptoKey | null, ctx: ExecutionContext,
 ) {
   const db = env.D1_US
   const executeAfter = sendDelay > 0 ? now + sendDelay * 1000 : null
@@ -34,8 +35,8 @@ export async function routeGreen(
     return  // Don't execute yet — Phase 1.4 picks up queued actions with execute_after
   }
 
-  // Execute immediately (stub)
-  await executeStub(msg, env, now)
+  // Execute immediately — real dispatch for wired tools, stub for rest
+  await executeAction(msg, tmk, env, ctx, now)
 }
 
 export async function routeYellow(

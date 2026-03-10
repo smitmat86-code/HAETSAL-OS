@@ -42,4 +42,5 @@ export interface Env {
   CF_ACCESS_AUD: string   // CF Access audience tag
   CF_ACCESS_TEAM: string  // CF Access team domain (for JWKs URL)
   HMAC_SECRET: string     // For action preference HMAC (Phase 1.3)
+  TELNYX_PUBLIC_KEY: string // Ed25519 public key for SMS webhook signature verification
 }

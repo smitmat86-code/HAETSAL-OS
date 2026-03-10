@@ -8,6 +8,7 @@ import { Hono } from 'hono'
 import { authMiddleware } from '../src/middleware/auth'
 import { auditMiddleware } from '../src/middleware/audit'
 import { dlpMiddleware } from '../src/middleware/dlp'
+import { ingest } from '../src/workers/mcpagent/routes/ingest'
 import type { Env } from '../src/types/env'
 
 type Variables = {
@@ -29,6 +30,9 @@ app.use('*', async (c, next) => {
     }
   }
 })
+
+// SMS ingest route — Law 1 exception: NOT behind CF Access
+app.route('/ingest', ingest)
 
 app.use('*', authMiddleware())
 app.use('*', auditMiddleware())

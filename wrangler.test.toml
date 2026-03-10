@@ -26,4 +26,15 @@ bucket_name = "brain-observability-test"
 binding = "KV_SESSION"
 id = "test-kv-session"
 
+# Queues — stubbed for ingestion pipeline tests (Phase 2.1+)
+[[queues.producers]]
+binding = "QUEUE_HIGH"
+queue = "brain-priority-high-test"
 
+[[queues.producers]]
+binding = "QUEUE_NORMAL"
+queue = "brain-priority-normal-test"
+
+[[queues.producers]]
+binding = "QUEUE_BULK"
+queue = "brain-priority-bulk-test"

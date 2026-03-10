@@ -142,3 +142,39 @@
 **Next:** Phase 1.4 — Pages UI + approval flow + settings
 
 ---
+
+## Session 2.1 — 2026-03-10
+
+**Spec:** Phase 2.1 — Queue Topology + Ingestion Foundation
+**Built:**
+- src/types/ingestion.ts (~47 lines) — IngestionArtifact, SalienceResult, RetainResult, queue message types
+- src/types/hindsight.ts (~38 lines) — HindsightRetainRequest/Response, HindsightRecallRequest/Response
+- migrations/1005_brain_ingestion.sql (~18 lines) — tenant_phone_numbers table
+- src/services/ingestion/dedup.ts (~40 lines) — SHA-256 dedup hash + D1 check
+- src/services/ingestion/salience.ts (~77 lines) — Tier 1/2/3 classification + queue routing
+- src/services/ingestion/domain.ts (~57 lines) — keyword domain inference + memory type
+- src/services/ingestion/write-policy.ts (~73 lines) — heuristic + Workers AI classifier
+- src/services/ingestion/retain.ts (~115 lines) — retainContent() single path for all memory writes
+- src/workers/mcpagent/routes/ingest.ts (~96 lines) — POST /ingest/sms (Telnyx Ed25519)
+- src/workers/mcpagent/routes/auth.ts (~12 lines) — placeholder for Phase 2.2
+- src/workers/ingestion/consumer.ts (~78 lines) — queue consumer for QUEUE_HIGH/NORMAL/BULK
+- src/workers/mcpagent/index.ts (~97 lines) — route extraction + multi-queue dispatch
+- src/workers/mcpagent/do/McpAgent.ts (~148 lines) — getTmk/getHindsightTenantId RPC + real retain
+- src/tools/retain.ts (~53 lines) — retainViaService replaces retainStub
+- src/tools/recall.ts (~15 lines) — updated TODO comment for Phase 2.2
+- tests/2.1-salience.test.ts (~80 lines) — 9 tests for tier classification + queue routing
+- tests/2.1-write-policy.test.ts (~64 lines) — 6 tests for heuristic + classifier
+- tests/2.1-retain.test.ts (~172 lines) — 14 tests for pipeline, dedup, encryption, R2 STONE
+- tests/2.1-sms.test.ts (~134 lines) — 6 tests for webhook, tenant lookup, phone uniqueness
+**Decisions:**
+- **Route extraction completed:** /ingest/* and /auth/* in separate route modules. Main index.ts mounts via Hono route groups. Prevents 2.2 restructuring.
+- **SMS route bypasses CF Access:** Mounted BEFORE auth middleware in Hono chain. Telnyx Ed25519 validation replaces JWT auth on this route.
+- **Multi-queue dispatch:** queue() handler dispatches by `batch.queue` name — actions vs ingestion.
+- **retainStub replaced:** retainViaService calls real retainContent() pipeline. Old 1.2 tests updated.
+- **Hindsight stub enhanced:** vitest config returns plausible retain/recall responses by URL path.
+**Hindsight Pin:** unchanged (v0.4.16 @ 58fdac4)
+**Fixture Data:** N/A — infrastructure only
+**Blockers:** None
+**Next:** Phase 2.2 — Gmail + Calendar Ingestion
+
+---

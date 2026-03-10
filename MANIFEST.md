@@ -25,6 +25,11 @@ Last updated: 2026-03-10 | Session: 1.1 (infrastructure bedrock)
 | src\services\action\executor.ts | 46 | — | ✅ |
 | src\services\action\router.ts | 110 | — | ✅ |
 | src\services\action\toctou.ts | 23 | — | ✅ |
+| src\services\ingestion\dedup.ts | 44 | — | ✅ |
+| src\services\ingestion\domain.ts | 63 | inferDomain, inferMemoryType | ✅ |
+| src\services\ingestion\retain.ts | 131 | — | ✅ |
+| src\services\ingestion\salience.ts | 80 | scoreSalience | ✅ |
+| src\services\ingestion\write-policy.ts | 74 | WritePolicyResult | ✅ |
 | src\services\tenant.ts | 137 | — | ✅ |
 | src\tools\act\browse.ts | 32 | browseSchema | ✅ |
 | src\tools\act\create-event.ts | 35 | createEventSchema | ✅ |
@@ -35,14 +40,19 @@ Last updated: 2026-03-10 | Session: 1.1 (infrastructure bedrock)
 | src\tools\act\search.ts | 33 | searchSchema | ✅ |
 | src\tools\act\send-message.ts | 33 | sendMessageSchema | ✅ |
 | src\tools\recall.ts | 20 | — | ✅ |
-| src\tools\retain.ts | 22 | — | ✅ |
+| src\tools\retain.ts | 58 | — | ✅ |
 | src\types\action.ts | 87 | CapabilityClass, AuthorizationLevel, AUTH_LEVEL_ORDINAL... | ✅ |
-| src\types\env.ts | 46 | Env | ✅ |
+| src\types\env.ts | 47 | Env | ✅ |
+| src\types\hindsight.ts | 38 | HindsightRetainRequest, HindsightRetainResponse, HindsightRecallRequest... | ✅ |
+| src\types\ingestion.ts | 46 | IngestionSource, IngestionArtifact, SalienceResult... | ✅ |
 | src\types\tenant.ts | 30 | TenantContext, TenantRow | ✅ |
 | src\types\tools.ts | 53 | RetainInput, RetainOutput, RecallInput... | ✅ |
 | src\workers\action\index.ts | 91 | — | ✅ |
-| src\workers\mcpagent\do\McpAgent.ts | 134 | McpAgentDO | ✅ |
-| src\workers\mcpagent\index.ts | 83 | — | ✅ |
+| src\workers\ingestion\consumer.ts | 94 | — | ✅ |
+| src\workers\mcpagent\do\McpAgent.ts | 146 | McpAgentDO | ✅ |
+| src\workers\mcpagent\index.ts | 104 | — | ✅ |
+| src\workers\mcpagent\routes\auth.ts | 15 | — | ✅ |
+| src\workers\mcpagent\routes\ingest.ts | 108 | — | ✅ |
 
 <!-- END AUTO-GENERATED -->
 

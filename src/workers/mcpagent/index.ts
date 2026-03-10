@@ -1,18 +1,23 @@
 // src/workers/mcpagent/index.ts
 // Hono app — route registrations only
-// Queue handler delegates to action worker module
+// Queue handlers for both actions and ingestion
 // Middleware order: security headers → auth → audit → dlp (MCP routes) → handler
 // LESSON: Security headers in try/finally — skip on WebSocket 101 responses
 // LESSON: Queue consumers export queue() alongside fetch() — no separate Worker needed
+// Route extraction (2.1): /ingest/* and /auth/* in separate route modules
 
 import { Hono } from 'hono'
 import { McpAgentDO } from './do/McpAgent'
 import { authMiddleware } from '../../middleware/auth'
 import { auditMiddleware } from '../../middleware/audit'
 import { dlpMiddleware } from '../../middleware/dlp'
+import { ingest } from './routes/ingest'
+import { auth } from './routes/auth'
 import { handleActionBatch } from '../action/index'
+import { handleIngestionBatch } from '../ingestion/consumer'
 import type { Env } from '../../types/env'
 import type { ActionQueueMessage } from '../../types/action'
+import type { IngestionQueueMessage } from '../../types/ingestion'
 
 type Variables = {
   tenantId: string
@@ -37,15 +42,19 @@ app.use('*', async (c, next) => {
   }
 })
 
-// Auth on all routes — Law 1: no route bypasses JWT validation
+// SMS ingest route — Law 1 exception: NOT behind CF Access
+// Telnyx webhook must reach this endpoint directly
+// Mounted BEFORE auth middleware so it bypasses JWT validation
+app.route('/ingest', ingest)
+
+// Auth on all remaining routes — Law 1: no route bypasses JWT validation
 app.use('*', authMiddleware())
-
-// Audit on all routes (stamps traceId after auth)
 app.use('*', auditMiddleware())
-
-// DLP only on MCP routes
 app.use('/mcp/*', dlpMiddleware())
 app.use('/mcp', dlpMiddleware())
+
+// Auth routes (Google OAuth — Phase 2.2)
+app.route('/auth', auth)
 
 // MCP Streamable HTTP — delegate to DO
 app.all('/mcp', async (c) => {
@@ -75,8 +84,20 @@ export { McpAgentDO }
 export default {
   fetch: app.fetch,
   // LESSON: Queue consumers don't require a separate Worker — export alongside fetch
-  async queue(batch: MessageBatch<ActionQueueMessage>, env: Env): Promise<void> {
-    await handleActionBatch(batch, env)
+  async queue(
+    batch: MessageBatch<ActionQueueMessage | IngestionQueueMessage>,
+    env: Env,
+    ctx: ExecutionContext,
+  ): Promise<void> {
+    // Dispatch by queue name — actions vs ingestion
+    const queueName = batch.queue
+    if (queueName === 'brain-actions') {
+      await handleActionBatch(batch as MessageBatch<ActionQueueMessage>, env)
+    } else {
+      // QUEUE_HIGH, QUEUE_NORMAL, QUEUE_BULK → ingestion consumer
+      await handleIngestionBatch(
+        batch as MessageBatch<IngestionQueueMessage>, env, ctx,
+      )
+    }
   },
 }
-

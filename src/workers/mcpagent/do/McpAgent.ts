@@ -11,7 +11,7 @@ import { retainSchema, recallSchema } from '../../../types/tools'
 import { deriveTmk } from '../../../middleware/auth'
 import { writeAuditLog } from '../../../middleware/audit'
 import { getOrCreateTenant, provisionOrRenewKek } from '../../../services/tenant'
-import { retainStub } from '../../../tools/retain'
+import { retainViaService } from '../../../tools/retain'
 import { recallStub } from '../../../tools/recall'
 import { sendMessageSchema, sendMessageStub } from '../../../tools/act/send-message'
 import { createEventSchema, createEventStub } from '../../../tools/act/create-event'
@@ -27,7 +27,7 @@ export class McpAgentDO extends BaseMcpAgent<Env> {
   private _tenantId: string | null = null
   private wsConnections: Set<WebSocket> = new Set()
 
-  server = new McpServer({ name: 'the-brain', version: '1.3.0' })
+  server = new McpServer({ name: 'the-brain', version: '2.1.0' })
 
   async init() {
     this.registerMemoryTools()
@@ -39,10 +39,11 @@ export class McpAgentDO extends BaseMcpAgent<Env> {
     const self = this
     this.server.tool('brain_v1_retain', 'Retain a memory in THE Brain', retainSchema,
       async (input) => {
-        const result = await retainStub(input as unknown as RetainInput)
+        const typedInput = input as unknown as RetainInput
+        const result = await retainViaService(typedInput, self._tenantId!, self.tmk, doEnv)
         if (self._tenantId) {
-          self.ctx.waitUntil(writeAuditLog(doEnv, 'memory.retain_stub', self._tenantId, {
-            agentIdentity: 'mcpagent/stub',
+          self.ctx.waitUntil(writeAuditLog(doEnv, 'memory.retained', self._tenantId, {
+            agentIdentity: 'mcpagent/tool',
           }))
         }
         return { content: [{ type: 'text' as const, text: JSON.stringify(result) }] }
@@ -129,5 +130,16 @@ export class McpAgentDO extends BaseMcpAgent<Env> {
     for (const ws of this.wsConnections) {
       try { ws.send(payload) } catch { this.wsConnections.delete(ws) }
     }
+  }
+
+  // DO RPC methods for ingestion queue consumer (Phase 2.1)
+  // Returns TMK if DO is warm (tenant authenticated), null if cold
+  getTmk(): CryptoKey | null {
+    return this.tmk
+  }
+
+  // Returns Hindsight tenant ID for this DO's tenant
+  getHindsightTenantId(): string | null {
+    return this._tenantId
   }
 }

@@ -1,21 +1,57 @@
 // src/tools/retain.ts
-// TODO: Phase 2.1 — wire write policy validator (heuristic + classifier) before real retain
-// TODO: Phase 2.1 — call Hindsight brain_retain API instead of returning stub
+// MCP retain tool — wires to real retainContent() pipeline (Phase 2.1)
+// MCP retain is synchronous (no queue) — calls service directly, returns memory_id
 
 import type { RetainInput, RetainOutput } from '../types/tools'
+import type { Env } from '../types/env'
+import { retainContent } from '../services/ingestion/retain'
 
-export async function retainStub(input: RetainInput): Promise<RetainOutput> {
-  // Stub — returns plausible structure so MCP callers can integrate
-  // Real implementation: heuristic check → classifier if flagged → Hindsight write
+/**
+ * MCP retain via real ingestion pipeline
+ * Called directly from DO (TMK available in DO memory)
+ */
+export async function retainViaService(
+  input: RetainInput,
+  tenantId: string,
+  tmk: CryptoKey | null,
+  env: Env,
+): Promise<RetainOutput> {
+  if (!tmk) {
+    // No TMK available — return deferred status
+    return {
+      memory_id: '',
+      salience_tier: 0,
+      status: 'deferred',
+    }
+  }
+
+  const result = await retainContent(
+    {
+      tenantId,
+      source: 'mcp_retain',
+      content: input.content,
+      occurredAt: Date.now(),
+      memoryType: input.memory_type,
+      domain: input.domain,
+      provenance: input.provenance ?? 'mcp_retain',
+    },
+    tmk,
+    env,
+  )
+
+  if (!result) {
+    // Dedup hit or write policy violation — return success (silent drop)
+    // LESSON: Return success to prevent doom loops
+    return {
+      memory_id: crypto.randomUUID(),
+      salience_tier: 1,
+      status: 'retained',
+    }
+  }
+
   return {
-    memory_id: crypto.randomUUID(),
-    salience_tier: inferSalienceTier(input.content),
+    memory_id: result.memoryId,
+    salience_tier: result.salienceTier,
     status: 'retained',
   }
-}
-
-function inferSalienceTier(content: string): number {
-  // Stub heuristic — real salience scorer wired in Phase 2.1
-  if (content.length > 500) return 2
-  return 1
 }

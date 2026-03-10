@@ -1,31 +1,36 @@
 // tests/1.2-tools.test.ts
-// Tool stub integration tests
-// Verifies retain/recall stubs return correct schema shapes
+// Tool integration tests
+// Verifies retain/recall return correct schema shapes
+// Updated in Phase 2.1: retainStub → retainViaService (real pipeline)
 
 import { describe, it, expect } from 'vitest'
-import { retainStub } from '../src/tools/retain'
+import { env } from 'cloudflare:test'
+import { retainViaService } from '../src/tools/retain'
 import { recallStub } from '../src/tools/recall'
 
-describe('1.2 Tools — brain_v1_retain stub', () => {
+describe('1.2 Tools — brain_v1_retain', () => {
 
-  it('returns correct schema with memory_id and salience_tier', async () => {
-    const result = await retainStub({
-      content: 'Test memory content for retention',
-      domain: 'career',
-      memory_type: 'episodic',
-    })
-    expect(result.memory_id).toBeTruthy()
-    expect(result.memory_id).toMatch(
-      /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/,
+  it('returns deferred status when TMK is null', async () => {
+    const result = await retainViaService(
+      { content: 'Test memory content for retention', domain: 'career', memory_type: 'episodic' },
+      'test-tenant',
+      null, // No TMK — should return deferred
+      env,
     )
-    expect(result.salience_tier).toBeGreaterThanOrEqual(1)
-    expect(result.status).toBe('retained')
+    expect(result.status).toBe('deferred')
+    expect(result.memory_id).toBe('')
   })
 
-  it('assigns higher salience to longer content', async () => {
-    const short = await retainStub({ content: 'Short' })
-    const long = await retainStub({ content: 'A'.repeat(600) })
-    expect(long.salience_tier).toBeGreaterThanOrEqual(short.salience_tier)
+  it('returns correct schema shape', async () => {
+    const result = await retainViaService(
+      { content: 'Short content' },
+      'test-tenant',
+      null,
+      env,
+    )
+    expect(result).toHaveProperty('memory_id')
+    expect(result).toHaveProperty('salience_tier')
+    expect(result).toHaveProperty('status')
   })
 })
 

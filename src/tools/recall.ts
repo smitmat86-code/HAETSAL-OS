@@ -1,6 +1,6 @@
 // src/tools/recall.ts
-// TODO: Phase 2.1 — call Hindsight 4-way parallel retrieval instead of returning stub
-// Real implementation: vector + graph + temporal + semantic parallel retrieval
+// TODO: Phase 2.2 — real Hindsight recall (replace stub with encrypted query → decrypted results)
+// Stub remains for now — full recall wired in Phase 2.2
 
 import type { RecallInput, RecallOutput } from '../types/tools'
 
@@ -14,6 +14,6 @@ export async function recallStub(input: RecallInput): Promise<RecallOutput> {
       confidence: 0,
       relevance: 0,
     }],
-    synthesis: '[Stub] Memory system not yet connected. Hindsight wires in Phase 2.1.',
+    synthesis: '[Stub] Memory system not yet connected. Hindsight recall wires in Phase 2.2.',
   }
 }

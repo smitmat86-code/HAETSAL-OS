@@ -4,7 +4,7 @@
 > Then read SESSION_LOG.md (last 3 entries), then LESSONS.md (relevant section),
 > then your active spec.
 
-Last updated: 2026-03-10 | Session: 1.1 (infrastructure bedrock)
+Last updated: 2026-03-10 | Session: 1.4 (pages ui + approval flow)
 
 ## Module Registry
 
@@ -18,16 +18,24 @@ Last updated: 2026-03-10 | Session: 1.1 (infrastructure bedrock)
 
 | File | Lines | Key Exports | Status |
 |------|-------|------------|--------|
+| src\agents\base-agent.ts | 149 | — | ✅ |
+| src\agents\chief-of-staff.ts | 69 | ChiefOfStaff | ✅ |
+| src\agents\helpers.ts | 49 | MODEL_CONTEXT_LIMIT, FLUSH_THRESHOLD, shouldFlush | ✅ |
+| src\agents\types.ts | 67 | EpistemicMemoryType, AgentType, AgentContext... | ✅ |
 | src\middleware\audit.ts | 45 | auditMiddleware | ✅ |
 | src\middleware\auth.ts | 140 | authMiddleware | ✅ |
 | src\middleware\dlp.ts | 17 | dlpMiddleware | ✅ |
+| src\services\action\approval-api.ts | 132 | clampPositiveInt | ✅ |
 | src\services\action\authorization.ts | 131 | AuthGateResult | ✅ |
 | src\services\action\executor.ts | 116 | — | ✅ |
 | src\services\action\integrations\browser.ts | 39 | BrowseResult | ✅ |
 | src\services\action\integrations\calendar.ts | 101 | CalendarResult | ✅ |
 | src\services\action\integrations\episodic.ts | 48 | — | ✅ |
+| src\services\action\preference-model.ts | 98 | PreferenceSetting, TenantSettingsSnapshot, PreferenceUpdateInput... | ✅ |
+| src\services\action\preferences.ts | 146 | — | ✅ |
 | src\services\action\router.ts | 111 | — | ✅ |
 | src\services\action\toctou.ts | 23 | — | ✅ |
+| src\services\agents\router.ts | 57 | — | ✅ |
 | src\services\bootstrap\historical-import.ts | 140 | historicalSalienceMultiplier | ✅ |
 | src\services\bootstrap\interview.ts | 80 | createInitialState, currentQuestion, currentDomain... | ✅ |
 | src\services\google\calendar.ts | 62 | — | ✅ |
@@ -53,7 +61,7 @@ Last updated: 2026-03-10 | Session: 1.1 (infrastructure bedrock)
 | src\tools\bootstrap.ts | 104 | registerBootstrapTools | ✅ |
 | src\tools\recall.ts | 97 | — | ✅ |
 | src\tools\retain.ts | 58 | — | ✅ |
-| src\types\action.ts | 101 | CapabilityClass, AuthorizationLevel, AUTH_LEVEL_ORDINAL... | ✅ |
+| src\types\action.ts | 105 | CapabilityClass, AuthorizationLevel, AUTH_LEVEL_ORDINAL... | ✅ |
 | src\types\bootstrap.ts | 76 | BootstrapStatus, BootstrapParams, InterviewDomain... | ✅ |
 | src\types\env.ts | 50 | Env | ✅ |
 | src\types\google.ts | 53 | GoogleOAuthTokens, GoogleThread, GoogleMessage... | ✅ |
@@ -66,11 +74,41 @@ Last updated: 2026-03-10 | Session: 1.1 (infrastructure bedrock)
 | src\workers\ingestion\consumer.ts | 91 | — | ✅ |
 | src\workers\ingestion\handlers.ts | 103 | — | ✅ |
 | src\workers\mcpagent\do\McpAgent.ts | 150 | McpAgentDO | ✅ |
-| src\workers\mcpagent\index.ts | 146 | — | ✅ |
+| src\workers\mcpagent\index.ts | 150 | — | ✅ |
 | src\workers\mcpagent\routes\actions.ts | 79 | actions | ✅ |
+| src\workers\mcpagent\routes\approval.ts | 73 | approval | ✅ |
+| src\workers\mcpagent\routes\audit.ts | 51 | audit | ✅ |
 | src\workers\mcpagent\routes\auth.ts | 45 | — | ✅ |
 | src\workers\mcpagent\routes\ingest.ts | 120 | — | ✅ |
+| src\workers\mcpagent\routes\settings.ts | 64 | settings | ✅ |
 | src\workflows\bootstrap.ts | 105 | BootstrapWorkflow | ✅ |
+
+### pages/src/
+
+| File | Lines | Key Exports | Status |
+|------|-------|------------|--------|
+| pages\src\api\client.ts | 70 | apiClient | ✅ |
+| pages\src\App.tsx | 43 | App | ✅ |
+| pages\src\components\ActionCard.tsx | 55 | ActionCard | ✅ |
+| pages\src\components\ActivityLog.tsx | 74 | ActivityLog | ✅ |
+| pages\src\components\ApprovalQueue.tsx | 47 | ApprovalQueue | ✅ |
+| pages\src\components\AuditDrawer.tsx | 34 | AuditDrawer | ✅ |
+| pages\src\components\RejectModal.tsx | 43 | RejectModal | ✅ |
+| pages\src\components\Settings.tsx | 108 | Settings | ✅ |
+| pages\src\components\UndoCard.tsx | 29 | UndoCard | ✅ |
+| pages\src\hooks\useActions.ts | 76 | useActions | ✅ |
+| pages\src\hooks\useCountdown.ts | 21 | useCountdown | ✅ |
+| pages\src\hooks\useSettings.ts | 39 | useSettings | ✅ |
+| pages\src\lib\format.ts | 31 | formatRelativeTime, formatMoney, formatClock | ✅ |
+| pages\src\main.tsx | 6 | — | ✅ |
+| pages\src\types\ui.ts | 82 | AuthorizationLevel, CapabilityClass, ActionState... | ✅ |
+| pages\src\vite-env.d.ts | 12 | — | ✅ |
+
+### pages/functions/
+
+| File | Lines | Key Exports | Status |
+|------|-------|------------|--------|
+| pages\functions\api\[[catchall]].ts | 9 | onRequest | ✅ |
 
 <!-- END AUTO-GENERATED -->
 
@@ -87,6 +125,9 @@ None yet. Cross-module interfaces will be listed here as they are defined.
 
 ## Active Specs
 
+Manual note: Session 1.4 is implemented and moved out of `specs/active/`.
+The current `specs/active/` directory now contains unreconciled Phase 3 drafts.
+
 | Spec | Session | Phase | Status |
 |------|---------|-------|--------|
 | Infrastructure Bedrock | 1.1 | 1 | 🟡 In Progress |
@@ -94,6 +135,7 @@ None yet. Cross-module interfaces will be listed here as they are defined.
 ## Known Issues
 
 - `npm install` required before any scripts run
+- Pages deployment still requires manual CF Access attachment plus `WORKER_URL` and `VITE_WORKER_URL`
 
 ## Hindsight Pin
 
@@ -115,6 +157,11 @@ Reason: Initial pin — latest stable release. Schema migration threading fix,
 - **Agent rules:** .agent/rules/governance.md
 
 ## Platform Binding Status
+
+Manual note: the status table below is partially stale from pre-1.4 work.
+As-built reality: McpAgent DO, Action Worker, Telnyx SMS, and the repo-side
+Cloudflare Pages app are implemented; Pages deployment still needs manual
+CF Access attachment plus `WORKER_URL` and `VITE_WORKER_URL`.
 
 | Binding | Status | Notes |
 |---------|--------|-------|

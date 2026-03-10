@@ -273,3 +273,59 @@
 **Next:** Phase 3.1 or next build sequence phase
 
 ---
+
+## Session 1.4 â€” 2026-03-10
+
+**Spec:** Phase 1.4 â€” Pages UI + Approval Queue + Settings
+**Built:**
+- `pages/` Vite React SPA â€” Queue, Activity Log, Settings, typed API client, countdown hook, styling, Pages Function proxy
+- `src/services/action/approval-api.ts` (149 lines) â€” list/approve/reject action route logic
+- `src/services/action/preference-model.ts` (88 lines) â€” preference DTO + HMAC-backed mapping
+- `src/services/action/preferences.ts` (130 lines) â€” tenant settings read + preference upsert + audit batch
+- `src/workers/mcpagent/routes/approval.ts` (66 lines) â€” `GET /api/actions`, `POST /api/actions/:id/approve`, `POST /api/actions/:id/reject`
+- `src/workers/mcpagent/routes/settings.ts` (64 lines) â€” `GET /api/settings`, `POST /api/settings/preferences`
+- `src/workers/mcpagent/routes/audit.ts` (51 lines) â€” `GET /api/audit`
+- `src/workers/mcpagent/index.ts` + `tests/test-entry.ts` â€” mounted `/api/actions`, `/api/settings`, `/api/audit`; mounted undo router at `/api/actions/:id/undo`
+- `tests/1.4-approval-queue.test.ts` + `tests/1.4-settings.test.ts` + `tests/support/cf-access.ts` â€” 9 protected-route tests via `SELF.fetch()`
+- `scripts/generate-manifest.ts` + `scripts/postflight-check.ts` â€” now scan `pages/src/` and `pages/functions/`
+**Decisions:**
+- **WebSocket uses Worker `/ws` + `VITE_WORKER_URL`.** The existing DO upgrade path already lives on `/ws`; the browser connects directly to the Worker while normal API traffic stays same-origin through Pages Functions.
+- **Pages-first sessions bootstrap tenants in API routes.** `getOrCreateTenant()` now runs on the new protected Pages APIs so a user doesn't need to hit `/mcp` or `/ws` first.
+- **Undo exposed under `/api/actions/:id/undo` without removing `/actions/:id/undo`.** This keeps the Pages proxy surface uniform while preserving the original Worker route.
+- **Postflight caught line-limit regressions immediately.** Approval logic and preference-model helpers were extracted into service modules instead of waiving limits.
+**Verification:**
+- `npm test` â€” 138 passed
+- `npm run postflight` â€” passed after refactor
+- `npm run manifest` â€” regenerated
+- `cd pages && npm install && npm run build` â€” passed
+**Hindsight Pin:** unchanged (v0.4.16 @ 58fdac4)
+**Fixture Data:** Protected-route tests seed `pending_actions`, `tenant_action_preferences`, and `tenants` rows per test case
+**Blockers:** Manual deployment steps remain â€” attach the Pages project to CF Access, set `WORKER_URL`, and set `VITE_WORKER_URL`
+**Next:** Phase 3.1 or next reviewed active spec
+
+---
+
+## Session 3.1 — 2026-03-10
+
+**Spec:** Phase 3.1 — BaseAgent + Chief of Staff + Layer 1 Router
+**Built:**
+- src/agents/types.ts (60 lines) — EpistemicMemoryType, AgentType, AgentContext, DoomLoopState, ReasoningTrace, DelegationSignal
+- src/agents/base-agent.ts (149 lines) — Abstract BaseAgent: open/run/close lifecycle, agent loop, Law 3 retain()
+- src/agents/helpers.ts (49 lines) — checkDoomLoop, encryptForR2, writeAnomalySignal, budget constants
+- src/agents/chief-of-staff.ts (66 lines) — ChiefOfStaff extends BaseAgent, delegation signal parsing
+- src/services/agents/router.ts (55 lines) — Layer 1 Router: pattern-first, Workers AI 8B classifier fallback
+- tests/3.1-base-agent.test.ts (109 lines) — 10 tests: Law 3, doom loop, context, budget
+- tests/3.1-chief-of-staff.test.ts (63 lines) — 6 tests: delegation, trace chaining
+- tests/3.1-router.test.ts (42 lines) — 6 tests: pattern matching, fallback
+- tests/3.1-cron-kek.test.ts (72 lines) — 4 tests: KEK columns, TTL, idempotency
+**Decisions:**
+- **BaseAgent split into two files:** Postflight 150-line limit forced extraction of doom loop, encryption, and anomaly helpers to `src/agents/helpers.ts`. Re-exported from base-agent.ts.
+- **McpAgent.ts not modified:** Agent classes are standalone; DO wiring deferred to Phase 3.2 delegation protocol.
+- **Cron KEK raw KV entry deferred:** Spec 3.1 confirms existing encrypted KEK path only. Raw KV entry for cron access is Phase 3.3.
+- **Doom loop push-on-warn fix:** Initial implementation didn't push to calls array on 'warn', preventing escalation to 'break'. Fixed by pushing before checking warn threshold.
+**Hindsight Pin:** unchanged (v0.4.16 @ 58fdac4)
+**Fixture Data:** KEK tests seed tenants rows per test case
+**Blockers:** None
+**Next:** Phase 3.2 — Career Coach (First Domain Agent)
+
+---

@@ -1,0 +1,36 @@
+# Dependencies
+node_modules/
+.pnp.*
+.yarn/
+
+# Build artifacts
+dist/
+build/
+target/
+*.wasm
+*.d.ts
+!src/**/*.d.ts
+
+# Environment
+.env
+.env.*
+.dev.vars
+!.env.example
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Test
+coverage/
+
+# Package managers
+package-lock.json
+yarn.lock
+pnpm-lock.yaml

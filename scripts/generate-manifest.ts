@@ -44,6 +44,11 @@ const PACKAGES: string[] = [
     // 'ui',
 ];
 
+const EXTRA_ROOTS = [
+    { label: 'pages/src', dir: join(ROOT, 'pages', 'src') },
+    { label: 'pages/functions', dir: join(ROOT, 'pages', 'functions') },
+];
+
 // File extensions to scan
 const SOURCE_EXTENSIONS = ['.ts', '.tsx'];
 // PROJECT: Add your backend language:
@@ -133,6 +138,13 @@ if (srcFiles.length > 0) {
     sections.push(`### src/\n\n${generateTable('src', srcFiles)}`);
 }
 
+for (const extra of EXTRA_ROOTS) {
+    const files = scanDirectory(extra.dir);
+    if (files.length > 0) {
+        sections.push(`### ${extra.label}/\n\n${generateTable(extra.label, files)}`);
+    }
+}
+
 // Read existing MANIFEST.md, preserve hand-edited sections
 const existing = readFileSync(MANIFEST_PATH, 'utf-8');
 
@@ -171,6 +183,7 @@ writeFileSync(MANIFEST_PATH, updated);
 const allFiles = [
     ...PACKAGES.flatMap(pkg => scanDirectory(join(ROOT, 'packages', pkg, 'src'))),
     ...scanDirectory(join(ROOT, 'src')),
+    ...EXTRA_ROOTS.flatMap(root => scanDirectory(root.dir)),
 ];
 const violations = allFiles.filter(f => f.overLimit);
 console.log(`✅ MANIFEST.md updated (${allFiles.length} files across ${PACKAGES.length} packages)`);

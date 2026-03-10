@@ -38,6 +38,8 @@ const TEST_LINE_LIMIT = 400;
 
 const PACKAGES_DIR = join(ROOT, 'packages');
 const SRC_DIR = join(ROOT, 'src');
+const PAGES_SRC_DIR = join(ROOT, 'pages', 'src');
+const PAGES_FUNCTIONS_DIR = join(ROOT, 'pages', 'functions');
 const MIGRATIONS_DIR = join(ROOT, 'migrations');
 
 // Packages excluded from certain checks (e.g., legacy code, copied libraries)
@@ -102,7 +104,12 @@ function isTestFile(filePath: string): boolean {
 function checkFileSizeLimits(): Violation[] {
     const violations: Violation[] = [];
     const extensions = Object.keys(LINE_LIMITS);
-    const files = [...walkFiles(PACKAGES_DIR, extensions), ...walkFiles(SRC_DIR, extensions)];
+    const files = [
+        ...walkFiles(PACKAGES_DIR, extensions),
+        ...walkFiles(SRC_DIR, extensions),
+        ...walkFiles(PAGES_SRC_DIR, extensions),
+        ...walkFiles(PAGES_FUNCTIONS_DIR, extensions),
+    ];
 
     for (const file of files) {
         if (isLegacyPackage(file)) continue;
@@ -132,7 +139,12 @@ function checkFileSizeLimits(): Violation[] {
 function checkBannedPatterns(): Violation[] {
     const violations: Violation[] = [];
 
-    const tsFiles = [...walkFiles(PACKAGES_DIR, ['.ts', '.tsx']), ...walkFiles(SRC_DIR, ['.ts', '.tsx'])];
+    const tsFiles = [
+        ...walkFiles(PACKAGES_DIR, ['.ts', '.tsx']),
+        ...walkFiles(SRC_DIR, ['.ts', '.tsx']),
+        ...walkFiles(PAGES_SRC_DIR, ['.ts', '.tsx']),
+        ...walkFiles(PAGES_FUNCTIONS_DIR, ['.ts', '.tsx']),
+    ];
     const tsBanned = [
         { pattern: /\beval\s*\(/, name: 'eval()' },
         { pattern: /new\s+Function\s*\(/, name: 'new Function()' },
@@ -182,7 +194,12 @@ function checkBannedPatterns(): Violation[] {
  */
 function checkSqlSafety(): Violation[] {
     const violations: Violation[] = [];
-    const tsFiles = [...walkFiles(PACKAGES_DIR, ['.ts']), ...walkFiles(SRC_DIR, ['.ts'])];
+    const tsFiles = [
+        ...walkFiles(PACKAGES_DIR, ['.ts']),
+        ...walkFiles(SRC_DIR, ['.ts']),
+        ...walkFiles(PAGES_SRC_DIR, ['.ts']),
+        ...walkFiles(PAGES_FUNCTIONS_DIR, ['.ts']),
+    ];
 
     for (const file of tsFiles) {
         if (isLegacyPackage(file)) continue;

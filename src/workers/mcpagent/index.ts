@@ -1,10 +1,7 @@
 // src/workers/mcpagent/index.ts
 // Hono app — route registrations only
-// Queue handlers for both actions and ingestion
-// Middleware order: security headers → auth → audit → dlp (MCP routes) → handler
 // LESSON: Security headers in try/finally — skip on WebSocket 101 responses
 // LESSON: Queue consumers export queue() alongside fetch() — no separate Worker needed
-// Route extraction (2.1): /ingest/* and /auth/* in separate route modules
 
 import { Hono } from 'hono'
 import { McpAgentDO } from './do/McpAgent'
@@ -14,6 +11,9 @@ import { dlpMiddleware } from '../../middleware/dlp'
 import { ingest } from './routes/ingest'
 import { auth } from './routes/auth'
 import { actions } from './routes/actions'
+import { approval } from './routes/approval'
+import { settings } from './routes/settings'
+import { audit } from './routes/audit'
 import { handleActionBatch } from '../action/index'
 import { handleIngestionBatch } from '../ingestion/consumer'
 import type { Env } from '../../types/env'
@@ -59,6 +59,10 @@ app.route('/auth', auth)
 
 // Action routes (undo — Phase 2.3)
 app.route('/actions', actions)
+app.route('/api/actions', actions)
+app.route('/api/actions', approval)
+app.route('/api/settings', settings)
+app.route('/api/audit', audit)
 
 // MCP Streamable HTTP — delegate to DO
 app.all('/mcp', async (c) => {

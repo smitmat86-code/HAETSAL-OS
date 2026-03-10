@@ -26,6 +26,8 @@ export const HARD_FLOORS: Record<CapabilityClass, AuthorizationLevel> = {
   DELETE:                        'RED',
 }
 
+export const CAPABILITY_CLASSES = Object.keys(HARD_FLOORS) as CapabilityClass[]
+
 export const DEFAULT_SEND_DELAY_SECONDS: Partial<Record<CapabilityClass, number>> = {
   WRITE_EXTERNAL_IRREVERSIBLE: 120,
   WRITE_EXTERNAL_FINANCIAL:    120,
@@ -54,6 +56,8 @@ export type ActionState =
   | 'undone'                 // Undo executed within window (Phase 2.3)
   | 'failed'
   | 'rejected'
+  | 'cancelled'
+  | 'expired'
 
 // Undo window duration in ms (5 minutes)
 export const UNDO_WINDOW_MS = 5 * 60 * 1000

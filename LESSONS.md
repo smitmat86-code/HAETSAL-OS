@@ -397,3 +397,17 @@
   The McpAgent DO components (auth, tenant service, tools) are tested
   individually via their imported functions.
   Ref: Phase 1.2, `agents@0.7.5` + `@cloudflare/vitest-pool-workers`.
+
+- **Pages-First Sessions Need Tenant Bootstrap Outside the DO Path.**
+  The original tenant bootstrap only happened in `McpAgentDO.initTenant()`,
+  which runs on `/mcp` and `/ws`. A user can open the Pages UI first and hit
+  `/api/actions` or `/api/settings` before either DO route runs. New protected
+  Pages-facing APIs must call `getOrCreateTenant()` themselves unless they can
+  prove a DO bootstrap has already happened.
+  Ref: Session 1.4, initial Pages load would 404 on tenant reads without this.
+
+- **Browser WebSocket Env Vars Are Separate From Pages Function Env Vars.**
+  `WORKER_URL` is server-side only inside Pages Functions. Browser code cannot
+  read it. If the SPA needs to open a direct WebSocket to the Worker DO, add a
+  separate `VITE_*` build-time variable and document both env vars together.
+  Ref: Session 1.4, approval queue real-time updates require `VITE_WORKER_URL`.

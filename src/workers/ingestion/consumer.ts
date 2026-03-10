@@ -1,12 +1,17 @@
 // src/workers/ingestion/consumer.ts
 // Queue consumer for ingestion queues (QUEUE_HIGH, QUEUE_NORMAL, QUEUE_BULK)
-// Dispatches by message type → ingestion pipeline → retainContent()
+// Dispatches by message type → handler → retainContent()
 // LESSON: Promise.allSettled for fan-out, INSERT OR IGNORE for at-least-once
 // LESSON: Cold DO (getTmk null) → re-enqueue with delay, not dropped
 
 import type { Env } from '../../types/env'
 import type { IngestionQueueMessage } from '../../types/ingestion'
-import { retainContent } from '../../services/ingestion/retain'
+import {
+  handleSmsInbound,
+  handleGmailThread,
+  handleCalendarEvent,
+  handleObsidianNote,
+} from './handlers'
 
 /**
  * Handle a batch of ingestion queue messages
@@ -56,38 +61,18 @@ async function processIngestionMessage(
     case 'sms_inbound':
       await handleSmsInbound(tenantId, payload, tmk, env, ctx)
       break
-    // TODO: Phase 2.2 — gmail_thread, calendar_event, obsidian_note handlers
-    // TODO: Phase 2.4 — bootstrap_gmail_thread, bootstrap_calendar_event, bootstrap_drive_file
+    case 'gmail_thread':
+      await handleGmailThread(tenantId, payload, tmk, env, ctx)
+      break
+    case 'calendar_event':
+      await handleCalendarEvent(tenantId, payload, tmk, env, ctx)
+      break
+    case 'obsidian_note':
+      await handleObsidianNote(tenantId, payload, tmk, env, ctx)
+      break
     default:
-      // Unknown type — ack to avoid infinite retry
       break
   }
 
   msg.ack()
-}
-
-async function handleSmsInbound(
-  tenantId: string,
-  payload: Record<string, unknown>,
-  tmk: CryptoKey,
-  env: Env,
-  ctx: ExecutionContext,
-): Promise<void> {
-  const text = payload.text as string
-  const occurredAt = payload.occurredAt as number
-  const from = payload.from as string
-
-  await retainContent(
-    {
-      tenantId,
-      source: 'sms',
-      content: text,
-      occurredAt,
-      provenance: 'sms',
-      metadata: { from_phone: from },
-    },
-    tmk,
-    env,
-    ctx,
-  )
 }

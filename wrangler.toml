@@ -123,6 +123,12 @@ dataset = "BRAIN_ANALYTICS"
 binding = "BROWSER"
 # Used by Action Worker for brain_v1_act_browse (Phase 2.3)
 
+# ── Cron Triggers (Phase 2.2 — Obsidian polling) ─────────────────────────────
+[triggers]
+crons = ["*/1 * * * *", "*/15 * * * *"]
+# */1: /to-brain/ folder poll (checks KV last_poll first)
+# */15: vault-wide brain: true frontmatter scan
+
 # ── Hyperdrive (Neon connection pool) ─────────────────────────────────────────
 [[hyperdrive]]
 binding = "HYPERDRIVE"

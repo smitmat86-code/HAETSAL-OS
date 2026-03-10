@@ -12,7 +12,7 @@ import { deriveTmk } from '../../../middleware/auth'
 import { writeAuditLog } from '../../../middleware/audit'
 import { getOrCreateTenant, provisionOrRenewKek } from '../../../services/tenant'
 import { retainViaService } from '../../../tools/retain'
-import { recallStub } from '../../../tools/recall'
+import { recallViaService } from '../../../tools/recall'
 import { sendMessageSchema, sendMessageStub } from '../../../tools/act/send-message'
 import { createEventSchema, createEventStub } from '../../../tools/act/create-event'
 import { modifyEventSchema, modifyEventStub } from '../../../tools/act/modify-event'
@@ -27,7 +27,7 @@ export class McpAgentDO extends BaseMcpAgent<Env> {
   private _tenantId: string | null = null
   private wsConnections: Set<WebSocket> = new Set()
 
-  server = new McpServer({ name: 'the-brain', version: '2.1.0' })
+  server = new McpServer({ name: 'the-brain', version: '2.2.0' })
 
   async init() {
     this.registerMemoryTools()
@@ -51,10 +51,11 @@ export class McpAgentDO extends BaseMcpAgent<Env> {
     )
     this.server.tool('brain_v1_recall', 'Recall memories from THE Brain', recallSchema,
       async (input) => {
-        const result = await recallStub(input as unknown as RecallInput)
+        const typedInput = input as unknown as RecallInput
+        const result = await recallViaService(typedInput, self._tenantId!, self.tmk, doEnv)
         if (self._tenantId) {
-          self.ctx.waitUntil(writeAuditLog(doEnv, 'memory.recall_stub', self._tenantId, {
-            agentIdentity: 'mcpagent/stub',
+          self.ctx.waitUntil(writeAuditLog(doEnv, 'memory.recalled', self._tenantId, {
+            agentIdentity: 'mcpagent/tool',
           }))
         }
         return { content: [{ type: 'text' as const, text: JSON.stringify(result) }] }

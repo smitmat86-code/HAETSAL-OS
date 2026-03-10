@@ -178,3 +178,36 @@
 **Next:** Phase 2.2 — Gmail + Calendar Ingestion
 
 ---
+
+## Session 2.2 — 2026-03-10
+
+**Spec:** Phase 2.2 — Gmail + Calendar Ingestion
+**Built:**
+- src/types/google.ts (~50 lines) — GoogleOAuthTokens, GoogleThread, GoogleMessage, GoogleCalendarEvent, GoogleDriveFile
+- migrations/1006_brain_google.sql (~33 lines) — google_webhook_channels, google_oauth_tokens tables
+- src/services/google/oauth.ts (~115 lines) — token encrypt/decrypt, store, refresh, revoke
+- src/services/google/gmail.ts (~83 lines) — thread fetch, 2+ reply filter, 2000 char trim
+- src/services/google/calendar.ts (~60 lines) — event fetch, 15min filter, PII reduction
+- src/services/google/drive.ts (~78 lines) — Drive polling, frontmatter parsing, wikilinks
+- src/services/google/webhook.ts (~42 lines) — channel token verification, registration
+- src/services/telnyx.ts (~37 lines) — Ed25519 verification extracted from ingest.ts
+- src/workers/ingestion/handlers.ts (~93 lines) — extracted handler functions from consumer.ts
+- src/workers/mcpagent/routes/ingest.ts (~120 lines) — Gmail/Calendar webhook routes added
+- src/workers/mcpagent/routes/auth.ts (~55 lines) — Google OAuth callback + revoke
+- src/tools/recall.ts (~58 lines) — real Hindsight recall via recallViaService
+- tests/2.2-gmail.test.ts (~77 lines) — 6 tests: thread extraction, filtering, trimming
+- tests/2.2-calendar.test.ts (~80 lines) — 5 tests: event extraction, duration, PII
+- tests/2.2-obsidian.test.ts (~100 lines) — 11 tests: frontmatter, wikilinks, anti-circular
+- tests/2.2-oauth.test.ts (~117 lines) — 4 tests: encryption, D1 metadata, revocation
+**Decisions:**
+- **KV key pattern `google_tokens:{tenantId}:{scope}`** instead of spec's `oauth:{tenantId}:google:{scope}`. Simpler, consistent with google_ prefix convention.
+- **Handlers extracted to `src/workers/ingestion/handlers.ts`** when postflight caught consumer.ts at 165 lines. Clean separation of dispatch logic vs handler implementations.
+- **Telnyx verification extracted to `src/services/telnyx.ts`** when postflight caught ingest.ts at 158 lines.
+- **vitest-pool-workers isolated storage confirmed:** OAuth tests required self-contained setup per test case (not shared across describe block).
+- **recallViaService pattern:** Encrypt query → Hindsight service binding → decrypt results. Mirrors retainViaService from 2.1.
+**Hindsight Pin:** unchanged (v0.4.16 @ 58fdac4)
+**Fixture Data:** N/A — infrastructure only
+**Blockers:** None
+**Next:** Phase 2.3 — Browser Rendering + Write Surfaces
+
+---

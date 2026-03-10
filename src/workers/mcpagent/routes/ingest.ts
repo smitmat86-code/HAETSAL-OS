@@ -6,45 +6,10 @@
 import { Hono } from 'hono'
 import type { Env } from '../../../types/env'
 import type { IngestionQueueMessage } from '../../../types/ingestion'
+import { verifyTelnyxSignature } from '../../../services/telnyx'
 
 type Variables = { tenantId: string; jwtSub: string; traceId: string }
 const ingest = new Hono<{ Bindings: Env; Variables: Variables }>()
-
-/**
- * Verify Telnyx Ed25519 webhook signature
- * Uses Web Crypto API (native in workerd) — no npm package needed
- */
-async function verifyTelnyxSignature(
-  body: string,
-  signature: string,
-  timestamp: string,
-  publicKeyHex: string,
-): Promise<boolean> {
-  try {
-    const publicKeyBytes = new Uint8Array(
-      publicKeyHex.match(/.{1,2}/g)!.map(b => parseInt(b, 16)),
-    )
-    const key = await crypto.subtle.importKey(
-      'raw',
-      publicKeyBytes,
-      { name: 'Ed25519', namedCurve: 'Ed25519' },
-      false,
-      ['verify'],
-    )
-    const signedPayload = `${timestamp}|${body}`
-    const signatureBytes = new Uint8Array(
-      atob(signature).split('').map(c => c.charCodeAt(0)),
-    )
-    return await crypto.subtle.verify(
-      'Ed25519',
-      key,
-      signatureBytes,
-      new TextEncoder().encode(signedPayload),
-    )
-  } catch {
-    return false
-  }
-}
 
 /**
  * POST /ingest/sms — Telnyx webhook receiver
@@ -56,7 +21,6 @@ ingest.post('/sms', async (c) => {
   const signature = c.req.header('telnyx-signature-ed25519') ?? ''
   const timestamp = c.req.header('telnyx-timestamp') ?? ''
 
-  // Ed25519 signature validation
   const valid = await verifyTelnyxSignature(
     body, signature, timestamp, c.env.TELNYX_PUBLIC_KEY,
   )
@@ -84,11 +48,9 @@ ingest.post('/sms', async (c) => {
   ).bind(fromPhone).first<{ tenant_id: string }>()
 
   if (!tenant) {
-    // Unknown number — silent ignore (200 OK so Telnyx doesn't retry)
     return c.json({ status: 'ignored' }, 200)
   }
 
-  // Enqueue to QUEUE_HIGH (SMS = 30s SLA)
   const message: IngestionQueueMessage = {
     type: 'sms_inbound',
     tenantId: tenant.tenant_id,
@@ -101,6 +63,56 @@ ingest.post('/sms', async (c) => {
   }
 
   await c.env.QUEUE_HIGH.send(message)
+  return c.json({ status: 'enqueued' }, 200)
+})
+
+/**
+ * POST /ingest/gmail — Google Push Notification for Gmail
+ * Verifies channel token → enqueues thread ID to QUEUE_NORMAL
+ */
+ingest.post('/gmail', async (c) => {
+  const channelToken = c.req.header('x-goog-channel-token') ?? ''
+  const { verifyGoogleChannelToken } = await import('../../../services/google/webhook')
+
+  const verified = await verifyGoogleChannelToken(channelToken, c.env)
+  if (!verified || verified.resourceType !== 'gmail') {
+    return c.json({ error: 'Invalid channel token' }, 403)
+  }
+
+  const body = await c.req.json() as { historyId?: string }
+  const message: IngestionQueueMessage = {
+    type: 'gmail_thread',
+    tenantId: verified.tenantId,
+    payload: { historyId: body.historyId ?? '' },
+    enqueuedAt: Date.now(),
+  }
+
+  await c.env.QUEUE_NORMAL.send(message)
+  return c.json({ status: 'enqueued' }, 200)
+})
+
+/**
+ * POST /ingest/calendar — Google Push Notification for Calendar
+ * Verifies channel token → enqueues event ID to QUEUE_NORMAL
+ */
+ingest.post('/calendar', async (c) => {
+  const channelToken = c.req.header('x-goog-channel-token') ?? ''
+  const { verifyGoogleChannelToken } = await import('../../../services/google/webhook')
+
+  const verified = await verifyGoogleChannelToken(channelToken, c.env)
+  if (!verified || verified.resourceType !== 'calendar') {
+    return c.json({ error: 'Invalid channel token' }, 403)
+  }
+
+  const resourceId = c.req.header('x-goog-resource-id') ?? ''
+  const message: IngestionQueueMessage = {
+    type: 'calendar_event',
+    tenantId: verified.tenantId,
+    payload: { resourceId },
+    enqueuedAt: Date.now(),
+  }
+
+  await c.env.QUEUE_NORMAL.send(message)
   return c.json({ status: 'enqueued' }, 200)
 })
 

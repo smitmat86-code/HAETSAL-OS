@@ -66,9 +66,11 @@ Enforced structurally in `brain_v1_retain` middleware — not by prompt.
 ## Hindsight Version Pin
 
 ```
-Commit: [SET AT PHASE 1.1]
-Date: [DATE]
-Reason: [REASON]
+Commit: 58fdac44f78c60afa09871430c375c0459d14cb6
+Tag: v0.4.16
+Date: 2026-03-10
+Reason: Initial pin — latest stable release. Schema migration threading fix,
+        GIN index on source_memory_ids, Dependabot security fixes.
 ```
 
 **Before any Hindsight upgrade:**
@@ -94,7 +96,8 @@ npm run dev           # Local development (wrangler dev)
 See `docs/build-sequence.md` for the full Phase 1–5 spec roadmap.
 
 **Current phase:** Phase 1 — Foundation
-**Next spec:** Session 1.1 — Infrastructure Bedrock
+**Last completed:** Session 1.1 — Infrastructure Bedrock
+**Next spec:** Session 1.2 — McpAgent Worker + auth + TMK derivation
 
 ---
 

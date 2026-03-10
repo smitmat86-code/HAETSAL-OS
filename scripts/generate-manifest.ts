@@ -127,6 +127,12 @@ for (const pkg of PACKAGES) {
     sections.push(`### ${pkg}/\n\n${generateTable(pkg, files)}`);
 }
 
+// Also scan src/ directory (flat Worker layout used by Phase 1.1+)
+const srcFiles = scanDirectory(join(ROOT, 'src'));
+if (srcFiles.length > 0) {
+    sections.push(`### src/\n\n${generateTable('src', srcFiles)}`);
+}
+
 // Read existing MANIFEST.md, preserve hand-edited sections
 const existing = readFileSync(MANIFEST_PATH, 'utf-8');
 
@@ -162,7 +168,10 @@ if (existing.includes(AUTO_START)) {
 writeFileSync(MANIFEST_PATH, updated);
 
 // Report
-const allFiles = PACKAGES.flatMap(pkg => scanDirectory(join(ROOT, 'packages', pkg, 'src')));
+const allFiles = [
+    ...PACKAGES.flatMap(pkg => scanDirectory(join(ROOT, 'packages', pkg, 'src'))),
+    ...scanDirectory(join(ROOT, 'src')),
+];
 const violations = allFiles.filter(f => f.overLimit);
 console.log(`✅ MANIFEST.md updated (${allFiles.length} files across ${PACKAGES.length} packages)`);
 if (violations.length > 0) {

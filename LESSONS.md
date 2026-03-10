@@ -239,10 +239,29 @@
   application cost). Already blocked structurally in THE Brain, but worth knowing
   why the structural guarantee exists.
 
-- **Hindsight Container Must Have workers_dev = false.**
-  Set `workers_dev = false` on the Hindsight Container worker config. Without it,
-  the Container gets a public `workers.dev` URL. Any accidental hit of that URL
-  violates Law 1 (One Public Face) and exposes the memory engine without auth.
+- **Container workers_dev — Platform Enforced, Not Config.**
+  The spec says `workers_dev = false` on the Hindsight Container. In wrangler v4,
+  `[[containers]]` does not accept a `workers_dev` field — containers are
+  service-binding-only by platform design. No public URL is ever possible.
+  The spec lesson is still correct in spirit: containers must never have a public
+  URL. But the enforcement is structural (platform), not config-level.
+  Previously coded as a `wrangler.toml` config flag in older wrangler versions.
+  Ref: Spec 1.1 As-Built Deviation #1.
+
+- **D1 exec() Splits on Newlines, Not Semicolons.**
+  `env.D1_US.exec(sql)` parses multi-line SQL by splitting on `\n`, not `;`.
+  A multi-line `CREATE TABLE (\n col1,\n col2\n)` fails with "incomplete input"
+  because each line is executed as a separate statement. For tests, use
+  `readD1Migrations()` from `@cloudflare/vitest-pool-workers/config` in the
+  vitest config and `applyD1Migrations()` in a setup file — never exec inline SQL.
+  Ref: Spec 1.1 test setup, Schema Compute `apply-migrations.ts` pattern.
+
+- **R2 Object Streams Must Be Consumed Before Test Cleanup.**
+  In vitest-pool-workers, an R2 `.get()` returns a stream. If you call
+  `.delete()` without first consuming the stream (e.g., `await obj.text()`),
+  the workerd runtime throws "Isolated storage failed" and skips remaining
+  tests. Always consume R2 body before cleanup in test code.
+  Ref: Spec 1.1 As-Built, R2 integration test fix.
 
 - **Container Cold Start: Distroless or Expect 3-5s Delays.**
   Full OS base images produce 3-5s cold starts. Distroless targets <500ms.

@@ -1,0 +1,120 @@
+name = "the-brain"
+main = "src/workers/health/index.ts"
+compatibility_date = "2025-01-01"
+compatibility_flags = ["nodejs_compat"]
+
+# ── Containers ────────────────────────────────────────────────────────────────
+[[containers]]
+name = "HINDSIGHT"
+image = "./hindsight"          # Dockerfile in /hindsight — pinned via image digest
+max_instances = 3              # Concurrent tenant requests; scale-to-zero between
+# NOTE: workers_dev is not a valid field on containers in wrangler v4.
+# Containers are service-binding-only by platform design — no public URL possible.
+# The spec's intent ("workers_dev = false") is enforced by the platform, not config.
+
+# ── D1 Databases (regional naming for DLS stub) ───────────────────────────────
+[[d1_databases]]
+binding = "D1_US"
+database_name = "brain-us"
+database_id = "<SET_AT_DEPLOY>"
+migrations_dir = "migrations"
+
+# TODO: Phase 5+ — EU tenant jurisdiction
+# When EU tenants are enabled, instantiate a separate D1 in EU and
+# update this binding to route by tenant data_region.
+[[d1_databases]]
+binding = "D1_EU"
+database_name = "brain-us"        # Same DB for now — DLS routing logic exists,
+database_id = "<SET_AT_DEPLOY>"   # EU binding gets its own DB when DLS activates
+
+# ── R2 Buckets ────────────────────────────────────────────────────────────────
+[[r2_buckets]]
+binding = "R2_ARTIFACTS"
+bucket_name = "brain-artifacts"
+
+[[r2_buckets]]
+binding = "R2_OBSERVABILITY"
+bucket_name = "brain-observability"
+
+# ── KV Namespaces ─────────────────────────────────────────────────────────────
+[[kv_namespaces]]
+binding = "KV_SESSION"
+id = "<SET_AT_DEPLOY>"
+
+# ── Queues ────────────────────────────────────────────────────────────────────
+# LESSON: Always set BOTH max_batch_size AND max_batch_timeout (Schema V2 Spec 1.5)
+
+[[queues.producers]]
+binding = "QUEUE_HIGH"
+queue = "brain-priority-high"
+
+[[queues.producers]]
+binding = "QUEUE_NORMAL"
+queue = "brain-priority-normal"
+
+[[queues.producers]]
+binding = "QUEUE_BULK"
+queue = "brain-priority-bulk"
+
+[[queues.producers]]
+binding = "QUEUE_DEAD"
+queue = "brain-dead-letter"
+
+[[queues.producers]]
+binding = "QUEUE_ACTIONS"
+queue = "brain-actions"
+
+[[queues.consumers]]
+queue = "brain-priority-high"
+max_batch_size = 10
+max_batch_timeout = 5          # seconds — 30s SLA needs fast delivery
+
+[[queues.consumers]]
+queue = "brain-priority-normal"
+max_batch_size = 25
+max_batch_timeout = 30
+
+[[queues.consumers]]
+queue = "brain-priority-bulk"
+max_batch_size = 50
+max_batch_timeout = 60
+
+[[queues.consumers]]
+queue = "brain-dead-letter"
+max_batch_size = 10
+max_batch_timeout = 300        # DLQ — 5min, manual review cadence
+
+[[queues.consumers]]
+queue = "brain-actions"
+max_batch_size = 1             # Actions are never batched — one at a time
+max_batch_timeout = 5
+
+# ── Vectorize ─────────────────────────────────────────────────────────────────
+[[vectorize]]
+binding = "VECTORIZE"
+index_name = "brain-memory"
+# dimensions = 768  (bge-base-en-v1.5)
+# metric = "cosine"
+# Create via: wrangler vectorize create brain-memory --dimensions=768 --metric=cosine
+
+# ── Analytics Engine ──────────────────────────────────────────────────────────
+[[analytics_engine_datasets]]
+binding = "ANALYTICS"
+dataset = "BRAIN_ANALYTICS"
+
+# ── AI Gateway ────────────────────────────────────────────────────────────────
+# Configured in src/ via AI binding with gateway option
+# All LLM calls use: { gateway: { id: "brain-gateway" } }
+# brain-gateway created manually in Cloudflare dashboard before first deploy
+
+# ── Browser Rendering ─────────────────────────────────────────────────────────
+[browser]
+binding = "BROWSER"
+# Used by Action Worker for brain_v1_act_browse (Phase 2.3)
+
+# ── Hyperdrive (Neon connection pool) ─────────────────────────────────────────
+[[hyperdrive]]
+binding = "HYPERDRIVE"
+id = "<SET_AT_DEPLOY>"
+# Create via: wrangler hyperdrive create brain-neon --connection-string="<NEON_URL>"
+# The Container uses HYPERDRIVE.connectionString for Postgres connection

@@ -1,0 +1,12 @@
+[server]
+port = 8080
+host = "0.0.0.0"
+
+[database]
+# Hyperdrive provides pooled connection — HYPERDRIVE env var injected by Cloudflare
+url_env = "HYPERDRIVE"
+
+[migrations]
+# Hindsight runs its own migrations on startup (0001-0999 prefix)
+# Brain migrations (1001+) run separately via wrangler d1 migrations apply
+auto_migrate = true

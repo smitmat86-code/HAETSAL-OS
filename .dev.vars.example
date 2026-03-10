@@ -1,0 +1,10 @@
+# THE Brain — Local Development Environment Variables
+# Copy this file to .dev.vars and fill in real values
+# .dev.vars is gitignored — never commit secrets
+
+# Neon Postgres connection string (used by Hyperdrive)
+# Format: postgresql://user:password@host:5432/dbname?sslmode=require
+NEON_CONNECTION_STRING=postgresql://user:password@localhost:5432/brain_dev
+
+# Cloudflare AI Gateway ID (created in dashboard)
+AI_GATEWAY_ID=brain-gateway

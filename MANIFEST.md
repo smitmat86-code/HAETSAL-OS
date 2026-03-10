@@ -4,7 +4,7 @@
 > Then read SESSION_LOG.md (last 3 entries), then LESSONS.md (relevant section),
 > then your active spec.
 
-Last updated: 2026-03-10 | Session: 0.0 (scaffold)
+Last updated: 2026-03-10 | Session: 1.1 (infrastructure bedrock)
 
 ## Module Registry
 
@@ -12,7 +12,13 @@ Last updated: 2026-03-10 | Session: 0.0 (scaffold)
 
 <!-- AUTO-GENERATED MODULE REGISTRY - DO NOT EDIT -->
 
-*Run `npm run manifest` to populate this section.*
+*Auto-generated: 2026-03-10*
+
+### src/
+
+| File | Lines | Key Exports | Status |
+|------|-------|------------|--------|
+| src\workers\health\index.ts | 70 | — | ✅ |
 
 <!-- END AUTO-GENERATED -->
 
@@ -31,18 +37,20 @@ None yet. Cross-module interfaces will be listed here as they are defined.
 
 | Spec | Session | Phase | Status |
 |------|---------|-------|--------|
-| *(none yet)* | — | — | — |
+| Infrastructure Bedrock | 1.1 | 1 | 🟡 In Progress |
 
 ## Known Issues
 
-- No known issues yet. This is a fresh scaffold.
+- `npm install` required before any scripts run
 
 ## Hindsight Pin
 
 ```
-Commit: [SET THIS AT PHASE 1 START]
-Date pinned: [DATE]
-Reason: Initial pin — tested on Neon branch [BRANCH NAME]
+Commit: 58fdac44f78c60afa09871430c375c0459d14cb6
+Tag: v0.4.16
+Date pinned: 2026-03-10
+Reason: Initial pin — latest stable release. Schema migration threading fix,
+        GIN index on source_memory_ids, Dependabot security fixes.
 ```
 
 ## Quick Reference
@@ -58,18 +66,20 @@ Reason: Initial pin — tested on Neon branch [BRANCH NAME]
 
 | Binding | Status | Notes |
 |---------|--------|-------|
-| Hindsight Container | 🔴 Not built | Phase 1.1 |
-| Neon Postgres + Hyperdrive | 🔴 Not built | Phase 1.1 |
+| Hindsight Container | 🟢 Pinned v0.4.16 | Dockerfile + hindsight.toml — `58fdac4` |
+| Neon Postgres + Hyperdrive | 🟡 Binding in wrangler.toml | ID placeholder — set at deploy |
 | McpAgent DO | 🔴 Not built | Phase 1.2 |
 | Cloudflare Pages | 🔴 Not built | Phase 1.3 |
-| D1_US | 🔴 Not built | Phase 1.1 |
-| R2_ARTIFACTS | 🔴 Not built | Phase 1.1 |
-| R2_OBSERVABILITY | 🔴 Not built | Phase 1.1 |
-| KV_SESSION | 🔴 Not built | Phase 1.1 |
-| Vectorize | 🔴 Not built | Phase 1.1 |
-| QUEUE_HIGH/NORMAL/BULK/DEAD | 🔴 Not built | Phase 2.1 |
-| QUEUE_ACTIONS | 🔴 Not built | Phase 1.3 |
+| D1_US | 🟢 Migrations ready | 4 migration files (1001–1004), 16 tables |
+| D1_EU | 🟡 Stub binding | Same DB as D1_US — TODO Phase 5+ |
+| R2_ARTIFACTS | 🟢 Binding configured | brain-artifacts bucket |
+| R2_OBSERVABILITY | 🟢 Binding configured | brain-observability bucket |
+| KV_SESSION | 🟢 Binding configured | ID placeholder — set at deploy |
+| Vectorize | 🟢 Binding configured | brain-memory index, 768 dims, cosine |
+| QUEUE_HIGH/NORMAL/BULK/DEAD | 🟢 Configured | All with max_batch_size + max_batch_timeout |
+| QUEUE_ACTIONS | 🟢 Configured | batch_size=1, timeout=5s |
 | Action Worker | 🔴 Not built | Phase 1.3 |
 | AI Gateway (brain-gateway) | 🔴 Not built | Phase 1.2 |
+| ANALYTICS | 🟢 Binding configured | BRAIN_ANALYTICS dataset |
+| BROWSER | 🟢 Binding configured | Phase 2.3 |
 | Telnyx SMS | 🔴 Not built | Phase 2.1 |
-| Browser Rendering | 🔴 Not built | Phase 2.3 |

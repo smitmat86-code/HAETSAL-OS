@@ -1,0 +1,25 @@
+# Wrangler config for vitest-pool-workers testing
+# Stripped to only bindings supported by miniflare
+# Full production config is in wrangler.toml
+name = "the-brain-test"
+main = "src/workers/health/index.ts"
+compatibility_date = "2025-01-01"
+compatibility_flags = ["nodejs_compat"]
+
+[[d1_databases]]
+binding = "D1_US"
+database_name = "brain-us-test"
+database_id = "test-brain-us"
+migrations_dir = "migrations"
+
+[[r2_buckets]]
+binding = "R2_ARTIFACTS"
+bucket_name = "brain-artifacts-test"
+
+[[r2_buckets]]
+binding = "R2_OBSERVABILITY"
+bucket_name = "brain-observability-test"
+
+[[kv_namespaces]]
+binding = "KV_SESSION"
+id = "test-kv-session"

@@ -1,0 +1,24 @@
+{
+  "name": "the-brain",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "wrangler dev",
+    "test": "vitest run",
+    "postflight": "tsx scripts/postflight-check.ts",
+    "manifest": "tsx scripts/generate-manifest.ts"
+  },
+  "dependencies": {
+    "hono": "^4.7.0"
+  },
+  "devDependencies": {
+    "@cloudflare/vitest-pool-workers": "^0.8.0",
+    "@cloudflare/workers-types": "^4.20250303.0",
+    "@types/node": "^22.0.0",
+    "tsx": "^4.19.0",
+    "typescript": "^5.7.0",
+    "vitest": "~3.0.0",
+    "wrangler": "^4.0.0"
+  }
+}

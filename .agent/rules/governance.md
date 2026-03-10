@@ -174,6 +174,11 @@ All three must pass before marking work complete.
 - [ ] CONVENTIONS.md updated if new patterns established
 - [ ] Spec As-Built section completed if finishing a spec
 
+### Step 5: Spec Lifecycle
+
+- [ ] Completed spec moved from `specs/active/` to `specs/completed/`
+- [ ] If spec touches Hindsight: pin is a real commit hash in Dockerfile, MANIFEST.md, and README.md (not a placeholder)
+
 ---
 
 ## Escalation Protocol

@@ -329,3 +329,25 @@
 **Next:** Phase 3.2 — Career Coach (First Domain Agent)
 
 ---
+
+## Session 3.2 — 2026-03-10
+
+**Spec:** Phase 3.2 — Career Coach (First Domain Agent)
+**Built:**
+- src/agents/career-coach.ts (100 lines) — CareerCoach extends BaseAgent, career-specific open/close/synthesis
+- src/agents/types.ts (73 lines) — Added CareerContext interface
+- src/tools/memory.ts (64 lines) — memory_search + memory_write MCP tools (Zod excludes procedural+world)
+- src/workers/mcpagent/do/McpAgent.ts (148 lines) — wired registerMemoryTools, version 3.2.0
+- tests/3.2-career-coach.test.ts (92 lines) — 10 tests
+- tests/3.2-memory-interface.test.ts (85 lines) — 9 tests
+**Decisions:**
+- **Memory tools extracted to src/tools/memory.ts:** McpAgent.ts at 150-line ceiling. Same context-injection pattern as bootstrap tools.
+- **career_context + career_note session-scoped tools deferred:** Requires DO lifecycle wiring; Career Coach works as standalone class without session-scoped tools.
+- **memory_write excludes both procedural AND world:** Law 3 blocks procedural; world enters via ingestion pipeline only, not MCP callers.
+- **recallViaService reused in CareerCoach open():** Instead of raw Hindsight calls with encryptQuery, uses existing pattern from tools/recall.ts.
+**Hindsight Pin:** unchanged (v0.4.16 @ 58fdac4)
+**Fixture Data:** N/A — type-level and schema-level tests
+**Blockers:** None
+**Next:** Phase 3.3 — Nightly Consolidation Cron
+
+---

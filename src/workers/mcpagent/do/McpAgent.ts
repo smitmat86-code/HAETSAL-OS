@@ -1,8 +1,4 @@
-// src/workers/mcpagent/do/McpAgent.ts
-// THE Brain's session container — Durable Object
-// Holds TMK in memory — eviction = key rotation
-// Handles MCP Streamable HTTP + WebSocket upgrade for Pages push
-
+// src/workers/mcpagent/do/McpAgent.ts — DO session container, TMK in memory
 import { McpAgent as BaseMcpAgent } from 'agents/mcp'
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import type { Env } from '../../../types/env'
@@ -23,28 +19,30 @@ import { remindSchema, remindStub } from '../../../tools/act/remind'
 import { runPlaybookSchema, runPlaybookStub } from '../../../tools/act/run-playbook'
 import type { InterviewState } from '../../../types/bootstrap'
 import { registerBootstrapTools } from '../../../tools/bootstrap'
+import { registerMemoryTools } from '../../../tools/memory'
 
 export class McpAgentDO extends BaseMcpAgent<Env> {
   private tmk: CryptoKey | null = null
   private _tenantId: string | null = null
   private wsConnections: Set<WebSocket> = new Set()
   private interviewState: InterviewState | null = null
-
-  server = new McpServer({ name: 'the-brain', version: '2.4.0' })
+  server = new McpServer({ name: 'the-brain', version: '3.2.0' })
 
   async init() {
-    this.registerMemoryTools()
+    this.registerLegacyMemoryTools()
     this.registerActTools()
+    const ctx = { getEnv: () => this.env, getTenantId: () => this._tenantId!,
+      getTmk: () => this.tmk, getHindsightTenantId: () => this._tenantId! }
+    registerMemoryTools(this.server, ctx)
     registerBootstrapTools(this.server, {
-      getEnv: () => this.env,
-      getTenantId: () => this._tenantId!,
+      getEnv: () => this.env, getTenantId: () => this._tenantId!,
       getTmk: () => this.tmk,
       getInterviewState: () => this.interviewState,
       setInterviewState: (s) => { this.interviewState = s },
     })
   }
 
-  private registerMemoryTools() {
+  private registerLegacyMemoryTools() {
     const doEnv = this.env
     const self = this
     this.server.tool('brain_v1_retain', 'Retain a memory in THE Brain', retainSchema,
@@ -82,35 +80,27 @@ export class McpAgentDO extends BaseMcpAgent<Env> {
         const result = await fn(input)
         return { content: [{ type: 'text' as const, text: JSON.stringify(result) }] }
       }
-
     this.server.tool('brain_v1_act_send_message', 'Send SMS or email',
       sendMessageSchema.shape, wrap(i => sendMessageStub(
         i as Parameters<typeof sendMessageStub>[0], doEnv, self._tenantId!, proposedBy)))
-
     this.server.tool('brain_v1_act_create_event', 'Create calendar event',
       createEventSchema.shape, wrap(i => createEventStub(
         i as Parameters<typeof createEventStub>[0], doEnv, self._tenantId!, proposedBy)))
-
     this.server.tool('brain_v1_act_modify_event', 'Modify calendar event',
       modifyEventSchema.shape, wrap(i => modifyEventStub(
         i as Parameters<typeof modifyEventStub>[0], doEnv, self._tenantId!, proposedBy)))
-
     this.server.tool('brain_v1_act_draft', 'Create a draft',
       draftSchema.shape, wrap(i => draftStub(
         i as Parameters<typeof draftStub>[0], doEnv, self._tenantId!, proposedBy)))
-
     this.server.tool('brain_v1_act_search', 'Search the web',
       searchSchema.shape, wrap(i => searchStub(
         i as Parameters<typeof searchStub>[0], doEnv, self._tenantId!, proposedBy)))
-
     this.server.tool('brain_v1_act_browse', 'Browse a web page',
       browseSchema.shape, wrap(i => browseStub(
         i as Parameters<typeof browseStub>[0], doEnv, self._tenantId!, proposedBy)))
-
     this.server.tool('brain_v1_act_remind', 'Set a reminder',
       remindSchema.shape, wrap(i => remindStub(
         i as Parameters<typeof remindStub>[0], doEnv, self._tenantId!, proposedBy)))
-
     this.server.tool('brain_v1_act_run_playbook', 'Run a multi-step playbook',
       runPlaybookSchema.shape, wrap(i => runPlaybookStub(
         i as Parameters<typeof runPlaybookStub>[0], doEnv, self._tenantId!, proposedBy)))
@@ -127,7 +117,7 @@ export class McpAgentDO extends BaseMcpAgent<Env> {
     const [client, server] = Object.values(new WebSocketPair())
     server.accept()
     this.wsConnections.add(server)
-    server.addEventListener('message', () => { /* Ping/pong — action events via broadcast */ })
+    server.addEventListener('message', () => {})
     server.addEventListener('close', () => { this.wsConnections.delete(server) })
     server.send(JSON.stringify({ type: 'connected', tenantId: this._tenantId }))
     return new Response(null, { status: 101, webSocket: client })
@@ -140,10 +130,6 @@ export class McpAgentDO extends BaseMcpAgent<Env> {
     }
   }
 
-  getTmk(): CryptoKey | null {
-    return this.tmk
-  }
-  getHindsightTenantId(): string | null {
-    return this._tenantId
-  }
+  getTmk(): CryptoKey | null { return this.tmk }
+  getHindsightTenantId(): string | null { return this._tenantId }
 }

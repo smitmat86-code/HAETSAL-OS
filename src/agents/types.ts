@@ -64,3 +64,9 @@ export interface DelegationSignal {
   reason: string
   context: string
 }
+
+/** Career Coach extended context */
+export interface CareerContext extends AgentContext {
+  careerRelationships: AgentContext['memories']
+  recentDecisions: AgentContext['memories']
+}

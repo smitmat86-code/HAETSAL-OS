@@ -19,9 +19,10 @@ Last updated: 2026-03-10 | Session: 1.4 (pages ui + approval flow)
 | File | Lines | Key Exports | Status |
 |------|-------|------------|--------|
 | src\agents\base-agent.ts | 149 | — | ✅ |
+| src\agents\career-coach.ts | 105 | CareerCoach | ✅ |
 | src\agents\chief-of-staff.ts | 69 | ChiefOfStaff | ✅ |
 | src\agents\helpers.ts | 49 | MODEL_CONTEXT_LIMIT, FLUSH_THRESHOLD, shouldFlush | ✅ |
-| src\agents\types.ts | 67 | EpistemicMemoryType, AgentType, AgentContext... | ✅ |
+| src\agents\types.ts | 73 | EpistemicMemoryType, AgentType, AgentContext... | ✅ |
 | src\middleware\audit.ts | 45 | auditMiddleware | ✅ |
 | src\middleware\auth.ts | 140 | authMiddleware | ✅ |
 | src\middleware\dlp.ts | 17 | dlpMiddleware | ✅ |
@@ -59,6 +60,7 @@ Last updated: 2026-03-10 | Session: 1.4 (pages ui + approval flow)
 | src\tools\act\search.ts | 33 | searchSchema | ✅ |
 | src\tools\act\send-message.ts | 33 | sendMessageSchema | ✅ |
 | src\tools\bootstrap.ts | 104 | registerBootstrapTools | ✅ |
+| src\tools\memory.ts | 65 | registerMemoryTools | ✅ |
 | src\tools\recall.ts | 97 | — | ✅ |
 | src\tools\retain.ts | 58 | — | ✅ |
 | src\types\action.ts | 105 | CapabilityClass, AuthorizationLevel, AUTH_LEVEL_ORDINAL... | ✅ |
@@ -73,7 +75,7 @@ Last updated: 2026-03-10 | Session: 1.4 (pages ui + approval flow)
 | src\workers\ingestion\bootstrap-handlers.ts | 91 | — | ✅ |
 | src\workers\ingestion\consumer.ts | 91 | — | ✅ |
 | src\workers\ingestion\handlers.ts | 103 | — | ✅ |
-| src\workers\mcpagent\do\McpAgent.ts | 150 | McpAgentDO | ✅ |
+| src\workers\mcpagent\do\McpAgent.ts | 136 | McpAgentDO | ✅ |
 | src\workers\mcpagent\index.ts | 150 | — | ✅ |
 | src\workers\mcpagent\routes\actions.ts | 79 | actions | ✅ |
 | src\workers\mcpagent\routes\approval.ts | 73 | approval | ✅ |

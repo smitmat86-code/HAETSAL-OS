@@ -46,4 +46,7 @@ export interface Env {
   CF_ACCESS_TEAM: string  // CF Access team domain (for JWKs URL)
   HMAC_SECRET: string     // For action preference HMAC (Phase 1.3)
   TELNYX_PUBLIC_KEY: string // Ed25519 public key for SMS webhook signature verification
+  TELEGRAM_BOT_TOKEN: string   // Bot API token from BotFather
+  TELEGRAM_WEBHOOK_SECRET: string // Secret token for webhook validation
+  BRAVE_API_KEY: string        // Brave Search API key for news headlines
 }

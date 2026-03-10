@@ -23,6 +23,15 @@ settings.get('/', async (c) => {
   }
 })
 
+// Manual Telegram chat_id setup — tenant enters chat_id from Pages settings
+// Full /start onboarding flow: Phase 5+
+settings.post('/telegram', async (c) => {
+  const { chat_id } = await c.req.json<{ chat_id: string }>()
+  if (!chat_id) return c.json({ error: 'Missing chat_id' }, 400)
+  await c.env.KV_SESSION.put(`telegram_chat_id:${c.get('tenantId')}`, String(chat_id))
+  return c.json({ ok: true })
+})
+
 settings.post('/preferences', async (c) => {
   await getOrCreateTenant(c.get('tenantId'), c.get('jwtSub'), c.env)
   const body = await c.req.json<{

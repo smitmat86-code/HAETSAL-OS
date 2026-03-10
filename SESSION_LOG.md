@@ -351,3 +351,38 @@
 **Next:** Phase 3.3 — Nightly Consolidation Cron
 
 ---
+
+## Session 3.4 — 2026-03-10
+
+**Spec:** Phase 3.4 — Morning Brief + Predictive Heartbeat
+**Built:**
+- src/cron/morning-brief.ts (93 lines) — brief assembly + 3-channel delivery (Telegram, DO broadcast, Obsidian)
+- src/cron/brief-sections.ts (91 lines) — 7 section fetchers extracted for postflight limit
+- src/cron/heartbeat.ts (61 lines) — 30-min predictive heartbeat, 8AM-8PM UTC, alert-only sends
+- src/cron/weekly-synthesis.ts (81 lines) — Friday 5PM synthesis via Workers AI + Telegram + Obsidian
+- src/cron/kek.ts (42 lines) — KEK fetch, validate, derive CryptoKey for cron jobs
+- src/cron/obsidian-poll.ts (40 lines) — extracted obsidian poll from index.ts
+- src/services/delivery/telegram.ts (30 lines) — Telegram bot sendMessage
+- src/services/delivery/obsidian-write.ts (51 lines) — Google Drive /from-brain/ write
+- migrations/1008_brain_consolidation.sql (37 lines) — consolidation_runs + consolidation_gaps
+- tests/3.4-morning-brief.test.ts — 9 tests
+- tests/3.4-heartbeat.test.ts — 7 tests
+- tests/3.4-weekly-synthesis.test.ts — 6 tests
+- tests/3.4-telegram.test.ts — 6 tests
+- Modified: env.ts, index.ts, settings.ts, tenant.ts, wrangler.toml
+**Decisions:**
+- **Phase 3.3 skipped (user redesigning).** 3.4's prerequisites (consolidation tables, kek.ts, raw KEK KV write) built as part of 3.4.
+- **Raw KEK bytes stored in KV** via `provisionOrRenewKek()` with 24h TTL — accepted tradeoff for cron access.
+- **morning-brief.ts split into two files** when postflight caught 175-line violation. Section fetchers extracted to brief-sections.ts.
+- **Obsidian poll extracted to separate module** to keep index.ts under 150 lines after adding cron dispatch switch.
+- **Column name mismatches discovered:** spec's `tool_name` → actual `action_type`, `payload_encrypted` → `payload_r2_key`, missing `proposed_by`. Added to LESSONS.md.
+**Verification:**
+- `npm test` — 212 passed (30 files, 0 failures)
+- `npm run postflight` — passed
+- `npm run manifest` — regenerated
+**Hindsight Pin:** unchanged (v0.4.16 @ 58fdac4)
+**Fixture Data:** Tests seed tenants, pending_actions, consolidation_runs, consolidation_gaps
+**Blockers:** None — Telegram secrets and Brave API key must be set before deploy
+**Next:** Phase 3.3 (redesigned) or Phase 4.1
+
+---

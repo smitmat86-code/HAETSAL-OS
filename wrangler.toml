@@ -129,11 +129,17 @@ name = "brain-bootstrap"
 binding = "BOOTSTRAP_WORKFLOW"
 class_name = "BootstrapWorkflow"
 
-# ── Cron Triggers (Phase 2.2 — Obsidian polling) ─────────────────────────────
+# ── Cron Triggers ────────────────────────────────────────────────────────────
 [triggers]
-crons = ["*/1 * * * *", "*/15 * * * *"]
-# */1: /to-brain/ folder poll (checks KV last_poll first)
-# */15: vault-wide brain: true frontmatter scan
+crons = ["*/1 * * * *", "*/15 * * * *", "0 7 * * *", "*/30 * * * *", "0 17 * * 5"]
+# */1: /to-brain/ folder poll (2.2)
+# */15: vault-wide brain:true scan (2.2)
+# 0 7: morning brief (3.4)
+# */30: predictive heartbeat 8AM-8PM (3.4)
+# 0 17 * * 5: weekly synthesis Friday 5PM (3.4)
+
+[vars]
+TELEGRAM_BOT_USERNAME = "the_brain_bot"
 
 # ── Hyperdrive (Neon connection pool) ─────────────────────────────────────────
 [[hyperdrive]]

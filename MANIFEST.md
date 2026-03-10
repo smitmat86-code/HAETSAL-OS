@@ -23,6 +23,12 @@ Last updated: 2026-03-10 | Session: 1.4 (pages ui + approval flow)
 | src\agents\chief-of-staff.ts | 69 | ChiefOfStaff | ✅ |
 | src\agents\helpers.ts | 49 | MODEL_CONTEXT_LIMIT, FLUSH_THRESHOLD, shouldFlush | ✅ |
 | src\agents\types.ts | 73 | EpistemicMemoryType, AgentType, AgentContext... | ✅ |
+| src\cron\brief-sections.ts | 92 | — | ✅ |
+| src\cron\heartbeat.ts | 62 | — | ✅ |
+| src\cron\kek.ts | 43 | — | ✅ |
+| src\cron\morning-brief.ts | 93 | — | ✅ |
+| src\cron\obsidian-poll.ts | 41 | — | ✅ |
+| src\cron\weekly-synthesis.ts | 82 | — | ✅ |
 | src\middleware\audit.ts | 45 | auditMiddleware | ✅ |
 | src\middleware\auth.ts | 140 | authMiddleware | ✅ |
 | src\middleware\dlp.ts | 17 | dlpMiddleware | ✅ |
@@ -39,6 +45,8 @@ Last updated: 2026-03-10 | Session: 1.4 (pages ui + approval flow)
 | src\services\agents\router.ts | 57 | — | ✅ |
 | src\services\bootstrap\historical-import.ts | 140 | historicalSalienceMultiplier | ✅ |
 | src\services\bootstrap\interview.ts | 80 | createInitialState, currentQuestion, currentDomain... | ✅ |
+| src\services\delivery\obsidian-write.ts | 52 | — | ✅ |
+| src\services\delivery\telegram.ts | 31 | — | ✅ |
 | src\services\google\calendar.ts | 62 | — | ✅ |
 | src\services\google\drive.ts | 74 | ObsidianFrontmatter, parseObsidianFrontmatter, extractWikilinks | ✅ |
 | src\services\google\gmail.ts | 84 | — | ✅ |
@@ -50,7 +58,7 @@ Last updated: 2026-03-10 | Session: 1.4 (pages ui + approval flow)
 | src\services\ingestion\salience.ts | 80 | scoreSalience | ✅ |
 | src\services\ingestion\write-policy.ts | 74 | WritePolicyResult | ✅ |
 | src\services\telnyx.ts | 39 | — | ✅ |
-| src\services\tenant.ts | 137 | — | ✅ |
+| src\services\tenant.ts | 143 | — | ✅ |
 | src\tools\act\browse.ts | 31 | browseSchema | ✅ |
 | src\tools\act\create-event.ts | 34 | createEventSchema | ✅ |
 | src\tools\act\draft.ts | 33 | draftSchema | ✅ |
@@ -65,7 +73,7 @@ Last updated: 2026-03-10 | Session: 1.4 (pages ui + approval flow)
 | src\tools\retain.ts | 58 | — | ✅ |
 | src\types\action.ts | 105 | CapabilityClass, AuthorizationLevel, AUTH_LEVEL_ORDINAL... | ✅ |
 | src\types\bootstrap.ts | 76 | BootstrapStatus, BootstrapParams, InterviewDomain... | ✅ |
-| src\types\env.ts | 50 | Env | ✅ |
+| src\types\env.ts | 53 | Env | ✅ |
 | src\types\google.ts | 53 | GoogleOAuthTokens, GoogleThread, GoogleMessage... | ✅ |
 | src\types\hindsight.ts | 38 | HindsightRetainRequest, HindsightRetainResponse, HindsightRecallRequest... | ✅ |
 | src\types\ingestion.ts | 46 | IngestionSource, IngestionArtifact, SalienceResult... | ✅ |
@@ -76,13 +84,13 @@ Last updated: 2026-03-10 | Session: 1.4 (pages ui + approval flow)
 | src\workers\ingestion\consumer.ts | 91 | — | ✅ |
 | src\workers\ingestion\handlers.ts | 103 | — | ✅ |
 | src\workers\mcpagent\do\McpAgent.ts | 136 | McpAgentDO | ✅ |
-| src\workers\mcpagent\index.ts | 150 | — | ✅ |
+| src\workers\mcpagent\index.ts | 132 | — | ✅ |
 | src\workers\mcpagent\routes\actions.ts | 79 | actions | ✅ |
 | src\workers\mcpagent\routes\approval.ts | 73 | approval | ✅ |
 | src\workers\mcpagent\routes\audit.ts | 51 | audit | ✅ |
 | src\workers\mcpagent\routes\auth.ts | 45 | — | ✅ |
 | src\workers\mcpagent\routes\ingest.ts | 120 | — | ✅ |
-| src\workers\mcpagent\routes\settings.ts | 64 | settings | ✅ |
+| src\workers\mcpagent\routes\settings.ts | 73 | settings | ✅ |
 | src\workflows\bootstrap.ts | 105 | BootstrapWorkflow | ✅ |
 
 ### pages/src/

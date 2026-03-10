@@ -406,6 +406,21 @@
   prove a DO bootstrap has already happened.
   Ref: Session 1.4, initial Pages load would 404 on tenant reads without this.
 
+- **Spec SQL Column Names Drift — Always Verify Against Actual DDL.**
+  Spec 3.4 referenced `tool_name` and `payload_encrypted` in `pending_actions`,
+  but the actual DDL (migration 1004) uses `action_type` and `payload_r2_key`.
+  Also missed `proposed_by` NOT NULL column in test INSERTs. These cause runtime
+  D1 errors, not compile-time type errors. ALWAYS read the migration file before
+  writing any D1 query — never trust column names from spec documents.
+  Ref: Phase 3.4 — 3 column name mismatches caught by integration tests.
+
+- **Postflight Line Limit Is Global — Spec Overrides Don't Apply.**
+  Spec 3.4 allowed 180 lines for morning-brief.ts, but `postflight-check.ts`
+  enforces a global 150-line limit on all `.ts` files. The spec-level limit is
+  aspirational guidance; the postflight tool is the actual enforcement boundary.
+  When a file exceeds 150 lines, extract helpers to a separate module file.
+  Ref: Phase 3.4 — morning-brief.ts split into morning-brief.ts (93) + brief-sections.ts (91).
+
 - **Browser WebSocket Env Vars Are Separate From Pages Function Env Vars.**
   `WORKER_URL` is server-side only inside Pages Functions. Browser code cannot
   read it. If the SPA needs to open a direct WebSocket to the Worker DO, add a

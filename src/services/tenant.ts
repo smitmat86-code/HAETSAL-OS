@@ -120,6 +120,12 @@ export async function provisionOrRenewKek(
   const combined = new Uint8Array([...iv, ...new Uint8Array(encrypted)])
   const ciphertext = btoa(String.fromCharCode(...combined))
 
+  // Store raw key bytes in KV for cron access (Law 2: accepted 24h exposure window)
+  const rawB64 = btoa(String.fromCharCode(...kekBytes))
+  await env.KV_SESSION.put(`cron_kek:${tenant.id}`, rawB64, {
+    expirationTtl: Math.floor(TWENTY_FOUR_HOURS_MS / 1000),
+  })
+
   const operation = needsProvision ? 'auth.kek_provisioned' : 'auth.kek_renewed'
 
   // Atomic: tenants UPDATE + audit in one batch

@@ -16,6 +16,10 @@ import { settings } from './routes/settings'
 import { audit } from './routes/audit'
 import { handleActionBatch } from '../action/index'
 import { handleIngestionBatch } from '../ingestion/consumer'
+import { handleObsidianPoll } from '../../cron/obsidian-poll'
+import { handleMorningBrief } from '../../cron/morning-brief'
+import { runPredictiveHeartbeat } from '../../cron/heartbeat'
+import { runWeeklySynthesis } from '../../cron/weekly-synthesis'
 import type { Env } from '../../types/env'
 import type { ActionQueueMessage } from '../../types/action'
 import type { IngestionQueueMessage } from '../../types/ingestion'
@@ -44,9 +48,14 @@ app.use('*', async (c, next) => {
 })
 
 // SMS ingest route — Law 1 exception: NOT behind CF Access
-// Telnyx webhook must reach this endpoint directly
-// Mounted BEFORE auth middleware so it bypasses JWT validation
 app.route('/ingest', ingest)
+
+// Telegram webhook — Law 1 exception: validated via secret token, not CF Access
+app.post('/telegram/webhook', async (c) => {
+  const secret = c.req.header('X-Telegram-Bot-Api-Secret-Token')
+  if (secret !== c.env.TELEGRAM_WEBHOOK_SECRET) return c.json({}, 403)
+  return c.json({ ok: true }) // Phase 3.4: ack only — full /start flow Phase 5+
+})
 
 // Auth on all remaining routes — Law 1: no route bypasses JWT validation
 app.use('*', authMiddleware())
@@ -109,41 +118,14 @@ export default {
       )
     }
   },
-  // Obsidian cron polling (Phase 2.2)
-  // */1: /to-brain/ folder check, */15: vault-wide brain:true scan
-  async scheduled(
-    event: ScheduledEvent,
-    env: Env,
-    ctx: ExecutionContext,
-  ): Promise<void> {
-    // Get all tenants with Obsidian sync enabled
-    const tenants = await env.D1_US.prepare(
-      `SELECT id FROM tenants WHERE obsidian_sync_enabled = 1`,
-    ).all<{ id: string }>()
-
-    if (!tenants.results?.length) return
-
-    for (const tenant of tenants.results) {
-      const lastPollKey = `obsidian_last_poll:${tenant.id}`
-      const lastPoll = await env.KV_SESSION.get(lastPollKey)
-      const lastPollMs = lastPoll ? parseInt(lastPoll, 10) : 0
-
-      // Skip if polled within the last 55 seconds (1-min cron safety)
-      if (event.cron === '*/1 * * * *' && Date.now() - lastPollMs < 55_000) continue
-
-      // Enqueue obsidian polling work to QUEUE_NORMAL
-      const message: IngestionQueueMessage = {
-        type: 'obsidian_note',
-        tenantId: tenant.id,
-        payload: {
-          pollType: event.cron === '*/1 * * * *' ? 'folder' : 'vault_scan',
-          sinceMs: lastPollMs,
-        },
-        enqueuedAt: Date.now(),
-      }
-
-      ctx.waitUntil(env.QUEUE_NORMAL.send(message))
-      ctx.waitUntil(env.KV_SESSION.put(lastPollKey, String(Date.now())))
+  // Cron dispatch — each expression routes to its handler module
+  async scheduled(event: ScheduledEvent, env: Env, ctx: ExecutionContext): Promise<void> {
+    switch (event.cron) {
+      case '*/1 * * * *':
+      case '*/15 * * * *':  return handleObsidianPoll(event, env, ctx)
+      case '0 7 * * *':     return handleMorningBrief(env, ctx)
+      case '*/30 * * * *':  return runPredictiveHeartbeat(env, ctx)
+      case '0 17 * * 5':    return runWeeklySynthesis(env, ctx)
     }
   },
 }

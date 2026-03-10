@@ -1,14 +1,18 @@
 // src/workers/mcpagent/index.ts
 // Hono app — route registrations only
+// Queue handler delegates to action worker module
 // Middleware order: security headers → auth → audit → dlp (MCP routes) → handler
 // LESSON: Security headers in try/finally — skip on WebSocket 101 responses
+// LESSON: Queue consumers export queue() alongside fetch() — no separate Worker needed
 
 import { Hono } from 'hono'
 import { McpAgentDO } from './do/McpAgent'
 import { authMiddleware } from '../../middleware/auth'
 import { auditMiddleware } from '../../middleware/audit'
 import { dlpMiddleware } from '../../middleware/dlp'
+import { handleActionBatch } from '../action/index'
 import type { Env } from '../../types/env'
+import type { ActionQueueMessage } from '../../types/action'
 
 type Variables = {
   tenantId: string
@@ -68,4 +72,11 @@ app.get('/ws', async (c) => {
 })
 
 export { McpAgentDO }
-export default app
+export default {
+  fetch: app.fetch,
+  // LESSON: Queue consumers don't require a separate Worker — export alongside fetch
+  async queue(batch: MessageBatch<ActionQueueMessage>, env: Env): Promise<void> {
+    await handleActionBatch(batch, env)
+  },
+}
+

@@ -21,14 +21,28 @@ Last updated: 2026-03-10 | Session: 1.1 (infrastructure bedrock)
 | src\middleware\audit.ts | 45 | auditMiddleware | ✅ |
 | src\middleware\auth.ts | 140 | authMiddleware | ✅ |
 | src\middleware\dlp.ts | 17 | dlpMiddleware | ✅ |
+| src\services\action\authorization.ts | 131 | AuthGateResult | ✅ |
+| src\services\action\executor.ts | 46 | — | ✅ |
+| src\services\action\router.ts | 110 | — | ✅ |
+| src\services\action\toctou.ts | 23 | — | ✅ |
 | src\services\tenant.ts | 137 | — | ✅ |
+| src\tools\act\browse.ts | 32 | browseSchema | ✅ |
+| src\tools\act\create-event.ts | 35 | createEventSchema | ✅ |
+| src\tools\act\draft.ts | 33 | draftSchema | ✅ |
+| src\tools\act\modify-event.ts | 35 | modifyEventSchema | ✅ |
+| src\tools\act\remind.ts | 33 | remindSchema | ✅ |
+| src\tools\act\run-playbook.ts | 32 | runPlaybookSchema | ✅ |
+| src\tools\act\search.ts | 33 | searchSchema | ✅ |
+| src\tools\act\send-message.ts | 33 | sendMessageSchema | ✅ |
 | src\tools\recall.ts | 20 | — | ✅ |
 | src\tools\retain.ts | 22 | — | ✅ |
+| src\types\action.ts | 87 | CapabilityClass, AuthorizationLevel, AUTH_LEVEL_ORDINAL... | ✅ |
 | src\types\env.ts | 46 | Env | ✅ |
 | src\types\tenant.ts | 30 | TenantContext, TenantRow | ✅ |
 | src\types\tools.ts | 53 | RetainInput, RetainOutput, RecallInput... | ✅ |
-| src\workers\mcpagent\do\McpAgent.ts | 102 | McpAgentDO | ✅ |
-| src\workers\mcpagent\index.ts | 72 | — | ✅ |
+| src\workers\action\index.ts | 91 | — | ✅ |
+| src\workers\mcpagent\do\McpAgent.ts | 134 | McpAgentDO | ✅ |
+| src\workers\mcpagent\index.ts | 83 | — | ✅ |
 
 <!-- END AUTO-GENERATED -->
 

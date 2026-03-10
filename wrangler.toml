@@ -97,6 +97,8 @@ max_batch_timeout = 300        # DLQ — 5min, manual review cadence
 queue = "brain-actions"
 max_batch_size = 1             # Actions are never batched — one at a time
 max_batch_timeout = 5
+max_retries = 3                # Platform-level retries before DLQ (independent of app-level max_retries)
+dead_letter_queue = "brain-dead-letter"
 
 # ── Vectorize ─────────────────────────────────────────────────────────────────
 [[vectorize]]

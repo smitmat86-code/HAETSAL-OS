@@ -215,6 +215,25 @@
   Brain impact: Action Worker dispatching to multiple integrations simultaneously.
   Ref: Schema V2 Spec 1.5, Bugs 1 & 2.
 
+- **Cloudflare Queue Consumers Export Alongside fetch() — No Separate Worker.**
+  Queues don't require a separate Worker to consume. Export a `queue()` handler
+  alongside `fetch()` from the same entry point. `[[queues.consumers]]` in
+  `wrangler.toml` points to the main Worker — the queue consumer binding resolves
+  to the Worker's exported `queue()` handler. Separate wrangler files are not
+  needed. Isolate action logic in a separate module (`src/workers/action/index.ts`)
+  to maintain Law 1 (no HTTP surface on the action logic), but export the
+  queue handler from the main entry.
+  Ref: Phase 1.3 — Action Layer Foundation.
+
+- **Platform max_retries vs. Application max_retries Are Independent.**
+  `wrangler.toml [[queues.consumers]] max_retries = 3` controls how many times
+  the platform retries a message before routing it to the `dead_letter_queue`.
+  `pending_actions.max_retries = 3` is the application-level retry budget for
+  action execution, tracked in D1. Both default to 3, but they are different
+  mechanisms operating at different layers — don't treat one as redundant with
+  the other.
+  Ref: Phase 1.3 — Action Layer Foundation.
+
 - **DO SQLite Forbids Raw SQL Transaction Statements.**
   Cloudflare DO SQLite does not allow `BEGIN`, `COMMIT`, or `ROLLBACK` SQL strings.
   Use `ctx.storage.transactionSync(() => { ... })` instead — the platform manages

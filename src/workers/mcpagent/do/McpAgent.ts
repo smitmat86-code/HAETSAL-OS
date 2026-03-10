@@ -13,31 +13,33 @@ import { writeAuditLog } from '../../../middleware/audit'
 import { getOrCreateTenant, provisionOrRenewKek } from '../../../services/tenant'
 import { retainStub } from '../../../tools/retain'
 import { recallStub } from '../../../tools/recall'
+import { sendMessageSchema, sendMessageStub } from '../../../tools/act/send-message'
+import { createEventSchema, createEventStub } from '../../../tools/act/create-event'
+import { modifyEventSchema, modifyEventStub } from '../../../tools/act/modify-event'
+import { draftSchema, draftStub } from '../../../tools/act/draft'
+import { searchSchema, searchStub } from '../../../tools/act/search'
+import { browseSchema, browseStub } from '../../../tools/act/browse'
+import { remindSchema, remindStub } from '../../../tools/act/remind'
+import { runPlaybookSchema, runPlaybookStub } from '../../../tools/act/run-playbook'
 
 export class McpAgentDO extends BaseMcpAgent<Env> {
-  // TMK held in DO memory only — NEVER written to storage
-  // Eviction clears it — re-derived on next auth
   private tmk: CryptoKey | null = null
   private _tenantId: string | null = null
   private wsConnections: Set<WebSocket> = new Set()
 
-  server = new McpServer({
-    name: 'the-brain',
-    version: '1.2.0',
-  })
+  server = new McpServer({ name: 'the-brain', version: '1.3.0' })
 
   async init() {
+    this.registerMemoryTools()
+    this.registerActTools()
+  }
+
+  private registerMemoryTools() {
     const doEnv = this.env
     const self = this
-
-    // Register MCP tools
-    this.server.tool(
-      'brain_v1_retain',
-      'Retain a memory in THE Brain',
-      retainSchema,
+    this.server.tool('brain_v1_retain', 'Retain a memory in THE Brain', retainSchema,
       async (input) => {
         const result = await retainStub(input as unknown as RetainInput)
-        // Audit via waitUntil — do not block MCP response
         if (self._tenantId) {
           self.ctx.waitUntil(writeAuditLog(doEnv, 'memory.retain_stub', self._tenantId, {
             agentIdentity: 'mcpagent/stub',
@@ -46,11 +48,7 @@ export class McpAgentDO extends BaseMcpAgent<Env> {
         return { content: [{ type: 'text' as const, text: JSON.stringify(result) }] }
       },
     )
-
-    this.server.tool(
-      'brain_v1_recall',
-      'Recall memories from THE Brain',
-      recallSchema,
+    this.server.tool('brain_v1_recall', 'Recall memories from THE Brain', recallSchema,
       async (input) => {
         const result = await recallStub(input as unknown as RecallInput)
         if (self._tenantId) {
@@ -63,7 +61,51 @@ export class McpAgentDO extends BaseMcpAgent<Env> {
     )
   }
 
-  // Initialize tenant context — called by Worker via DO RPC after auth
+  // Register action tool stubs — each publishes to QUEUE_ACTIONS
+  // LESSON (1.2): McpServer.tool() requires ZodRawShapeCompat — pass schema.shape
+  private registerActTools() {
+    const doEnv = this.env
+    const self = this
+    const proposedBy = 'mcpagent/tool'
+    const wrap = (fn: (i: unknown) => Promise<{ action_id: string; status: string }>) =>
+      async (input: unknown) => {
+        const result = await fn(input)
+        return { content: [{ type: 'text' as const, text: JSON.stringify(result) }] }
+      }
+
+    this.server.tool('brain_v1_act_send_message', 'Send SMS or email',
+      sendMessageSchema.shape, wrap(i => sendMessageStub(
+        i as Parameters<typeof sendMessageStub>[0], doEnv, self._tenantId!, proposedBy)))
+
+    this.server.tool('brain_v1_act_create_event', 'Create calendar event',
+      createEventSchema.shape, wrap(i => createEventStub(
+        i as Parameters<typeof createEventStub>[0], doEnv, self._tenantId!, proposedBy)))
+
+    this.server.tool('brain_v1_act_modify_event', 'Modify calendar event',
+      modifyEventSchema.shape, wrap(i => modifyEventStub(
+        i as Parameters<typeof modifyEventStub>[0], doEnv, self._tenantId!, proposedBy)))
+
+    this.server.tool('brain_v1_act_draft', 'Create a draft',
+      draftSchema.shape, wrap(i => draftStub(
+        i as Parameters<typeof draftStub>[0], doEnv, self._tenantId!, proposedBy)))
+
+    this.server.tool('brain_v1_act_search', 'Search the web',
+      searchSchema.shape, wrap(i => searchStub(
+        i as Parameters<typeof searchStub>[0], doEnv, self._tenantId!, proposedBy)))
+
+    this.server.tool('brain_v1_act_browse', 'Browse a web page',
+      browseSchema.shape, wrap(i => browseStub(
+        i as Parameters<typeof browseStub>[0], doEnv, self._tenantId!, proposedBy)))
+
+    this.server.tool('brain_v1_act_remind', 'Set a reminder',
+      remindSchema.shape, wrap(i => remindStub(
+        i as Parameters<typeof remindStub>[0], doEnv, self._tenantId!, proposedBy)))
+
+    this.server.tool('brain_v1_act_run_playbook', 'Run a multi-step playbook',
+      runPlaybookSchema.shape, wrap(i => runPlaybookStub(
+        i as Parameters<typeof runPlaybookStub>[0], doEnv, self._tenantId!, proposedBy)))
+  }
+
   async initTenant(jwtSub: string, tenantId: string) {
     this._tenantId = tenantId
     this.tmk = await deriveTmk(jwtSub, this.env.CF_ACCESS_AUD)
@@ -71,27 +113,17 @@ export class McpAgentDO extends BaseMcpAgent<Env> {
     await provisionOrRenewKek(tenant, this.tmk, this.env)
   }
 
-  // WebSocket upgrade handler — Pages UI push (1.3+ will broadcast action events)
   // LESSON: WebSocket 101 headers are immutable in workerd
   async handleWebSocket(_request: Request): Promise<Response> {
     const [client, server] = Object.values(new WebSocketPair())
     server.accept()
     this.wsConnections.add(server)
-
-    server.addEventListener('message', () => {
-      // Ping/pong only in Phase 1 — action events wired in 1.3
-    })
-    server.addEventListener('close', () => {
-      this.wsConnections.delete(server)
-    })
-
-    // Send connected confirmation
+    server.addEventListener('message', () => { /* Ping/pong — action events via broadcast */ })
+    server.addEventListener('close', () => { this.wsConnections.delete(server) })
     server.send(JSON.stringify({ type: 'connected', tenantId: this._tenantId }))
-
     return new Response(null, { status: 101, webSocket: client })
   }
 
-  // Broadcast to all connected Pages clients — called by Action Worker in 1.3
   broadcast(message: unknown) {
     const payload = JSON.stringify(message)
     for (const ws of this.wsConnections) {

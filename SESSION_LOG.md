@@ -110,3 +110,35 @@
 **Next:** Phase 1.3 — Action Worker + approval flow + WebSocket push for action events
 
 ---
+
+## Session 1.3 — 2026-03-10
+
+**Spec:** Phase 1.3 — Action Layer Foundation
+**Built:**
+- src/types/action.ts (~86 lines) — CapabilityClass, AuthorizationLevel, HARD_FLOORS, queue message schema
+- src/services/action/toctou.ts (~22 lines) — hashPayload + verifyPayloadHash (timingSafeEqual)
+- src/services/action/authorization.ts (~130 lines) — auth gate, HMAC verify, preference lookup
+- src/services/action/executor.ts (~46 lines) — stub execution + WebSocket broadcast
+- src/services/action/router.ts (~110 lines) — routeGreen/Yellow/Red + writeAnomalyAndAudit
+- src/workers/action/index.ts (~90 lines) — queue consumer pipeline (no HTTP surface)
+- src/tools/act/send-message.ts (~33 lines) — WRITE_EXTERNAL_IRREVERSIBLE stub
+- src/tools/act/create-event.ts (~35 lines) — WRITE_EXTERNAL_REVERSIBLE stub
+- src/tools/act/modify-event.ts (~35 lines) — WRITE_EXTERNAL_REVERSIBLE stub
+- src/tools/act/draft.ts (~33 lines) — WRITE_INTERNAL stub
+- src/tools/act/search.ts (~33 lines) — READ stub
+- src/tools/act/browse.ts (~33 lines) — READ stub
+- src/tools/act/remind.ts (~33 lines) — WRITE_INTERNAL stub
+- src/tools/act/run-playbook.ts (~33 lines) — WRITE_EXTERNAL_IRREVERSIBLE stub
+- src/workers/mcpagent/do/McpAgent.ts (~120 lines) — registered 8 act tools via registerActTools()
+- src/workers/mcpagent/index.ts (~82 lines) — added queue() handler alongside fetch()
+- tests/1.3-action-layer.test.ts (~210 lines) — 12 integration tests (auth gate, TOCTOU, pipeline)
+**Decisions:**
+- **Deviation: Queue consumer on main Worker, not separate.** Cloudflare Queues consumers export queue() alongside fetch() from the same entry point. No separate wrangler file needed. Action logic isolated in src/workers/action/ module with zero HTTP surface. Added to LESSONS.md.
+- **Deviation: Router extracted to separate file.** Postflight caught action/index.ts at 207 lines (limit 150). Extracted routeGreen/Yellow/Red + writeAnomalyAndAudit to src/services/action/router.ts.
+- **Platform max_retries vs app max_retries documented.** wrangler.toml max_retries=3 (platform DLQ routing) is independent from pending_actions.max_retries=3 (application-level budget). Added to LESSONS.md.
+**Hindsight Pin:** unchanged (v0.4.16 @ 58fdac4)
+**Fixture Data:** N/A — behavioral wiring only
+**Blockers:** None
+**Next:** Phase 1.4 — Pages UI + approval flow + settings
+
+---

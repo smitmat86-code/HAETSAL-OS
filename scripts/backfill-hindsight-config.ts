@@ -4,8 +4,16 @@
 // to an already-bootstrapped tenant. Safe to re-run — all operations idempotent.
 // Required .dev.vars: HINDSIGHT_URL, HINDSIGHT_BANK_ID, HINDSIGHT_WEBHOOK_SECRET, WORKER_DOMAIN
 
-import { config } from 'dotenv'
-config({ path: '.dev.vars' })
+import { readFileSync, existsSync } from 'fs'
+// Parse .dev.vars if present (KEY=VALUE lines, no dotenv dependency)
+if (existsSync('.dev.vars')) {
+  const vars = Object.fromEntries(
+    readFileSync('.dev.vars', 'utf-8').split('\n')
+      .map(l => l.trim()).filter(l => l && !l.startsWith('#'))
+      .map(l => { const i = l.indexOf('='); return [l.slice(0, i), l.slice(i + 1)] }),
+  )
+  Object.assign(process.env, vars)
+}
 
 const HINDSIGHT_URL = process.env.HINDSIGHT_URL!
 const BANK_ID = process.env.HINDSIGHT_BANK_ID!

@@ -418,3 +418,29 @@
 **Next:** Phase 4.1 or next reviewed active spec
 
 ---
+
+## Session 2.4a — 2026-03-10
+
+**Spec:** Phase 2.4a — Bootstrap Hindsight Configuration Addendum
+**Built:**
+- src/services/bootstrap/hindsight-config.ts (100 lines) — configureHindsightBank, createMentalModels, registerConsolidationWebhook
+- src/workflows/bootstrap.ts (128 lines) — added 4 step.do() (lookup-bank, config, models, webhook) before bootstrap-complete
+- src/types/env.ts (55 lines) — added WORKER_DOMAIN
+- scripts/backfill-hindsight-config.ts (91 lines) — one-time backfill for existing tenant
+- wrangler.toml — added WORKER_DOMAIN var
+- tests/2.4a-hindsight-config.test.ts (119 lines) — 9 tests
+**Decisions:**
+- **Extracted to service module:** 3 Hindsight config functions in `hindsight-config.ts` to keep bootstrap.ts under 150 lines.
+- **Added lookup-hindsight-bank step:** BootstrapParams has tenantId but not hindsightBankId — D1 lookup needed.
+- **Partial mental model failure non-blocking:** Promise.allSettled + console.error. Brain works without perfect mental models.
+- **Backfill manual:** Script created but deferred to when live Hindsight instance is available.
+**Verification:**
+- `npm test` — 251 passed (38 files, 0 failures)
+- `npm run postflight` — passed
+- `npm run manifest` — regenerated
+**Hindsight Pin:** unchanged (v0.4.16 @ 58fdac4)
+**Fixture Data:** Tests use mock env objects (no D1 needed — service function unit tests)
+**Blockers:** Backfill script needs live Hindsight to execute; 3 pre-finalization items deferred to deploy
+**Next:** Phase 4.1 or next reviewed active spec
+
+---

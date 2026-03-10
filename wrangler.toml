@@ -141,6 +141,7 @@ crons = ["*/1 * * * *", "*/15 * * * *", "0 7 * * *", "*/30 * * * *", "0 17 * * 5
 
 [vars]
 TELEGRAM_BOT_USERNAME = "the_brain_bot"
+WORKER_DOMAIN = "the-brain.workers.dev"  # set to actual domain at deploy (2.4a)
 
 # ── Hyperdrive (Neon connection pool) ─────────────────────────────────────────
 [[hyperdrive]]

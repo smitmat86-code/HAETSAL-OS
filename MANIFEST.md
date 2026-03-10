@@ -48,6 +48,7 @@ Last updated: 2026-03-10 | Session: 1.4 (pages ui + approval flow)
 | src\services\action\router.ts | 111 | — | ✅ |
 | src\services\action\toctou.ts | 23 | — | ✅ |
 | src\services\agents\router.ts | 57 | — | ✅ |
+| src\services\bootstrap\hindsight-config.ts | 101 | MENTAL_MODEL_DOMAINS | ✅ |
 | src\services\bootstrap\historical-import.ts | 140 | historicalSalienceMultiplier | ✅ |
 | src\services\bootstrap\interview.ts | 80 | createInitialState, currentQuestion, currentDomain... | ✅ |
 | src\services\delivery\obsidian-write.ts | 52 | — | ✅ |
@@ -78,7 +79,7 @@ Last updated: 2026-03-10 | Session: 1.4 (pages ui + approval flow)
 | src\tools\retain.ts | 58 | — | ✅ |
 | src\types\action.ts | 105 | CapabilityClass, AuthorizationLevel, AUTH_LEVEL_ORDINAL... | ✅ |
 | src\types\bootstrap.ts | 76 | BootstrapStatus, BootstrapParams, InterviewDomain... | ✅ |
-| src\types\env.ts | 54 | Env | ✅ |
+| src\types\env.ts | 55 | Env | ✅ |
 | src\types\google.ts | 53 | GoogleOAuthTokens, GoogleThread, GoogleMessage... | ✅ |
 | src\types\hindsight.ts | 38 | HindsightRetainRequest, HindsightRetainResponse, HindsightRecallRequest... | ✅ |
 | src\types\ingestion.ts | 46 | IngestionSource, IngestionArtifact, SalienceResult... | ✅ |
@@ -96,7 +97,7 @@ Last updated: 2026-03-10 | Session: 1.4 (pages ui + approval flow)
 | src\workers\mcpagent\routes\auth.ts | 45 | — | ✅ |
 | src\workers\mcpagent\routes\ingest.ts | 120 | — | ✅ |
 | src\workers\mcpagent\routes\settings.ts | 73 | settings | ✅ |
-| src\workflows\bootstrap.ts | 105 | BootstrapWorkflow | ✅ |
+| src\workflows\bootstrap.ts | 129 | BootstrapWorkflow | ✅ |
 
 ### pages/src/
 

@@ -15,6 +15,9 @@ import {
   importDriveHistory,
 } from '../services/bootstrap/historical-import'
 import { broadcastEvent } from '../services/action/executor'
+import {
+  configureHindsightBank, createMentalModels, registerConsolidationWebhook,
+} from '../services/bootstrap/hindsight-config'
 
 export class BootstrapWorkflow extends WorkflowEntrypoint<Env, BootstrapParams> {
   async run(event: WorkflowEvent<BootstrapParams>, step: WorkflowStep) {
@@ -77,7 +80,28 @@ export class BootstrapWorkflow extends WorkflowEntrypoint<Env, BootstrapParams> 
       return await importDriveHistory(tenantId, driveMonths, token, this.env)
     })
 
-    // Phase C: Handoff
+    // Phase C-1: Hindsight configuration (2.4a addendum)
+    // Order: bank config → mental models → webhook. Each step retries independently.
+    const bankId = await step.do('lookup-hindsight-bank', async () => {
+      const row = await this.env.D1_US.prepare(
+        'SELECT hindsight_tenant_id FROM tenants WHERE id = ?',
+      ).bind(tenantId).first<{ hindsight_tenant_id: string }>()
+      return row?.hindsight_tenant_id ?? ''
+    })
+
+    if (bankId) {
+      await step.do('configure-hindsight-bank', async () => {
+        await configureHindsightBank(bankId, this.env)
+      })
+      await step.do('create-mental-models', async () => {
+        await createMentalModels(bankId, this.env)
+      })
+      await step.do('register-consolidation-webhook', async () => {
+        await registerConsolidationWebhook(bankId, this.env)
+      })
+    }
+
+    // Phase C-2: Handoff
     const totalImported = gmailCount + calendarCount + driveCount
     await step.do('bootstrap-complete', async () => {
       const now = Date.now()

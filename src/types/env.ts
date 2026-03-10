@@ -50,4 +50,5 @@ export interface Env {
   TELEGRAM_WEBHOOK_SECRET: string // Secret token for webhook validation
   BRAVE_API_KEY: string        // Brave Search API key for news headlines
   HINDSIGHT_WEBHOOK_SECRET: string // HMAC-SHA256 for Hindsight webhook validation
+  WORKER_DOMAIN: string            // e.g. 'the-brain.workers.dev' — webhook registration (2.4a)
 }

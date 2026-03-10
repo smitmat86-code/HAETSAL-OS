@@ -4,7 +4,7 @@
 > Then read SESSION_LOG.md (last 3 entries), then LESSONS.md (relevant section),
 > then your active spec.
 
-Last updated: 2026-03-10 | Session: 1.4 (pages ui + approval flow)
+Last updated: 2026-03-10 | Session: 2.4a (bootstrap hindsight config)
 
 ## Module Registry
 
@@ -141,17 +141,30 @@ None yet. Cross-module interfaces will be listed here as they are defined.
 
 ## Active Specs
 
-Manual note: Session 1.4 is implemented and moved out of `specs/active/`.
-The current `specs/active/` directory now contains unreconciled Phase 3 drafts.
+No active specs. All Phases 1–3 + 2.4a complete (13 specs in `specs/completed/`).
 
-| Spec | Session | Phase | Status |
-|------|---------|-------|--------|
-| Infrastructure Bedrock | 1.1 | 1 | 🟡 In Progress |
+| Completed | Session | Phase |
+|-----------|---------|-------|
+| Infrastructure Bedrock | 1.1 | 1 |
+| McpAgent + Auth + AI Gateway | 1.2 | 1 |
+| Action Layer Foundation | 1.3 | 1 |
+| Pages UI + Approval Queue | 1.4 | 1 |
+| Ingestion Foundation | 2.1 | 2 |
+| Gmail + Calendar Ingestion | 2.2 | 2 |
+| Browser + Write Surfaces | 2.3 | 2 |
+| Bootstrap Import | 2.4 | 2 |
+| Bootstrap Hindsight Config | 2.4a | 2 |
+| BaseAgent + Chief of Staff | 3.1 | 3 |
+| Career Coach | 3.2 | 3 |
+| Nightly Consolidation v2 | 3.3 | 3 |
+| Morning Brief + Heartbeat | 3.4 | 3 |
 
 ## Known Issues
 
 - `npm install` required before any scripts run
 - Pages deployment still requires manual CF Access attachment plus `WORKER_URL` and `VITE_WORKER_URL`
+- 2.4a backfill script requires live Hindsight instance + `.dev.vars` — 3 deferred pre-finalization items
+- Deploy requires setting secrets: CF_ACCESS_AUD, CF_ACCESS_TEAM, HMAC_SECRET, TELNYX_PUBLIC_KEY, TELEGRAM_BOT_TOKEN, TELEGRAM_WEBHOOK_SECRET, BRAVE_API_KEY, HINDSIGHT_WEBHOOK_SECRET
 
 ## Hindsight Pin
 
@@ -174,18 +187,15 @@ Reason: Initial pin — latest stable release. Schema migration threading fix,
 
 ## Platform Binding Status
 
-Manual note: the status table below is partially stale from pre-1.4 work.
-As-built reality: McpAgent DO, Action Worker, Telnyx SMS, and the repo-side
-Cloudflare Pages app are implemented; Pages deployment still needs manual
-CF Access attachment plus `WORKER_URL` and `VITE_WORKER_URL`.
+Updated: Session 2.4a (2026-03-10)
 
 | Binding | Status | Notes |
 |---------|--------|-------|
-| Hindsight Container | 🟢 Pinned v0.4.16 | Dockerfile + hindsight.toml — `58fdac4` |
+| Hindsight Container | 🟢 Pinned v0.4.16 | Dockerfile + hindsight.toml — `58fdac4` (Phase 1.1) |
 | Neon Postgres + Hyperdrive | 🟡 Binding in wrangler.toml | ID placeholder — set at deploy |
-| McpAgent DO | 🔴 Not built | Phase 1.2 |
-| Cloudflare Pages | 🔴 Not built | Phase 1.3 |
-| D1_US | 🟢 Migrations ready | 4 migration files (1001–1004), 16 tables |
+| McpAgent DO | 🟢 Built | Phase 1.2 — auth, TMK, MCP tools, WebSocket |
+| Cloudflare Pages | 🟢 Built | Phase 1.4 — Vite React SPA, CF Access proxy |
+| D1_US | 🟢 Migrations ready | 8 migration files (1001–1008), 20+ tables |
 | D1_EU | 🟡 Stub binding | Same DB as D1_US — TODO Phase 5+ |
 | R2_ARTIFACTS | 🟢 Binding configured | brain-artifacts bucket |
 | R2_OBSERVABILITY | 🟢 Binding configured | brain-observability bucket |
@@ -193,8 +203,17 @@ CF Access attachment plus `WORKER_URL` and `VITE_WORKER_URL`.
 | Vectorize | 🟢 Binding configured | brain-memory index, 768 dims, cosine |
 | QUEUE_HIGH/NORMAL/BULK/DEAD | 🟢 Configured | All with max_batch_size + max_batch_timeout |
 | QUEUE_ACTIONS | 🟢 Configured | batch_size=1, timeout=5s |
-| Action Worker | 🔴 Not built | Phase 1.3 |
-| AI Gateway (brain-gateway) | 🔴 Not built | Phase 1.2 |
+| Action Worker | 🟢 Built | Phase 1.3 — queue consumer, no HTTP surface |
+| AI Gateway (brain-gateway) | 🟢 Wired | Phase 3.1+ — all LLM calls route via gateway |
 | ANALYTICS | 🟢 Binding configured | BRAIN_ANALYTICS dataset |
-| BROWSER | 🟢 Binding configured | Phase 2.3 |
-| Telnyx SMS | 🔴 Not built | Phase 2.1 |
+| BROWSER | 🟢 Binding configured | Phase 2.3 — Puppeteer CDP browse |
+| Telnyx SMS | 🟢 Built | Phase 2.1 — Ed25519 webhook, phone lookup |
+| Google OAuth | 🟢 Built | Phase 2.2 — Gmail, Calendar, Drive tokens |
+| Telegram Bot | 🟢 Built | Phase 3.4 — webhook ack, sendMessage delivery |
+| Hindsight Webhook | 🟢 Built | Phase 3.3 — HMAC-SHA256 validated, consolidation trigger |
+| Bootstrap Workflow | 🟢 Built | Phase 2.4 + 2.4a — interview, import, Hindsight config |
+| Cron: Obsidian Poll | 🟢 Built | Phase 3.4 — */15 * * * * |
+| Cron: Morning Brief | 🟢 Built | Phase 3.4 — 0 7 * * * |
+| Cron: Heartbeat | 🟢 Built | Phase 3.4 — */30 * * * * |
+| Cron: Weekly Synthesis | 🟢 Built | Phase 3.4 — 0 17 * * 5 |
+| Cron: Nightly Consolidation | 🟢 Built | Phase 3.3 — 0 2 * * * (fallback; webhook-first) |

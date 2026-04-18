@@ -324,7 +324,7 @@ only after confirmed R2 write.
 | Calling Hindsight from outside the Worker via service binding | Law 1 |
 | Storing memory content in D1, KV, or Analytics Engine | Law 2 |
 | Writing `memory_type = procedural` from a domain agent | Law 3 |
-| Calling an AI provider directly (not via AI Gateway) | All LLM traffic through brain-gateway |
+| Calling an AI provider directly (not via AI Gateway) | All LLM traffic through haetsal-brain-gateway |
 | Returning plaintext memory content in an audit record | Platform operator blindness |
 | Blocking a sync MCP tool call with a >30s operation | 30-second rule |
 | Running STONE re-extraction synchronously | Use Workflow + Job ID pattern |
@@ -335,3 +335,19 @@ only after confirmed R2 write.
 | String interpolation in SQL | Law 3 — always `.bind()` |
 | Modifying Hindsight's migration files | Brain additions use 1001+ prefix, separate files |
 | Writing `agent_identity = action_worker` from a domain agent | Action Worker has isolated identity |
+| Running `wrangler pages deploy` from project root | Functions are discovered relative to CWD — always `cd pages && wrangler pages deploy dist` |
+| Forwarding `CF-Access-Jwt-Assertion` through a CF Access bypass | CF Access strips it — use `X-Forwarded-Access-Jwt` custom header |
+
+---
+
+## Pages Proxy Pattern
+
+The Pages Function proxy at `pages/functions/api/[[catchall]].ts` forwards all
+`/api/*` requests from the SPA to the Worker. Key requirements:
+
+1. **CWD for deploy:** `cd pages && wrangler pages deploy dist --project-name haetsal`
+2. **Header forwarding:** Clone all headers into new `Headers()`, skip hop-by-hop (`host`, `connection`, etc.)
+3. **JWT forwarding:** Copy `cf-access-jwt-assertion` → `X-Forwarded-Access-Jwt` (CF Access strips the original on bypass)
+4. **Worker auth:** Read from `CF-Access-Jwt-Assertion || X-Forwarded-Access-Jwt`
+5. **Redirect handling:** `redirect: 'manual'` — don't follow CF Access redirects
+6. **WORKER_URL secret:** Set via `wrangler pages secret put WORKER_URL --project-name haetsal`

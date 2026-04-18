@@ -16,6 +16,7 @@ interface MemoryToolContext {
   getTenantId: () => string
   getTmk: () => CryptoKey | null
   getHindsightTenantId: () => string
+  getExecutionContext: () => Pick<ExecutionContext, 'waitUntil'>
 }
 
 const searchSchema = z.object({
@@ -46,7 +47,13 @@ export function registerMemoryTools(server: McpServer, ctx: MemoryToolContext): 
     async (input) => {
       const { content, memory_type, domain } = input as z.infer<typeof writeSchema>
       const tmk = ctx.getTmk()
+      console.log('MEMORY_WRITE_START', {
+        tenantId: ctx.getTenantId(),
+        domain: domain ?? 'general',
+        memoryType: memory_type,
+      })
       if (!tmk) {
+        console.warn('MEMORY_WRITE_NO_TMK', { tenantId: ctx.getTenantId() })
         return { content: [{ type: 'text' as const,
           text: JSON.stringify({ memory_id: null, error: 'No active session' }) }] }
       }
@@ -56,9 +63,16 @@ export function registerMemoryTools(server: McpServer, ctx: MemoryToolContext): 
         domain: domain ?? 'general', provenance: 'user_authored',
         occurredAt: Date.now(),
       }
-      const result = await retainContent(artifact, tmk, ctx.getEnv(), undefined)
+      const result = await retainContent(artifact, tmk, ctx.getEnv(), ctx.getExecutionContext(), {
+        hindsightAsync: true,
+      })
+      console.log('MEMORY_WRITE_DONE', {
+        tenantId: ctx.getTenantId(),
+        memoryId: result?.memoryId ?? null,
+        status: result ? 'queued' : 'deferred',
+      })
       return { content: [{ type: 'text' as const,
-        text: JSON.stringify({ memory_id: result?.memoryId ?? null }) }] }
+        text: JSON.stringify({ memory_id: result?.memoryId ?? null, status: result ? 'queued' : 'deferred' }) }] }
     },
   )
 }

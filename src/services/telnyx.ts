@@ -9,12 +9,10 @@ export async function verifyTelnyxSignature(
   body: string,
   signature: string,
   timestamp: string,
-  publicKeyHex: string,
+  publicKeyB64: string,
 ): Promise<boolean> {
   try {
-    const publicKeyBytes = new Uint8Array(
-      publicKeyHex.match(/.{1,2}/g)!.map(b => parseInt(b, 16)),
-    )
+    const publicKeyBytes = Uint8Array.from(atob(publicKeyB64), c => c.charCodeAt(0))
     const key = await crypto.subtle.importKey(
       'raw',
       publicKeyBytes,
@@ -23,9 +21,7 @@ export async function verifyTelnyxSignature(
       ['verify'],
     )
     const signedPayload = `${timestamp}|${body}`
-    const signatureBytes = new Uint8Array(
-      atob(signature).split('').map(c => c.charCodeAt(0)),
-    )
+    const signatureBytes = Uint8Array.from(atob(signature), c => c.charCodeAt(0))
     return await crypto.subtle.verify(
       'Ed25519',
       key,

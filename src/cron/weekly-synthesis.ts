@@ -1,16 +1,21 @@
 // src/cron/weekly-synthesis.ts
-// Friday 5PM weekly reflection — themes, decisions, one prediction
-// Delivery: Telegram + Obsidian (NOT Pages notification)
-// Archived as memory_type: 'semantic', provenance: 'weekly_synthesis'
+// Friday 5PM weekly reflection delivered via Telegram + Drive and archived back into memory.
 
 import type { Env } from '../types/env'
 import type { IngestionArtifact } from '../types/ingestion'
+import { reflectMemory } from '../services/hindsight'
 import { fetchAndValidateKek } from './kek'
 import { sendTelegramMessage } from '../services/delivery/telegram'
 import { writeToDriveBrainFolder } from '../services/delivery/obsidian-write'
-import { recallViaService } from '../tools/recall'
 import { retainContent } from '../services/ingestion/retain'
 import { getGoogleToken } from '../services/google/oauth'
+
+export const WEEKLY_SYNTHESIS_REFLECT_QUERY = `Review this week's sessions and retained memories. Write a 200-word weekly synthesis.
+Include: key themes, significant decisions, patterns noticed, and one grounded prediction for next week.
+Be specific and concrete. Avoid filler.`
+
+export const WEEKLY_SYNTHESIS_REFLECT_TAGS_MATCH = 'all_strict'
+export const WEEKLY_SYNTHESIS_REFLECT_BUDGET = 'high'
 
 export async function runWeeklySynthesis(
   env: Env,
@@ -22,59 +27,45 @@ export async function runWeeklySynthesis(
 
   if (!tenants.results?.length) return
   await Promise.allSettled(
-    tenants.results.map(t => generateWeeklySynthesis(t.id, env, ctx)),
+    tenants.results.map(tenant => generateWeeklySynthesis(tenant.id, env, ctx)),
   )
 }
 
 async function generateWeeklySynthesis(
-  tenantId: string, env: Env, ctx: ExecutionContext,
+  tenantId: string,
+  env: Env,
+  ctx: ExecutionContext,
 ): Promise<void> {
   const kek = await fetchAndValidateKek(tenantId, env)
   if (!kek) return
 
-  const sessions = await recallViaService(
-    { query: 'session week review decisions themes patterns', limit: 20 },
-    tenantId, kek, env,
-  )
+  const reflection = await reflectMemory(tenantId, {
+    query: WEEKLY_SYNTHESIS_REFLECT_QUERY,
+    budget: WEEKLY_SYNTHESIS_REFLECT_BUDGET,
+    tags: [`tenant:${tenantId}`],
+    tags_match: WEEKLY_SYNTHESIS_REFLECT_TAGS_MATCH,
+  }, env).catch(() => null)
 
-  if (!sessions.results.length) return
+  const synthesis = reflection?.text?.trim()
+  if (!synthesis) return
 
-  const sessionText = sessions.results
-    .slice(0, 10)
-    .map(r => r.content.slice(0, 300))
-    .join('\n\n---\n\n')
-
-  // LLM synthesis via Workers AI with brain-gateway
-  const ai = await env.AI.run(
-    '@cf/meta/llama-3.3-70b-instruct-fp8-fast',
-    {
-      messages: [{
-        role: 'user',
-        content: `Review this week's sessions. Write a 200-word weekly synthesis.
-Include: key themes, significant decisions, patterns noticed, one prediction for next week.
-Be specific — no filler.\n\nSessions:\n${sessionText}`,
-      }],
-    },
-    { gateway: { id: 'brain-gateway' } },
-  ) as { response: string }
-
-  const message = `<b>Week in Review</b>\n\n${ai.response}`
-
-  // Deliver: Telegram + Obsidian (not Pages)
-  await sendTelegramMessage(tenantId, message, env)
+  await sendTelegramMessage(tenantId, `<b>Week in Review</b>\n\n${synthesis}`, env)
 
   const driveToken = await getGoogleToken(tenantId, 'drive', kek, env).catch(() => null)
   if (driveToken) {
-    const md = `---\ngenerated_by: the-brain\ndate: ${new Date().toISOString()}\n---\n\n# Week in Review\n\n${ai.response}`
+    const md = `---\ngenerated_by: the-brain\ndate: ${new Date().toISOString()}\n---\n\n# Week in Review\n\n${synthesis}`
     const filename = `Weekly Synthesis ${new Date().toISOString().split('T')[0]}.md`
     ctx.waitUntil(writeToDriveBrainFolder(filename, md, driveToken).catch(() => {}))
   }
 
-  // Archive as semantic memory
   const artifact: IngestionArtifact = {
-    tenantId, source: 'mcp_retain', content: ai.response,
-    occurredAt: Date.now(), memoryType: 'semantic',
-    domain: 'general', provenance: 'weekly_synthesis',
+    tenantId,
+    source: 'mcp_retain',
+    content: synthesis,
+    occurredAt: Date.now(),
+    memoryType: 'semantic',
+    domain: 'general',
+    provenance: 'weekly_synthesis',
     metadata: { is_weekly_synthesis: true },
   }
   ctx.waitUntil(retainContent(artifact, kek, env).catch(() => {}))

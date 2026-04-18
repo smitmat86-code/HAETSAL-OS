@@ -5,6 +5,107 @@
 
 ---
 
+## Session 6.2 - 2026-04-18
+
+**Spec:** Phase 6.2 - Canonical MCP Memory Surface
+**Built:**
+- `src/types/canonical-memory-query.ts` - canonical search/recent/document/status/stats contracts
+- `src/services/canonical-memory-read-model.ts`, `canonical-memory-query.ts`, `canonical-memory-status.ts`, `canonical-memory-stats.ts` - canonical read, decrypt, status, and stats services over the Session 6.1 bridge layer
+- `src/tools/canonical-memory.ts` - canonical MCP tools: `capture_memory`, `search_memory`, `get_recent_memories`, `get_document`, `memory_status`, `memory_stats`
+- `src/workers/mcpagent/do/McpAgent.ts` - canonical tools registered through the existing McpAgent surface, version `6.2.0`
+- `tests/6.2-canonical-mcp-memory-surface.test.ts` + new canonical-memory query fixtures - tenant-scoped search/recent/document/status/stats coverage plus capture alias presence
+**Decisions:**
+- **Session 6.2 keeps the public surface canonical while leaving the production Hindsight path intact.** The new canonical tools are additive and do not replace `brain_v1_*` or `memory_*` yet.
+- **Canonical reads stay foundation-first.** Search and recent reads use Session 6.1 D1 metadata and, when a session TMK is present, decrypt canonical R2 document bodies to build previews and matches.
+- **`capture_memory` is a bridge, not the 6.3 pipeline.** It maps canonical `scope` onto the current retain `domain` field so write policy and live retain behavior remain unchanged until canonical capture-first writes land.
+**Verification:**
+- `npx vitest run tests/6.2-canonical-mcp-memory-surface.test.ts` - passed
+- `npm test` - passed (`291 passed`, `1 skipped`)
+- `npm run postflight` - passed
+- `npm run manifest` - passed
+**Hindsight Pin:** unchanged (`ghcr.io/vectorize-io/hindsight-api:0.5.2`)
+**Fixture Data:** `tests/fixtures/canonical-memory/note-search-query.json`, `recent-query.json`, `document-query.json`, `status-query.json`
+**Blockers:** None for Session 6.2; 6.3 still owns canonical capture-first writes and projection fan-out
+**Next:** Session 6.3 - move the canonical contract from bridge reads into the canonical capture-first write pipeline
+
+---
+
+## Session 6.1 - 2026-04-18
+
+**Spec:** Phase 6.1 - Canonical Open Brain Foundation
+**Built:**
+- `migrations/1013_canonical_open_brain_foundation.sql` - canonical capture/artifact/document/chunk/operation/projection tables in the bridge-layer substrate
+- `src/types/canonical-memory.ts` - canonical capture/artifact/result contracts
+- `src/services/canonical-memory.ts` plus schema/type/artifact/audit helpers - service-layer canonical capture with atomic D1 writes and encrypted R2 payload persistence
+- `src/services/ingestion/retain.ts` - off-by-default canonical shadow-write hook guarded by `CANONICAL_MEMORY_SHADOW_WRITES`
+- `tests/fixtures/canonical-memory/*.json` + `tests/6.1-canonical-open-brain-foundation.test.ts` - note, conversation, and artifact fixture coverage for canonical capture acceptance
+**Decisions:**
+- **Session 6.1 lands a bridge layer first.** Canonical metadata now lives in D1 and canonical payloads live encrypted in R2, shaped to map cleanly to the long-term Postgres + R2 target without adding a new Worker-to-Neon write path yet.
+- **The production Hindsight path remains authoritative today.** Shadow writes are best-effort and feature-flagged off by default so current interactive and queued retain behavior is unchanged unless explicitly enabled.
+- **Canonical chunk truth is offset/hash based.** Raw chunk text is derived from the encrypted canonical document body in R2 rather than duplicated into D1.
+**Verification:**
+- `npx vitest run tests/6.1-canonical-open-brain-foundation.test.ts` - passed
+- `npm test` - passed (`284 passed`, `1 skipped`)
+- `npm run postflight` - passed
+- `npm run manifest` - passed
+**Hindsight Pin:** unchanged (`ghcr.io/vectorize-io/hindsight-api:0.5.2`)
+**Fixture Data:** `tests/fixtures/canonical-memory/note-capture.json`, `conversation-capture.json`, `artifact-capture.json`
+**Blockers:** None for Session 6.1; later sessions still need the real Postgres landing and projection worker fan-out
+**Next:** Session 6.2 - define the stable canonical MCP memory surface on top of the new foundation
+
+---
+
+## Session OPS.4 - 2026-04-17
+
+**Spec:** Operational - drift-aware Hindsight provisioning + service-layer cleanup
+**Built:**
+- `migrations/1012_hindsight_bank_config.sql` - D1 ledger for applied Hindsight config hashes per bank
+- `src/services/bootstrap/hindsight-bank-spec.ts` - canonical Hindsight bank provisioning spec + deterministic config hash
+- `src/services/bootstrap/hindsight-config.ts` - drift-aware `ensureHindsightBankConfigured()` plus idempotent bank/model/webhook re-apply
+- `src/services/hindsight-client.ts` + `src/services/hindsight.ts` - thinner raw Hindsight client under the richer HAETSAL orchestration layer
+- `src/workers/ingestion/retain-consumer.ts` + `src/workers/ingestion/consumer.ts` - retain-artifact queue path split into its own consumer seam
+- `src/services/ingestion/retain.ts` + `src/workflows/bootstrap.ts` - both write-time retain and bootstrap now run through the same bank-config ensure path
+- `tests/2.4a-hindsight-config.test.ts`, `tests/2.1c-ingestion-consumer.test.ts`, `tests/2.1d-ingestion-consumer-integration.test.ts`, `tests/2.1-retain.test.ts` - updated for Request-based Hindsight transport and the new queue seam
+**Decisions:**
+- **Bank config is no longer "bootstrap once and trust forever."** HAETSAL now stores a config hash per Hindsight bank and re-applies when missions, mental models, or webhook shape drift.
+- **The raw Hindsight API client is separate from orchestration.** Transport-level calls live in `hindsight-client.ts`; D1-aware lifecycle and runtime concerns stay above it.
+- **Non-interactive retain artifacts get their own queue seam.** `retain_artifact` dispatch no longer piggybacks on the TMK-backed handler module.
+- **Write-time retain can safely self-heal config drift.** Interactive writes and queued retains both converge on the same `ensureHindsightBankConfigured()` path.
+**Verification:**
+- `npx vitest run tests/2.4a-hindsight-config.test.ts tests/2.1c-ingestion-consumer.test.ts tests/2.1d-ingestion-consumer-integration.test.ts tests/2.1-retain.test.ts` - passed (32 tests)
+**Hindsight Pin:** unchanged (`ghcr.io/vectorize-io/hindsight-api:0.5.2`)
+**Fixture Data:** Test tenants `test-tenant-retain`, `test-tenant-queue`; Request-based Hindsight service-binding stubs
+**Blockers:** None in this slice; full checkout verification still required after truth-file regeneration
+**Next:** Run repo-wide checkout (`postflight`, `npm test`, `manifest`) and decide whether to backfill existing bank-config rows in live environments
+
+---
+
+## Session OPS.3 â€” 2026-04-17
+
+**Spec:** Operational â€” Checkout protocol closeout
+**Built:**
+- src/cron/hindsight-operations.ts + `src/cron/hindsight-operation-*.ts` â€” split the ops poller/reconcile path into smaller modules so postflight line enforcement passes cleanly
+- src/services/hindsight.ts + helper transport/formatter modules â€” extracted transport and formatting helpers to keep the public Hindsight service under the global 150-line boundary
+- src/services/ingestion/retain.ts + retain-request / retain-persistence helpers â€” separated request construction and persistence side-effects from the retain orchestrator
+- src/workers/mcpagent/do/McpAgent.ts + tool/session/inbound helpers â€” trimmed the DO runtime back under postflight while keeping the dedicated-worker Hindsight topology intact
+- tests/2.1-retain.test.ts path stabilized indirectly via `src/services/ingestion/retain-persistence.ts` â€” detached async reconcile work no longer outlives the test when no `ExecutionContext` exists
+- MANIFEST.md â€” regenerated after the checkout cleanup
+**Decisions:**
+- The checkout protocol is authoritative: `npm run postflight`, `npm test`, and `npm run manifest` must all pass before calling the Hindsight work truly closed out.
+- Detached async follow-up work is only safe when a real `ctx.waitUntil()` exists; test and pure service-call paths should not spawn background D1 reconciliation promises.
+- Postflight line enforcement is best handled by extracting focused helper modules, not by squeezing more branching into already-hot files.
+**Verification:**
+- `npm run postflight` â€” passed
+- `npm test` â€” passed
+- `npm run manifest` â€” passed
+- `npx vitest run tests/2.1-retain.test.ts` â€” passed after the retain follow-up fix
+**Hindsight Pin:** `ghcr.io/vectorize-io/hindsight-api:0.5.2`
+**Fixture Data:** Test-only async retain path without `ExecutionContext` now exits cleanly; no extra live fixture changes
+**Blockers:** None for checkout completion; remaining repo warnings are non-fatal harness/platform noise
+**Next:** Move to non-Hindsight platform work, or do broader repo-health cleanup as a separate lane
+
+---
+
 <!-- Template for new entries:
 
 ## Session [N.N] — [YYYY-MM-DD]
@@ -442,5 +543,56 @@
 **Fixture Data:** Tests use mock env objects (no D1 needed — service function unit tests)
 **Blockers:** Backfill script needs live Hindsight to execute; 3 pre-finalization items deferred to deploy
 **Next:** Phase 4.1 or next reviewed active spec
+
+---
+
+## Session OPS.1 — 2026-03-15
+
+**Spec:** Operational — CF Access Configuration & Dashboard Deployment Fix
+**Built:**
+- pages/functions/api/[[catchall]].ts (57 lines) — Pages-to-Worker proxy with JWT forwarding via `X-Forwarded-Access-Jwt`
+- src/middleware/auth.ts — added `X-Forwarded-Access-Jwt` fallback header read, multi-AUD support
+**Decisions:**
+- **Custom JWT header for bypass routes:** CF Access strips `CF-Access-Jwt-Assertion` on bypass policies. Proxy copies JWT to `X-Forwarded-Access-Jwt` which CF Access doesn't touch.
+- **Pages deploy from subdirectory:** `wrangler pages deploy dist` must run from `pages/` CWD — Functions discovery is relative to CWD, not the dist path.
+- **7 CF Access apps total:** 3 auth gates (Pages custom domain, Pages.dev, Worker) + 4 bypass policies (API proxy, 3 webhooks). All bypass policies verified needed.
+- **Multi-AUD in CF_ACCESS_AUD secret:** Worker accepts JWTs from both Worker direct (CF Access AUD) and Pages proxy (`X-Forwarded-Access-Jwt`) using comma-separated AUDs.
+**Verification:**
+- Tenant created in D1: `f51239...fcc2e6`, hindsight_tenant_id: `71e465df-...`
+- Dashboard loads "Loading approval queue..." with zero console errors
+- Worker tail confirms requests reaching Worker via proxy
+**Hindsight Pin:** unchanged (v0.4.16 @ 58fdac4)
+**Fixture Data:** N/A — operational deployment session
+**Blockers:** None
+**Next:** MCP/WS bypass policies when those are ready to integrate
+
+---
+
+## Session OPS.2 — 2026-04-17
+
+**Spec:** Operational — Hindsight full completion closeout
+**Built:**
+- src/services/hindsight.ts — shared Hindsight transport finalized around API-only runtime, fresh shared identities, and dedicated worker prewarm
+- src/workers/mcpagent/do/HindsightContainer.ts — dedicated worker entrypoint restored on the container class; API + worker topology locked in
+- src/cron/hindsight-operations.ts — async retain polling/reconciliation became the durable source of truth for completion
+- docs/hindsight-ops-runbook.md — operator truth, legacy-pending guidance, and dedicated-worker diagnostics documented
+- docs/fold-hindsight-handoff.md — direct lessons for Fold from HAETSAL’s live repair
+- README.md / ARCHITECTURE.md / docs/full_system_walkthrough.md / MANIFEST.md — top-level truth files updated to the actual production topology
+**Decisions:**
+- Hindsight’s production shape for HAETSAL is now canonical: API-only container + dedicated Hindsight worker containers + direct Neon + direct interactive `async=true` retain.
+- Interactive writes stay on Hindsight’s native async path; HAETSAL queues remain for external/bulk ingestion, not as a second front-door queue for every MCP write.
+- Fresh container identities were worth keeping during rollout because they flushed wedged shared instances without changing the public interface.
+- Cloudflare container health counters are informative but subordinate to operation completion and delayed fact recall when judging Hindsight health.
+**Verification:**
+- `npx vitest run tests/2.4b-hindsight-container-runtime.test.ts tests/3.3-hindsight-operations.test.ts` — passed
+- live deploy: `c0fd595f-a94a-4737-bf35-070e4ef63810`
+- fresh writes completed live under dedicated-worker topology:
+  - `73f148c2-47a4-46f1-8665-e0f90ef0afbb`
+  - `fa885f41-87af-4dba-9af1-c3c8ba3df801`
+- previously lingering pending op `ec4b1247-2704-4234-bda8-a2683579628c` drained to `completed`
+**Hindsight Pin:** `ghcr.io/vectorize-io/hindsight-api:0.5.2`
+**Fixture Data:** Live synthetic users `test-user-smoke-v4-api-*` with fact-style retain/recall smoke
+**Blockers:** None for the Hindsight brain itself; remaining repo debt is outside the Hindsight completion scope
+**Next:** Separate release-doc / repo-health cleanup, not more Hindsight surgery
 
 ---

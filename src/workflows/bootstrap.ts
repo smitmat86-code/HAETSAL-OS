@@ -16,8 +16,9 @@ import {
 } from '../services/bootstrap/historical-import'
 import { broadcastEvent } from '../services/action/executor'
 import {
-  configureHindsightBank, createMentalModels, registerConsolidationWebhook,
+  ensureHindsightBankConfigured,
 } from '../services/bootstrap/hindsight-config'
+import { getMcpAgentObjectName } from '../workers/mcpagent/do/identity'
 
 export class BootstrapWorkflow extends WorkflowEntrypoint<Env, BootstrapParams> {
   async run(event: WorkflowEvent<BootstrapParams>, step: WorkflowStep) {
@@ -47,7 +48,7 @@ export class BootstrapWorkflow extends WorkflowEntrypoint<Env, BootstrapParams> 
     })
 
     // Phase B: Historical import — get TMK from DO for token decryption
-    const doId = this.env.MCPAGENT.idFromName(tenantId)
+    const doId = this.env.MCPAGENT.idFromName(getMcpAgentObjectName(tenantId))
     const stub = this.env.MCPAGENT.get(doId) as DurableObjectStub<never>
 
     // Import Gmail (12 months default)
@@ -90,14 +91,8 @@ export class BootstrapWorkflow extends WorkflowEntrypoint<Env, BootstrapParams> 
     })
 
     if (bankId) {
-      await step.do('configure-hindsight-bank', async () => {
-        await configureHindsightBank(bankId, this.env)
-      })
-      await step.do('create-mental-models', async () => {
-        await createMentalModels(bankId, this.env)
-      })
-      await step.do('register-consolidation-webhook', async () => {
-        await registerConsolidationWebhook(bankId, this.env)
+      await step.do('ensure-hindsight-bank-configured', async () => {
+        await ensureHindsightBankConfigured(bankId, tenantId, this.env)
       })
     }
 

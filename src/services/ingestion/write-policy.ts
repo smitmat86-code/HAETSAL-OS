@@ -45,7 +45,7 @@ export async function runWritePolicyValidator(
   // Stage 2: Workers AI classifier (only if heuristic flags)
   try {
     const response = await env.AI.run(
-      '@cf/meta/llama-3.1-8b-instruct' as BaseAiTextGenerationModels,
+      '@cf/meta/llama-3.1-8b-instruct' as keyof AiModels,
       {
         messages: [
           {
@@ -58,7 +58,7 @@ export async function runWritePolicyValidator(
           },
         ],
       },
-      { gateway: { id: 'brain-gateway' } },
+      { gateway: { id: env.AI_GATEWAY_ID } },
     )
 
     const text = typeof response === 'string'

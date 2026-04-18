@@ -10,19 +10,21 @@
     "manifest": "tsx scripts/generate-manifest.ts"
   },
   "dependencies": {
+    "@cloudflare/containers": "^0.3.2",
     "@cloudflare/puppeteer": "^1.0.6",
     "agents": "^0.7.5",
+    "ai": "^6.0.116",
     "hono": "^4.7.0",
-    "zod": "^3.25.1"
+    "zod": "^3.25.76"
   },
   "devDependencies": {
     "@cloudflare/vitest-pool-workers": "^0.8.0",
-    "@vitest/snapshot": "~3.0.0",
     "@cloudflare/workers-types": "^4.20250303.0",
     "@types/node": "^22.0.0",
+    "@vitest/snapshot": "~3.0.0",
     "tsx": "^4.19.0",
     "typescript": "^5.7.0",
     "vitest": "~3.0.0",
-    "wrangler": "^4.0.0"
+    "wrangler": "^4.83.0"
   }
 }

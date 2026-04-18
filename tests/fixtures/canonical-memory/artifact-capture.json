@@ -1,0 +1,15 @@
+{
+  "tenantId": "test-tenant-canonical",
+  "sourceSystem": "file",
+  "sourceRef": "artifact-001",
+  "scope": "research",
+  "title": "Research brief",
+  "body": "Imported a file-backed research brief and recorded the key summary for future semantic and graph projections.",
+  "capturedAt": 1760196000000,
+  "artifactRef": {
+    "mode": "inline_encrypted",
+    "filename": "brief.txt",
+    "mediaType": "text/plain",
+    "byteLength": 66
+  }
+}

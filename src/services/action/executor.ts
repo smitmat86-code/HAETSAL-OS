@@ -9,6 +9,7 @@ import { UNDO_WINDOW_MS } from '../../types/action'
 import { executeBrowse } from './integrations/browser'
 import { executeCreateEvent, executeModifyEvent } from './integrations/calendar'
 import { writeActionEpisodicMemory } from './integrations/episodic'
+import { getMcpAgentObjectId } from '../../workers/mcpagent/do/identity'
 
 /**
  * Execute a real action — dispatches by tool_name to the correct integration
@@ -105,7 +106,7 @@ export async function broadcastEvent(
   env: Env, tenantId: string, payload: unknown,
 ): Promise<void> {
   try {
-    const id = env.MCPAGENT.idFromName(tenantId)
+    const id = getMcpAgentObjectId(env.MCPAGENT, tenantId)
     const stub = env.MCPAGENT.get(id) as DurableObjectStub<never>
     // @ts-expect-error — DO RPC method (confirmed 1.2 pattern)
     await stub.broadcast(payload)

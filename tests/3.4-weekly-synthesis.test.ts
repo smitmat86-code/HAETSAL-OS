@@ -52,6 +52,17 @@ describe('Weekly synthesis', () => {
     expect(metadata.is_weekly_synthesis).toBe(true)
   })
 
+  it('uses Hindsight reflect rather than separate recall-plus-summarize flow', async () => {
+    const mod = await import('../src/cron/weekly-synthesis')
+    expect(mod.WEEKLY_SYNTHESIS_REFLECT_QUERY).toContain("Review this week's sessions and retained memories")
+    expect(mod.WEEKLY_SYNTHESIS_REFLECT_BUDGET).toBe('high')
+  })
+
+  it('weekly synthesis reflect query scopes results to the tenant tag', async () => {
+    const mod = await import('../src/cron/weekly-synthesis')
+    expect(mod.WEEKLY_SYNTHESIS_REFLECT_TAGS_MATCH).toBe('all_strict')
+  })
+
   it('obsidian output carries generated_by frontmatter', () => {
     const frontmatter = `---\ngenerated_by: the-brain\ndate: 2026-03-10T00:00:00.000Z\n---`
     expect(frontmatter).toContain('generated_by: the-brain')

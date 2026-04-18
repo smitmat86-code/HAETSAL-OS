@@ -6,6 +6,8 @@
 
 import type { Env } from '../../types/env'
 import type { IngestionQueueMessage } from '../../types/ingestion'
+import { getMcpAgentObjectId } from '../mcpagent/do/identity'
+import { processQueuedRetainArtifact } from './retain-consumer'
 import {
   handleSmsInbound,
   handleGmailThread,
@@ -26,9 +28,15 @@ export async function handleIngestionBatch(
   ctx: ExecutionContext,
 ): Promise<void> {
   const results = await Promise.allSettled(
-    batch.messages.map(msg => processIngestionMessage(msg, env, ctx)),
+    batch.messages.map(async (msg) => {
+      await processIngestionMessage(msg, env, ctx)
+      return msg.id
+    }),
   )
   const failures = results.filter(r => r.status === 'rejected')
+  for (const failure of failures) {
+    console.error('INGESTION_BATCH_MESSAGE_FAILED', failure.reason)
+  }
   if (failures.length > 0 && failures.length === batch.messages.length) {
     throw new Error(`All ${failures.length} ingestion messages failed`)
   }
@@ -41,8 +49,16 @@ async function processIngestionMessage(
 ): Promise<void> {
   const { type, tenantId, payload } = msg.body
 
+  if (type === 'retain_artifact') {
+    console.log('INGESTION_RETAIN_ARTIFACT_START', { tenantId, requestId: payload.requestId })
+    await processQueuedRetainArtifact(tenantId, payload, env, ctx)
+    console.log('INGESTION_RETAIN_ARTIFACT_DONE', { tenantId, requestId: payload.requestId })
+    msg.ack()
+    return
+  }
+
   // Get TMK from DO — if cold (null), re-enqueue with delay
-  const doId = env.MCPAGENT.idFromName(tenantId)
+  const doId = getMcpAgentObjectId(env.MCPAGENT, tenantId)
   const stub = env.MCPAGENT.get(doId)
 
   let tmk: CryptoKey | null = null
@@ -56,6 +72,7 @@ async function processIngestionMessage(
   if (!tmk) {
     // Cold DO — re-enqueue with 30s delay
     // Cannot process without TMK for encryption (Law 2)
+    console.warn('INGESTION_RETRY_WAITING_FOR_TMK', { tenantId, type, messageId: msg.id })
     msg.retry({ delaySeconds: 30 })
     return
   }

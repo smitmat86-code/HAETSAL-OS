@@ -4,7 +4,7 @@
 > Then read SESSION_LOG.md (last 3 entries), then LESSONS.md (relevant section),
 > then your active spec.
 
-Last updated: 2026-03-10 | Session: 2.4a (bootstrap hindsight config)
+Last updated: 2026-04-17 | Session: OPS.3 (Checkout protocol closeout)
 
 ## Module Registry
 
@@ -12,13 +12,13 @@ Last updated: 2026-03-10 | Session: 2.4a (bootstrap hindsight config)
 
 <!-- AUTO-GENERATED MODULE REGISTRY - DO NOT EDIT -->
 
-*Auto-generated: 2026-03-10*
+*Auto-generated: 2026-04-18*
 
 ### src/
 
 | File | Lines | Key Exports | Status |
 |------|-------|------------|--------|
-| src\agents\base-agent.ts | 147 | — | ✅ |
+| src\agents\base-agent.ts | 148 | — | ✅ |
 | src\agents\career-coach.ts | 105 | CareerCoach | ✅ |
 | src\agents\chief-of-staff.ts | 69 | ChiefOfStaff | ✅ |
 | src\agents\helpers.ts | 49 | MODEL_CONTEXT_LIMIT, FLUSH_THRESHOLD, shouldFlush | ✅ |
@@ -26,20 +26,25 @@ Last updated: 2026-03-10 | Session: 2.4a (bootstrap hindsight config)
 | src\cron\brief-sections.ts | 92 | — | ✅ |
 | src\cron\consolidation.ts | 80 | — | ✅ |
 | src\cron\heartbeat.ts | 62 | — | ✅ |
+| src\cron\hindsight-operation-poll.ts | 114 | — | ✅ |
+| src\cron\hindsight-operation-reconcile.ts | 54 | — | ✅ |
+| src\cron\hindsight-operation-side-effects.ts | 149 | toUnixMs | ✅ |
+| src\cron\hindsight-operation-types.ts | 25 | PendingOperationRow, OperationStateRow, MAX_POLLS_PER_TICK... | ✅ |
+| src\cron\hindsight-operations.ts | 38 | — | ✅ |
 | src\cron\kek.ts | 61 | — | ✅ |
-| src\cron\morning-brief.ts | 93 | — | ✅ |
+| src\cron\morning-brief.ts | 94 | — | ✅ |
 | src\cron\obsidian-poll.ts | 41 | — | ✅ |
-| src\cron\passes\pass1-contradiction.ts | 69 | — | ✅ |
-| src\cron\passes\pass2-bridges.ts | 81 | — | ✅ |
+| src\cron\passes\pass1-contradiction.ts | 68 | — | ✅ |
+| src\cron\passes\pass2-bridges.ts | 87 | — | ✅ |
 | src\cron\passes\pass3-patterns.ts | 63 | — | ✅ |
-| src\cron\passes\pass4-gaps.ts | 62 | — | ✅ |
-| src\cron\weekly-synthesis.ts | 82 | — | ✅ |
+| src\cron\passes\pass4-gaps.ts | 55 | — | ✅ |
+| src\cron\weekly-synthesis.ts | 73 | WEEKLY_SYNTHESIS_REFLECT_QUERY, WEEKLY_SYNTHESIS_REFLECT_TAGS_MATCH, WEEKLY_SYNTHESIS_REFLECT_BUDGET | ✅ |
 | src\middleware\audit.ts | 45 | auditMiddleware | ✅ |
-| src\middleware\auth.ts | 140 | authMiddleware | ✅ |
+| src\middleware\auth.ts | 146 | authMiddleware | ✅ |
 | src\middleware\dlp.ts | 17 | dlpMiddleware | ✅ |
 | src\services\action\approval-api.ts | 132 | clampPositiveInt | ✅ |
 | src\services\action\authorization.ts | 131 | AuthGateResult | ✅ |
-| src\services\action\executor.ts | 116 | — | ✅ |
+| src\services\action\executor.ts | 117 | — | ✅ |
 | src\services\action\integrations\browser.ts | 39 | BrowseResult | ✅ |
 | src\services\action\integrations\calendar.ts | 101 | CalendarResult | ✅ |
 | src\services\action\integrations\episodic.ts | 48 | — | ✅ |
@@ -48,23 +53,44 @@ Last updated: 2026-03-10 | Session: 2.4a (bootstrap hindsight config)
 | src\services\action\router.ts | 111 | — | ✅ |
 | src\services\action\toctou.ts | 23 | — | ✅ |
 | src\services\agents\router.ts | 57 | — | ✅ |
-| src\services\bootstrap\hindsight-config.ts | 101 | MENTAL_MODEL_DOMAINS | ✅ |
+| src\services\bootstrap\hindsight-bank-spec.ts | 74 | HindsightBankProvisioningSpec, buildHindsightBankProvisioningSpec, computeHindsightConfigVersion... | ✅ |
+| src\services\bootstrap\hindsight-config.ts | 106 | — | ✅ |
 | src\services\bootstrap\historical-import.ts | 140 | historicalSalienceMultiplier | ✅ |
-| src\services\bootstrap\interview.ts | 80 | createInitialState, currentQuestion, currentDomain... | ✅ |
+| src\services\bootstrap\interview.ts | 76 | createInitialState, currentQuestion, currentDomain... | ✅ |
+| src\services\canonical-memory-artifacts.ts | 66 | PersistedCanonicalPayloads | ✅ |
+| src\services\canonical-memory-audit.ts | 41 | buildCanonicalAuditBatch | ✅ |
+| src\services\canonical-memory-query.ts | 142 | — | ✅ |
+| src\services\canonical-memory-read-model.ts | 67 | CanonicalMemoryReadOptions, CanonicalListRow, CanonicalDocumentRow... | ✅ |
+| src\services\canonical-memory-schema.ts | 75 | CANONICAL_PROJECTION_KINDS, normalizeCanonicalBody, assertCanonicalIdentity... | ✅ |
+| src\services\canonical-memory-stats.ts | 56 | — | ✅ |
+| src\services\canonical-memory-status.ts | 78 | — | ✅ |
+| src\services\canonical-memory-types.ts | 52 | CanonicalChunkPlan, CanonicalArtifactPlan, NormalizedCanonicalCapture... | ✅ |
+| src\services\canonical-memory.ts | 116 | — | ✅ |
 | src\services\delivery\obsidian-write.ts | 52 | — | ✅ |
+| src\services\delivery\sms.ts | 35 | — | ✅ |
 | src\services\delivery\telegram.ts | 31 | — | ✅ |
 | src\services\google\calendar.ts | 62 | — | ✅ |
 | src\services\google\drive.ts | 74 | ObsidianFrontmatter, parseObsidianFrontmatter, extractWikilinks | ✅ |
 | src\services\google\gmail.ts | 84 | — | ✅ |
 | src\services\google\oauth.ts | 115 | — | ✅ |
 | src\services\google\webhook.ts | 43 | — | ✅ |
+| src\services\hindsight-client.ts | 115 | HindsightClient, createHindsightClient | ✅ |
+| src\services\hindsight-formatters.ts | 30 | buildHindsightDocumentId, buildHindsightTags, buildRetainContext | ✅ |
+| src\services\hindsight-ops-webhooks.ts | 37 | HindsightWebhookHealth | ✅ |
+| src\services\hindsight-ops.ts | 149 | HINDSIGHT_PENDING_SLOW_MS, HINDSIGHT_PENDING_STUCK_MS, HindsightQueueState... | ✅ |
+| src\services\hindsight-transport.ts | 147 | jsonInit, getHindsightStub | ✅ |
+| src\services\hindsight.ts | 140 | — | ✅ |
 | src\services\ingestion\dedup.ts | 44 | — | ✅ |
 | src\services\ingestion\domain.ts | 63 | inferDomain, inferMemoryType | ✅ |
-| src\services\ingestion\retain.ts | 131 | — | ✅ |
+| src\services\ingestion\encryption.ts | 17 | — | ✅ |
+| src\services\ingestion\enqueue.ts | 55 | EnqueuedRetainResult | ✅ |
+| src\services\ingestion\retain-persistence.ts | 139 | — | ✅ |
+| src\services\ingestion\retain-request.ts | 55 | normalizeHindsightMetadata, buildHindsightRetainRequest | ✅ |
+| src\services\ingestion\retain.ts | 145 | — | ✅ |
 | src\services\ingestion\salience.ts | 80 | scoreSalience | ✅ |
 | src\services\ingestion\write-policy.ts | 74 | WritePolicyResult | ✅ |
-| src\services\telnyx.ts | 39 | — | ✅ |
-| src\services\tenant.ts | 143 | — | ✅ |
+| src\services\telnyx.ts | 35 | — | ✅ |
+| src\services\tenant.ts | 133 | — | ✅ |
 | src\tools\act\browse.ts | 31 | browseSchema | ✅ |
 | src\tools\act\create-event.ts | 34 | createEventSchema | ✅ |
 | src\tools\act\draft.ts | 33 | draftSchema | ✅ |
@@ -74,30 +100,41 @@ Last updated: 2026-03-10 | Session: 2.4a (bootstrap hindsight config)
 | src\tools\act\search.ts | 33 | searchSchema | ✅ |
 | src\tools\act\send-message.ts | 33 | sendMessageSchema | ✅ |
 | src\tools\bootstrap.ts | 104 | registerBootstrapTools | ✅ |
-| src\tools\memory.ts | 65 | registerMemoryTools | ✅ |
-| src\tools\recall.ts | 97 | — | ✅ |
-| src\tools\retain.ts | 58 | — | ✅ |
+| src\tools\canonical-memory.ts | 107 | registerCanonicalMemoryTools | ✅ |
+| src\tools\memory.ts | 79 | registerMemoryTools | ✅ |
+| src\tools\recall.ts | 73 | — | ✅ |
+| src\tools\retain.ts | 52 | — | ✅ |
 | src\types\action.ts | 105 | CapabilityClass, AuthorizationLevel, AUTH_LEVEL_ORDINAL... | ✅ |
 | src\types\bootstrap.ts | 76 | BootstrapStatus, BootstrapParams, InterviewDomain... | ✅ |
-| src\types\env.ts | 55 | Env | ✅ |
+| src\types\canonical-memory-query.ts | 98 | CanonicalSearchInput, CanonicalRecentInput, CanonicalDocumentInput... | ✅ |
+| src\types\canonical-memory.ts | 34 | CanonicalProjectionKind, CanonicalArtifactMode, CanonicalArtifactRef... | ✅ |
+| src\types\env.ts | 62 | Env | ✅ |
 | src\types\google.ts | 53 | GoogleOAuthTokens, GoogleThread, GoogleMessage... | ✅ |
 | src\types\hindsight.ts | 38 | HindsightRetainRequest, HindsightRetainResponse, HindsightRecallRequest... | ✅ |
-| src\types\ingestion.ts | 46 | IngestionSource, IngestionArtifact, SalienceResult... | ✅ |
+| src\types\ingestion.ts | 64 | IngestionSource, IngestionArtifact, SalienceResult... | ✅ |
 | src\types\tenant.ts | 30 | TenantContext, TenantRow | ✅ |
 | src\types\tools.ts | 53 | RetainInput, RetainOutput, RecallInput... | ✅ |
 | src\workers\action\index.ts | 105 | — | ✅ |
 | src\workers\ingestion\bootstrap-handlers.ts | 91 | — | ✅ |
-| src\workers\ingestion\consumer.ts | 91 | — | ✅ |
-| src\workers\ingestion\handlers.ts | 103 | — | ✅ |
-| src\workers\mcpagent\do\McpAgent.ts | 136 | McpAgentDO | ✅ |
-| src\workers\mcpagent\index.ts | 149 | — | ✅ |
-| src\workers\mcpagent\routes\actions.ts | 79 | actions | ✅ |
+| src\workers\ingestion\consumer.ts | 108 | — | ✅ |
+| src\workers\ingestion\handlers.ts | 104 | — | ✅ |
+| src\workers\ingestion\retain-consumer.ts | 21 | — | ✅ |
+| src\workers\mcpagent\do\HindsightContainer.ts | 147 | HINDSIGHT_PING_ENDPOINT, HINDSIGHT_WORKER_PING_ENDPOINT, useDedicatedHindsightWorkers... | ✅ |
+| src\workers\mcpagent\do\identity.ts | 13 | MCP_STREAMABLE_HTTP_PREFIX, getMcpAgentObjectName, getMcpAgentObjectId | ✅ |
+| src\workers\mcpagent\do\inbound-message.ts | 37 | — | ✅ |
+| src\workers\mcpagent\do\McpAgent.ts | 149 | McpAgentDO | ✅ |
+| src\workers\mcpagent\do\register-tools.ts | 86 | registerLegacyMemoryTools, registerActTools | ✅ |
+| src\workers\mcpagent\do\session-store.ts | 55 | PersistedSessionRow, ensureSessionTable, readPersistedSession... | ✅ |
+| src\workers\mcpagent\index.ts | 106 | — | ✅ |
+| src\workers\mcpagent\public-webhooks.ts | 72 | registerPublicWebhooks | ✅ |
+| src\workers\mcpagent\routes\actions.ts | 80 | actions | ✅ |
 | src\workers\mcpagent\routes\approval.ts | 73 | approval | ✅ |
-| src\workers\mcpagent\routes\audit.ts | 51 | audit | ✅ |
+| src\workers\mcpagent\routes\audit.ts | 59 | audit | ✅ |
 | src\workers\mcpagent\routes\auth.ts | 45 | — | ✅ |
-| src\workers\mcpagent\routes\ingest.ts | 120 | — | ✅ |
+| src\workers\mcpagent\routes\ingest.ts | 133 | — | ✅ |
 | src\workers\mcpagent\routes\settings.ts | 73 | settings | ✅ |
-| src\workflows\bootstrap.ts | 129 | BootstrapWorkflow | ✅ |
+| src\workers\mcpagent\runtime.ts | 49 | — | ✅ |
+| src\workflows\bootstrap.ts | 124 | BootstrapWorkflow | ✅ |
 
 ### pages/src/
 
@@ -124,7 +161,7 @@ Last updated: 2026-03-10 | Session: 2.4a (bootstrap hindsight config)
 
 | File | Lines | Key Exports | Status |
 |------|-------|------------|--------|
-| pages\functions\api\[[catchall]].ts | 9 | onRequest | ✅ |
+| pages\functions\api\[[catchall]].ts | 60 | onRequest | ✅ |
 
 <!-- END AUTO-GENERATED -->
 
@@ -169,11 +206,11 @@ No active specs. All Phases 1–3 + 2.4a complete (13 specs in `specs/completed/
 ## Hindsight Pin
 
 ```
-Commit: 58fdac44f78c60afa09871430c375c0459d14cb6
-Tag: v0.4.16
-Date pinned: 2026-03-10
-Reason: Initial pin — latest stable release. Schema migration threading fix,
-        GIN index on source_memory_ids, Dependabot security fixes.
+Image: ghcr.io/vectorize-io/hindsight-api:0.5.2
+Date pinned: 2026-04-17
+Reason: Production HAETSAL topology now uses the API-only Hindsight image,
+        dedicated Hindsight worker containers, direct Neon, and D1-backed
+        async retain lifecycle tracking.
 ```
 
 ## Quick Reference
@@ -187,12 +224,13 @@ Reason: Initial pin — latest stable release. Schema migration threading fix,
 
 ## Platform Binding Status
 
-Updated: Session 2.4a (2026-03-10)
+Updated: Session OPS.2 (2026-04-17)
 
 | Binding | Status | Notes |
 |---------|--------|-------|
-| Hindsight Container | 🟢 Pinned v0.4.16 | Dockerfile + hindsight.toml — `58fdac4` (Phase 1.1) |
-| Neon Postgres + Hyperdrive | 🟡 Binding in wrangler.toml | ID placeholder — set at deploy |
+| Hindsight API Container | 🟢 Live | API-only Hindsight `0.5.2`, port 8888 |
+| Hindsight Worker Container | 🟢 Live | Dedicated `hindsight-worker` instances, port 8889 |
+| Neon Postgres | ✅ Secret + live runtime | Used directly by Hindsight API + worker containers |
 | McpAgent DO | 🟢 Built | Phase 1.2 — auth, TMK, MCP tools, WebSocket |
 | Cloudflare Pages | 🟢 Built | Phase 1.4 — Vite React SPA, CF Access proxy |
 | D1_US | 🟢 Migrations ready | 8 migration files (1001–1008), 20+ tables |
@@ -204,7 +242,7 @@ Updated: Session 2.4a (2026-03-10)
 | QUEUE_HIGH/NORMAL/BULK/DEAD | 🟢 Configured | All with max_batch_size + max_batch_timeout |
 | QUEUE_ACTIONS | 🟢 Configured | batch_size=1, timeout=5s |
 | Action Worker | 🟢 Built | Phase 1.3 — queue consumer, no HTTP surface |
-| AI Gateway (brain-gateway) | 🟢 Wired | Phase 3.1+ — all LLM calls route via gateway |
+| AI Gateway (haetsal-brain-gateway) | 🟢 Wired | Phase 3.1+ — all LLM calls route via gateway |
 | ANALYTICS | 🟢 Binding configured | BRAIN_ANALYTICS dataset |
 | BROWSER | 🟢 Binding configured | Phase 2.3 — Puppeteer CDP browse |
 | Telnyx SMS | 🟢 Built | Phase 2.1 — Ed25519 webhook, phone lookup |
@@ -212,6 +250,7 @@ Updated: Session 2.4a (2026-03-10)
 | Telegram Bot | 🟢 Built | Phase 3.4 — webhook ack, sendMessage delivery |
 | Hindsight Webhook | 🟢 Built | Phase 3.3 — HMAC-SHA256 validated, consolidation trigger |
 | Bootstrap Workflow | 🟢 Built | Phase 2.4 + 2.4a — interview, import, Hindsight config |
+| Hindsight Operations Tracker | 🟢 Live | D1 lifecycle state + `/api/audit/memory` diagnostics |
 | Cron: Obsidian Poll | 🟢 Built | Phase 3.4 — */15 * * * * |
 | Cron: Morning Brief | 🟢 Built | Phase 3.4 — 0 7 * * * |
 | Cron: Heartbeat | 🟢 Built | Phase 3.4 — */30 * * * * |

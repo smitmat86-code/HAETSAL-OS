@@ -1,6 +1,6 @@
 // src/services/agents/router.ts
 // Layer 1 Router — pattern-first (~5ms), Workers AI classifier fallback (~200ms)
-// LESSON: All Workers AI calls use { gateway: { id: 'brain-gateway' } }
+// LESSON: All Workers AI calls use the configured Cloudflare AI Gateway.
 
 import type { Env } from '../../types/env'
 import type { AgentType } from '../../agents/types'
@@ -24,7 +24,7 @@ export async function routeRequest(input: string, env: Env): Promise<AgentType> 
   // Ambiguous — Workers AI 8B classifier fallback (~200ms)
   try {
     const result = await env.AI.run(
-      '@cf/meta/llama-3.1-8b-instruct' as BaseAiTextGenerationModels,
+      '@cf/meta/llama-3.1-8b-instruct' as keyof AiModels,
       {
         messages: [{
           role: 'user',
@@ -38,7 +38,7 @@ Request: "${input.slice(0, 300)}"
 Answer with exactly one category name.`,
         }],
       },
-      { gateway: { id: 'brain-gateway' } },
+      { gateway: { id: env.AI_GATEWAY_ID } },
     ) as AiTextGenerationOutput
 
     const response = typeof result === 'string' ? result

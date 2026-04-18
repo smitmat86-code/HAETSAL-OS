@@ -3,6 +3,7 @@
 // Each handler: fetch external data (if needed) → build artifact → retainContent()
 
 import type { Env } from '../../types/env'
+import type { IngestionArtifact } from '../../types/ingestion'
 import { retainContent } from '../../services/ingestion/retain'
 import { getGoogleToken } from '../../services/google/oauth'
 import { fetchAndExtractThread } from '../../services/google/gmail'

@@ -1,16 +1,11 @@
 // src/agents/base-agent.ts — Abstract BaseAgent: lifecycle, doom loop, context budget, Law 3
 import type { Env } from '../types/env'
 import type { IngestionArtifact } from '../types/ingestion'
-import type {
-  EpistemicMemoryType, AgentContext, DoomLoopState,
-  ReasoningTrace, ReasoningTraceEntry,
-} from './types'
-import { retainContent } from '../services/ingestion/retain'
+import type { EpistemicMemoryType, AgentContext, DoomLoopState, ReasoningTrace, ReasoningTraceEntry } from './types'
+import { enqueueRetainArtifact } from '../services/ingestion/enqueue'
 import { recallViaService } from '../tools/recall'
-import {
-  checkDoomLoop, encryptForR2, writeAnomalySignal,
-  MODEL_CONTEXT_LIMIT, FLUSH_THRESHOLD,
-} from './helpers'
+import { fetchMentalModel } from '../services/hindsight'
+import { checkDoomLoop, encryptForR2, writeAnomalySignal, MODEL_CONTEXT_LIMIT, FLUSH_THRESHOLD } from './helpers'
 
 export { checkDoomLoop } from './helpers'
 export abstract class BaseAgent {
@@ -37,12 +32,19 @@ export abstract class BaseAgent {
 
   protected async open(): Promise<void> {
     // Mental model from Hindsight API (plaintext — synthesized, no KEK needed)
-    const mmRes = await this.env.HINDSIGHT.fetch(
-      `http://hindsight/v1/default/banks/${this.hindsightTenantId}/mental-models/mental-model-${this.domain}`,
+    const mentalModel = await fetchMentalModel(
+      this.hindsightTenantId,
+      `mental-model-${this.domain}`,
+      this.env,
     )
-    if (mmRes.ok) {
-      const mm = await mmRes.json() as { content?: string }
-      if (mm.content) this.context.memories.push({ content: mm.content, memory_type: 'semantic' })
+    if (mentalModel?.content) {
+      this.context.memories.push({
+        memory_id: `mental-model-${this.domain}`,
+        content: mentalModel.content,
+        memory_type: 'semantic',
+        confidence: 1,
+        relevance: 1,
+      })
     }
     const episodic = await recallViaService(
       { query: `recent events decisions ${this.domain}`, domain: this.domain, limit: 5 },
@@ -61,12 +63,11 @@ export abstract class BaseAgent {
     content: string, memoryType: EpistemicMemoryType,
     domain: string, provenance: string,
   ): Promise<{ memoryId: string } | null> {
-    const artifact: IngestionArtifact = {
+    const result = await enqueueRetainArtifact({
       tenantId: this.tenantId, content, source: `agent:${this.agentIdentity}`,
       memoryType, domain, provenance, occurredAt: Date.now(),
-    }
-    const result = await retainContent(artifact, this.tmk, this.env, undefined)
-    return result ? { memoryId: result.memoryId } : null
+    }, this.env, undefined, this.tmk)
+    return { memoryId: result.requestId }
   }
 
   protected async agentLoop(input: string): Promise<string> {
@@ -104,9 +105,9 @@ export abstract class BaseAgent {
     messages: Array<{ role: string; content: string }>,
   ): Promise<{ response: string; toolCall?: { name: string; input: unknown } }> {
     const result = await this.env.AI.run(
-      '@cf/meta/llama-3.3-70b-instruct-fp8-fast' as BaseAiTextGenerationModels,
+      '@cf/meta/llama-3.3-70b-instruct-fp8-fast',
       { messages: messages as RoleScopedChatInput[] },
-      { gateway: { id: 'brain-gateway' } },
+      { gateway: { id: this.env.AI_GATEWAY_ID } },
     ) as AiTextGenerationOutput & { usage?: { input_tokens: number; output_tokens: number } }
     const response = typeof result === 'string' ? result
       : (result as { response?: string }).response ?? ''

@@ -119,6 +119,12 @@
   Worker restarts, or operation is >30s. When in doubt: Workflow.
   Never put multi-step logic inside a Queue consumer.
 
+- **Vitest Workers Runtime Does Not Implement Node `fs` Reads.**
+  `@cloudflare/vitest-pool-workers` runs inside the Workers runtime, not full
+  Node. Test fixtures that use `readFileSync()` will fail at runtime even if
+  TypeScript compiles. Prefer JSON imports (enabled by `resolveJsonModule`) or
+  inline fixture objects for Worker-side tests.
+
 ---
 
 ## Database & Migrations
@@ -387,6 +393,34 @@
   `workers_dev = false` to container configs; wrangler will error on unknown keys.
   Ref: Phase 1.2, confirmed via Cloudflare docs.
 
+- **Dedicated Hindsight Workers Need a Stable Worker Entrypoint.**
+  When using Hindsight’s dedicated-worker topology on Cloudflare Containers,
+  let the worker container class own `entrypoint = ['hindsight-worker']`.
+  Relying only on per-call `startOptions.entrypoint` made the topology less
+  stable across restarts and obscured whether a healthy-looking worker
+  container was really running the worker process. Keep the explicit worker
+  role in the container class, then use fresh named worker identities during
+  rollout if you need to flush old instances.
+  Ref: Hindsight completion closeout, 2026-04-17.
+
+- **Hindsight Bank Provisioning Must Be Drift-Aware, Not Bootstrap-Only.**
+  Missions, mental models, and webhook registration evolve after a tenant is
+  created. A one-shot bootstrap leaves old banks stale unless someone remembers
+  to backfill them manually. Store a deterministic config hash per bank in D1,
+  rebuild the canonical provisioning spec in code, and re-run
+  `ensureHindsightBankConfigured()` at bootstrap time and write time so config
+  drift is corrected intentionally.
+  Ref: Session OPS.4, 2026-04-17.
+
+- **Judge Hindsight Health by Operations and Recall, Not Only Container Counters.**
+  Cloudflare container app health counters can lag or look contradictory during
+  Hindsight startup and worker polling. The trustworthy order for production
+  diagnosis is: (1) Hindsight operation status, (2) delayed fact-style recall,
+  (3) local `hindsight_operations` state in D1, and only then (4) container app
+  health counters. A `healthy: 0` report alone is not enough to roll back a
+  working topology.
+  Ref: Hindsight completion closeout, 2026-04-17.
+
 - **Agents SDK (`agents/mcp`) Cannot Bundle in vitest-pool-workers.**
   The `agents@0.7.5` SDK has complex transitive deps (partyserver,
   @modelcontextprotocol/sdk) that fail to bundle inside Miniflare's workerd
@@ -434,3 +468,47 @@
   read it. If the SPA needs to open a direct WebSocket to the Worker DO, add a
   separate `VITE_*` build-time variable and document both env vars together.
   Ref: Session 1.4, approval queue real-time updates require `VITE_WORKER_URL`.
+
+- **Pages Deploy CWD Determines Function Discovery.**
+  `wrangler pages deploy dist` discovers the `functions/` directory relative to
+  the current working directory, NOT relative to the dist path. Running
+  `wrangler pages deploy pages/dist` from the project root deploys static files
+  but silently skips Functions. Always `cd pages && wrangler pages deploy dist`.
+  Symptom: `/api/*` routes return SPA `index.html` (200 text/html) instead of
+  invoking the Pages Function proxy.
+  Ref: CF Access session — dashboard showed `<!doctype` HTML as JSON parse error.
+
+- **CF Access Strips CF-Access-Jwt-Assertion on Bypass Routes.**
+  When a CF Access application has Action=Bypass, CF Access removes the
+  `CF-Access-Jwt-Assertion` header from incoming requests to prevent header
+  spoofing. This means a Pages Function proxy cannot forward the JWT to a
+  Worker that has `/api/*` set to Bypass — the header arrives at the Worker empty.
+  Fix: copy the JWT to a custom header (`X-Forwarded-Access-Jwt`) in the proxy.
+  The Worker auth middleware reads from either `CF-Access-Jwt-Assertion` (direct
+  requests where CF Access is active) or `X-Forwarded-Access-Jwt` (proxied
+  requests through bypass routes).
+  Security: the bypass route is not publicly reachable without the proxy, and
+  the Worker validates the JWT signature regardless of which header carries it.
+  Ref: CF Access session — 401 Unauthorized with no `detail`, meaning JWT was
+  empty (not invalid). Debug endpoint confirmed Pages Function received the JWT.
+
+- **Pages-to-Worker Proxy: Forward All Headers, Strip Hop-by-Hop.**
+  The Pages Function proxy must forward all request headers to the Worker,
+  stripping only hop-by-hop headers (`host`, `connection`, `keep-alive`,
+  `transfer-encoding`, `te`, `upgrade`). Passing the raw `context.request.headers`
+  object causes 502 errors because `Host` mismatches the target URL. Clone into
+  a new `Headers()` instance with the skip list. Set `redirect: 'manual'` on the
+  fetch to avoid following CF Access redirects.
+  Ref: CF Access session — 502 Bad Gateway from Cloudflare platform-level error.
+
+- **Detached Async D1 Follow-Ups Need `waitUntil` Or They Leak Into Test Teardown.**
+  Async retain follow-up work that touches D1 must only be scheduled when a real
+  `ExecutionContext.waitUntil()` exists. In unit/integration tests and pure
+  service-call paths, spawning detached reconciliation promises after the main
+  function returns can keep Miniflare's SQLite handles open and trigger
+  isolated-storage teardown failures or `EBUSY` temp-dir cleanup noise. The
+  safe pattern is: if `ctx` exists, hand background work to `waitUntil`; if not,
+  do only the minimum synchronous bookkeeping needed for the caller and skip the
+  detached task.
+  Ref: Session OPS.3 - `tests/2.1-retain.test.ts` only became clean once
+  async reconcile work in `retain-persistence.ts` stopped escaping the test.

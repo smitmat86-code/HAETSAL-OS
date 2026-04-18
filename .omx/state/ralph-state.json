@@ -1,0 +1,14 @@
+{
+  "active": true,
+  "mode": "ralph",
+  "current_phase": "starting",
+  "started_at": "2026-04-16T05:11:18.453Z",
+  "updated_at": "2026-04-17T08:07:54.790Z",
+  "thread_id": "019d948f-d6b8-7f50-bdb6-1fe999fda600",
+  "turn_id": "019d9a7b-3328-78e3-bc7e-20fb10402f55",
+  "iteration": 79,
+  "max_iterations": 80,
+  "last_turn_at": "2026-04-18T07:57:25.907Z",
+  "max_iterations_auto_expand_count": 3,
+  "max_iterations_auto_expanded_at": "2026-04-17T20:06:49.458Z"
+}

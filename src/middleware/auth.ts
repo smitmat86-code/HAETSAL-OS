@@ -65,7 +65,7 @@ export async function deriveTmk(sub: string, secret: string): Promise<CryptoKey>
 export async function validateCfAccessJwt(
   jwt: string,
   jwksUrl: string,
-  expectedAud: string,
+  expectedAud: string | string[],
 ): Promise<{ sub: string; aud: string | string[]; exp: number }> {
   const parts = jwt.split('.')
   if (parts.length !== 3) throw new Error('Invalid JWT format')
@@ -78,9 +78,10 @@ export async function validateCfAccessJwt(
     throw new Error('JWT expired')
   }
 
-  // Validate audience
+  // Validate audience — supports multiple expected AUDs (Worker + Pages)
   const aud = Array.isArray(payload.aud) ? payload.aud : [payload.aud]
-  if (!aud.includes(expectedAud)) throw new Error('Invalid audience')
+  const expected = Array.isArray(expectedAud) ? expectedAud : [expectedAud]
+  if (!aud.some(a => expected.includes(a))) throw new Error('Invalid audience')
 
   // Fetch JWKs and find matching key
   const jwksResponse = await fetch(jwksUrl)
@@ -107,14 +108,19 @@ import { createMiddleware } from 'hono/factory'
 
 export function authMiddleware() {
   return createMiddleware<{ Bindings: Env; Variables: AuthVariables }>(async (c, next) => {
-    const jwt = c.req.header('CF-Access-Jwt-Assertion')
+    // Check standard CF Access header first, then custom proxy-forwarded header
+    // CF Access strips CF-Access-Jwt-Assertion on bypass routes, so the Pages proxy
+    // copies it to X-Forwarded-Access-Jwt as a fallback
+    const jwt = c.req.header('CF-Access-Jwt-Assertion') || c.req.header('X-Forwarded-Access-Jwt')
     if (!jwt) return c.json({ error: 'Unauthorized' }, 401)
 
     const jwksUrl = `https://${c.env.CF_ACCESS_TEAM}.cloudflareaccess.com/cdn-cgi/access/certs`
 
     try {
-      const payload = await validateCfAccessJwt(jwt, jwksUrl, c.env.CF_ACCESS_AUD)
-      const tenantId = await deriveTenantId(payload.sub, c.env.CF_ACCESS_AUD)
+      // Support comma-separated AUDs: "worker-aud,pages-aud"
+      const audiences = c.env.CF_ACCESS_AUD.split(',').map((s: string) => s.trim())
+      const payload = await validateCfAccessJwt(jwt, jwksUrl, audiences)
+      const tenantId = await deriveTenantId(payload.sub, audiences[0])
       c.set('tenantId', tenantId)
       c.set('jwtSub', payload.sub)
     } catch {

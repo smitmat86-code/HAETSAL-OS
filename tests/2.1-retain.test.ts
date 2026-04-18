@@ -1,12 +1,13 @@
 // tests/2.1-retain.test.ts
 // Retain pipeline integration tests
-// Verifies: dedup, encryption, D1 records, STONE R2 archive
+// Verifies: dedup, plaintext Hindsight retain, D1 records, encrypted STONE R2 archive
 
 import { describe, it, expect, beforeAll } from 'vitest'
 import { env } from 'cloudflare:test'
 import { retainContent } from '../src/services/ingestion/retain'
 import { computeDedupHash, checkDedup } from '../src/services/ingestion/dedup'
 import { inferDomain, inferMemoryType } from '../src/services/ingestion/domain'
+import { encryptContentForArchive } from '../src/services/ingestion/encryption'
 import type { IngestionArtifact } from '../src/types/ingestion'
 
 // Create test tenant in D1 before retain tests (FK constraint)
@@ -50,6 +51,55 @@ function makeArtifact(overrides: Partial<IngestionArtifact> = {}): IngestionArti
     occurredAt: Date.now(),
     ...overrides,
   }
+}
+
+function makeEnvWithHindsightStub(capture?: { bankIds: string[]; retainBodies?: unknown[] }) {
+  return {
+    ...env,
+    HINDSIGHT_DEDICATED_WORKERS_ENABLED: 'false',
+    WORKER_DOMAIN: 'brain.workers.dev',
+    HINDSIGHT_WEBHOOK_SECRET: 'test-secret',
+    HINDSIGHT: {
+      fetch: async (input: RequestInfo | URL, init?: RequestInit) => {
+        const url =
+          input instanceof Request
+            ? new URL(input.url)
+            : new URL(input.toString())
+        if (/^\/v1\/default\/banks\/[^/]+\/mental-models$/.test(url.pathname) && (!init?.method || init.method === 'GET')) {
+          return new Response(JSON.stringify({ items: [] }), {
+            status: 200,
+            headers: { 'Content-Type': 'application/json' },
+          })
+        }
+        if (/^\/v1\/default\/banks\/[^/]+\/webhooks$/.test(url.pathname) && (!init?.method || init.method === 'GET')) {
+          return new Response(JSON.stringify({ items: [] }), {
+            status: 200,
+            headers: { 'Content-Type': 'application/json' },
+          })
+        }
+        if (/^\/v1\/default\/banks\/[^/]+\/memories$/.test(url.pathname)) {
+          capture?.bankIds.push(url.pathname.split('/')[4])
+          const request = input instanceof Request
+            ? input
+            : new Request(input.toString(), init)
+          capture?.retainBodies?.push(await request.clone().json())
+          return new Response(JSON.stringify({
+            success: true,
+            bank_id: url.pathname.split('/')[4],
+            items_count: 1,
+            async: false,
+          }), {
+            status: 200,
+            headers: { 'Content-Type': 'application/json' },
+          })
+        }
+        return new Response(JSON.stringify({ status: 'ok' }), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        })
+      },
+    },
+  } as unknown as typeof env
 }
 
 describe('dedup', () => {
@@ -104,8 +154,9 @@ describe('retainContent pipeline', () => {
   it('retains content and creates D1 records', async () => {
     const tmk = await deriveTestTmk()
     const artifact = makeArtifact()
+    const testEnv = makeEnvWithHindsightStub()
 
-    const result = await retainContent(artifact, tmk, env)
+    const result = await retainContent(artifact, tmk, testEnv)
 
     expect(result).not.toBeNull()
     expect(result!.memoryId).toBeTruthy()
@@ -114,7 +165,7 @@ describe('retainContent pipeline', () => {
     expect(result!.stoneR2Key).toBeTruthy()
 
     // Verify ingestion_events row
-    const event = await env.D1_US.prepare(
+    const event = await testEnv.D1_US.prepare(
       `SELECT * FROM ingestion_events WHERE dedup_hash = ?`,
     ).bind(result!.dedupHash).first()
     expect(event).not.toBeNull()
@@ -122,7 +173,7 @@ describe('retainContent pipeline', () => {
     expect(event!.memory_id).toBe(result!.memoryId)
 
     // Verify memory_audit row
-    const audit = await env.D1_US.prepare(
+    const audit = await testEnv.D1_US.prepare(
       `SELECT * FROM memory_audit WHERE memory_id = ?`,
     ).bind(result!.memoryId).first()
     expect(audit).not.toBeNull()
@@ -133,25 +184,27 @@ describe('retainContent pipeline', () => {
     const tmk = await deriveTestTmk()
     const content = `dedup-test-${crypto.randomUUID()}`
     const artifact = makeArtifact({ content })
+    const testEnv = makeEnvWithHindsightStub()
 
     // First retain — should succeed
-    const first = await retainContent(artifact, tmk, env)
+    const first = await retainContent(artifact, tmk, testEnv)
     expect(first).not.toBeNull()
 
     // Second retain with same content — dedup hit, returns null
-    const second = await retainContent(artifact, tmk, env)
+    const second = await retainContent(artifact, tmk, testEnv)
     expect(second).toBeNull()
   })
 
   it('writes encrypted content to R2 STONE archive', async () => {
     const tmk = await deriveTestTmk()
     const artifact = makeArtifact({ content: `stone-test-${crypto.randomUUID()}` })
+    const testEnv = makeEnvWithHindsightStub()
 
-    const result = await retainContent(artifact, tmk, env)
+    const result = await retainContent(artifact, tmk, testEnv)
     expect(result).not.toBeNull()
 
     // Verify R2 object exists at the STONE key
-    const r2Object = await env.R2_ARTIFACTS.get(result!.stoneR2Key!)
+    const r2Object = await testEnv.R2_ARTIFACTS.get(result!.stoneR2Key!)
     expect(r2Object).not.toBeNull()
 
     // Content should be encrypted (base64), not plaintext
@@ -159,23 +212,142 @@ describe('retainContent pipeline', () => {
     expect(storedContent).not.toContain(artifact.content)
   })
 
-  it('sends encrypted content to Hindsight (not plaintext) — Law 2', async () => {
+  it('accepts pre-encrypted archival content when no TMK is available', async () => {
+    const tmk = await deriveTestTmk()
+    const artifact = makeArtifact({ content: `pre-encrypted-test-${crypto.randomUUID()}` })
+    const contentEncrypted = await encryptContentForArchive(artifact.content, tmk)
+    const testEnv = makeEnvWithHindsightStub()
+
+    const result = await retainContent(artifact, null, testEnv, undefined, {
+      contentEncrypted,
+    })
+
+    expect(result).not.toBeNull()
+    const r2Object = await testEnv.R2_ARTIFACTS.get(result!.stoneR2Key!)
+    expect(r2Object).not.toBeNull()
+    expect(await r2Object!.text()).toBe(contentEncrypted)
+  })
+
+  it('uses a stable document-based memory reference for Hindsight retains', async () => {
     const tmk = await deriveTestTmk()
     const artifact = makeArtifact({ content: `law2-test-${crypto.randomUUID()}` })
+    const testEnv = makeEnvWithHindsightStub()
 
-    // The Hindsight stub accepts any request — verify the pipeline runs without error
-    // Real Law 2 verification: content_encrypted field is base64, not plaintext
-    const result = await retainContent(artifact, tmk, env)
+    const result = await retainContent(artifact, tmk, testEnv)
     expect(result).not.toBeNull()
     expect(result!.memoryId).toBeTruthy()
+    expect(result!.memoryId).toContain('test-tenant-retain:mcp_retain:')
+  })
+
+  it('resolves the stored hindsight bank id before writing to Hindsight', async () => {
+    const tmk = await deriveTestTmk()
+    const artifact = makeArtifact({ content: `bank-id-test-${crypto.randomUUID()}` })
+    const capture = { bankIds: [] as string[] }
+    const testEnv = makeEnvWithHindsightStub(capture)
+
+    const result = await retainContent(artifact, tmk, testEnv)
+
+    expect(result).not.toBeNull()
+    expect(capture.bankIds).toContain('hindsight-test-tenant-retain')
+    expect(capture.bankIds).not.toContain('test-tenant-retain')
+  })
+
+  it('normalizes Hindsight metadata values to strings', async () => {
+    const tmk = await deriveTestTmk()
+    const capture = { bankIds: [] as string[], retainBodies: [] as unknown[] }
+    const artifact = makeArtifact({
+      content: `metadata-test-${crypto.randomUUID()}`,
+      metadata: { priority: 3, nested: { source: 'test' }, enabled: true },
+    })
+    const testEnv = makeEnvWithHindsightStub(capture)
+
+    const result = await retainContent(artifact, tmk, testEnv)
+
+    expect(result).not.toBeNull()
+    const body = capture.retainBodies[0] as {
+      items: Array<{ metadata: Record<string, string> }>
+    }
+    expect(body.items[0].metadata.priority).toBe('3')
+    expect(body.items[0].metadata.nested).toBe('{"source":"test"}')
+    expect(body.items[0].metadata.enabled).toBe('true')
+    expect(body.items[0].metadata.salience_tier).toMatch(/^[123]$/)
+    expect(body.items[0].metadata.occurred_at_ms).toBe(String(artifact.occurredAt))
   })
 
   it('scores salience correctly for mcp_retain source (Tier 3)', async () => {
     const tmk = await deriveTestTmk()
     const artifact = makeArtifact({ source: 'mcp_retain' })
+    const testEnv = makeEnvWithHindsightStub()
 
-    const result = await retainContent(artifact, tmk, env)
+    const result = await retainContent(artifact, tmk, testEnv)
     expect(result).not.toBeNull()
     expect(result!.salienceTier).toBe(3)
+  })
+
+  it('records async retain lifecycle in hindsight_operations', async () => {
+    const tmk = await deriveTestTmk()
+    const artifact = makeArtifact({ content: `async-op-test-${crypto.randomUUID()}` })
+    const testEnv = makeEnvWithHindsightStub({
+      bankIds: [],
+      retainBodies: [],
+    })
+    testEnv.HINDSIGHT = {
+      fetch: async (input: RequestInfo | URL, init?: RequestInit) => {
+        const url =
+          input instanceof Request
+            ? new URL(input.url)
+            : new URL(input.toString())
+        if (/^\/v1\/default\/banks\/[^/]+\/memories$/.test(url.pathname)) {
+          const request = input instanceof Request
+            ? input
+            : new Request(input.toString(), init)
+          await request.clone().json()
+          return new Response(JSON.stringify({
+            success: true,
+            bank_id: url.pathname.split('/')[4],
+            items_count: 1,
+            async: true,
+            operation_id: 'op-async-retain-test',
+          }), {
+            status: 200,
+            headers: { 'Content-Type': 'application/json' },
+          })
+        }
+        return new Response(JSON.stringify({ status: 'ok' }), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        })
+      },
+    } as unknown as typeof env.HINDSIGHT
+
+    const result = await retainContent(artifact, tmk, testEnv, undefined, {
+      hindsightAsync: true,
+    })
+
+    expect(result).not.toBeNull()
+    expect(result!.operationId).toBe('op-async-retain-test')
+
+    const row = await testEnv.D1_US.prepare(
+      `SELECT operation_id, tenant_id, bank_id, source_document_id, status, dedup_hash
+       FROM hindsight_operations
+       WHERE operation_id = ?`,
+    ).bind('op-async-retain-test').first<{
+      operation_id: string
+      tenant_id: string
+      bank_id: string
+      source_document_id: string
+      status: string
+      dedup_hash: string
+    }>()
+
+    expect(row).not.toBeNull()
+    expect(row!.tenant_id).toBe('test-tenant-retain')
+    expect(row!.status).toBe('pending')
+    expect(row!.source_document_id).toContain('test-tenant-retain:mcp_retain:')
+
+    const audit = await testEnv.D1_US.prepare(
+      `SELECT operation, memory_id FROM memory_audit WHERE operation = 'retain_queued' AND memory_id = ?`,
+    ).bind('op-async-retain-test').first()
+    expect(audit).not.toBeNull()
   })
 })

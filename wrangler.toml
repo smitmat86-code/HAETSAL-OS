@@ -3,29 +3,57 @@ main = "src/workers/mcpagent/index.ts"
 compatibility_date = "2025-01-01"
 compatibility_flags = ["nodejs_compat"]
 
+[observability]
+enabled = true
+
+# ── Placement ──────────────────────────────────────────────────────────────────
+# Route Worker near Neon Postgres (us-west-2) to minimise DB round-trip latency
+[placement]
+mode = "smart"
+
 # ── Containers ────────────────────────────────────────────────────────────────
 [[containers]]
-name = "HINDSIGHT"
-image = "./hindsight"          # Dockerfile in /hindsight — pinned via image digest
-max_instances = 3              # Concurrent tenant requests; scale-to-zero between
-# NOTE: workers_dev is not a valid field on containers in wrangler v4.
-# Containers are service-binding-only by platform design — no public URL possible.
-# The spec's intent ("workers_dev = false") is enforced by the platform, not config.
+class_name = "HindsightContainer"
+image = "./hindsight/Dockerfile"   # API-only image pinned to Hindsight 0.5.2
+max_instances = 3                  # Concurrent tenant requests; scale-to-zero between
+instance_type = "standard-2"      # 1 vCPU, 6 GiB RAM — extra headroom for full-image cold starts
+
+[[containers]]
+class_name = "HindsightWorkerContainer"
+image = "./hindsight/Dockerfile"
+max_instances = 2
+instance_type = "standard-2"
 
 # ── Durable Objects ───────────────────────────────────────────────────────────
 [[durable_objects.bindings]]
 name = "MCPAGENT"
 class_name = "McpAgentDO"
 
+[[durable_objects.bindings]]
+name = "HINDSIGHT"
+class_name = "HindsightContainer"
+
+[[durable_objects.bindings]]
+name = "HINDSIGHT_WORKER"
+class_name = "HindsightWorkerContainer"
+
 [[migrations]]
 tag = "v1"
 new_sqlite_classes = ["McpAgentDO"]
+
+[[migrations]]
+tag = "v2"
+new_sqlite_classes = ["HindsightContainer"]
+
+[[migrations]]
+tag = "v3"
+new_sqlite_classes = ["HindsightWorkerContainer"]
 
 # ── D1 Databases (regional naming for DLS stub) ───────────────────────────────
 [[d1_databases]]
 binding = "D1_US"
 database_name = "brain-us"
-database_id = "<SET_AT_DEPLOY>"
+database_id = "b934a2d4-c429-4eea-9153-42a2796a9c63"
 migrations_dir = "migrations"
 
 # TODO: Phase 5+ — EU tenant jurisdiction
@@ -34,7 +62,7 @@ migrations_dir = "migrations"
 [[d1_databases]]
 binding = "D1_EU"
 database_name = "brain-us"        # Same DB for now — DLS routing logic exists,
-database_id = "<SET_AT_DEPLOY>"   # EU binding gets its own DB when DLS activates
+database_id = "b934a2d4-c429-4eea-9153-42a2796a9c63"   # EU binding gets its own DB when DLS activates
 
 # ── R2 Buckets ────────────────────────────────────────────────────────────────
 [[r2_buckets]]
@@ -48,7 +76,7 @@ bucket_name = "brain-observability"
 # ── KV Namespaces ─────────────────────────────────────────────────────────────
 [[kv_namespaces]]
 binding = "KV_SESSION"
-id = "<SET_AT_DEPLOY>"
+id = "087d9c34729a4df4a2805843a1602cb4"
 
 # ── Queues ────────────────────────────────────────────────────────────────────
 # LESSON: Always set BOTH max_batch_size AND max_batch_timeout (Schema V2 Spec 1.5)
@@ -91,7 +119,7 @@ max_batch_timeout = 60
 [[queues.consumers]]
 queue = "brain-dead-letter"
 max_batch_size = 10
-max_batch_timeout = 300        # DLQ — 5min, manual review cadence
+max_batch_timeout = 60         # DLQ — max allowed by Cloudflare (was 300, limit is 60)
 
 [[queues.consumers]]
 queue = "brain-actions"
@@ -114,9 +142,10 @@ binding = "ANALYTICS"
 dataset = "BRAIN_ANALYTICS"
 
 # ── AI Gateway ────────────────────────────────────────────────────────────────
-# Configured in src/ via AI binding with gateway option
-# All LLM calls use: { gateway: { id: "brain-gateway" } }
-# brain-gateway created manually in Cloudflare dashboard before first deploy
+# All LLM calls use: { gateway: { id: "haetsal-brain-gateway" } }
+# haetsal-brain-gateway created manually in Cloudflare dashboard before first deploy
+[ai]
+binding = "AI"
 
 # ── Browser Rendering ─────────────────────────────────────────────────────────
 [browser]
@@ -140,12 +169,11 @@ crons = ["*/1 * * * *", "*/15 * * * *", "0 7 * * *", "*/30 * * * *", "0 17 * * 5
 # 0 2: nightly consolidation fallback (3.3)
 
 [vars]
-TELEGRAM_BOT_USERNAME = "the_brain_bot"
-WORKER_DOMAIN = "the-brain.workers.dev"  # set to actual domain at deploy (2.4a)
+TELEGRAM_BOT_USERNAME = "haetsal_os_bot"
+WORKER_DOMAIN = "the-brain.ct-trading-bot1.workers.dev"
+TELNYX_FROM_NUMBER = "+13236785761"
+AI_GATEWAY_ID = "haetsal-brain-gateway"
+AI_GATEWAY_ACCOUNT_ID = "d3f0a1c579945862edc9c6f6e36e448a"
+HINDSIGHT_DEDICATED_WORKERS_ENABLED = "true"
+HINDSIGHT_DEDICATED_WORKER_COUNT = "2"
 
-# ── Hyperdrive (Neon connection pool) ─────────────────────────────────────────
-[[hyperdrive]]
-binding = "HYPERDRIVE"
-id = "<SET_AT_DEPLOY>"
-# Create via: wrangler hyperdrive create brain-neon --connection-string="<NEON_URL>"
-# The Container uses HYPERDRIVE.connectionString for Postgres connection

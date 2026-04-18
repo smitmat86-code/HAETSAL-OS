@@ -8,6 +8,7 @@ import type { PendingActionRow } from '../../../types/action'
 import { UNDO_WINDOW_MS } from '../../../types/action'
 import { executeDeleteEvent } from '../../../services/action/integrations/calendar'
 import { broadcastEvent } from '../../../services/action/executor'
+import { getMcpAgentObjectId } from '../do/identity'
 
 type Variables = { tenantId: string; jwtSub: string; traceId: string }
 
@@ -42,7 +43,7 @@ actions.post('/:id/undo', async (c) => {
   // Get TMK for integration calls
   let tmk: CryptoKey | null = null
   try {
-    const doId = c.env.MCPAGENT.idFromName(tenantId)
+    const doId = getMcpAgentObjectId(c.env.MCPAGENT, tenantId)
     const stub = c.env.MCPAGENT.get(doId)
     // @ts-expect-error -- DO RPC method not in generic DurableObjectStub type
     tmk = await stub.getTmk()

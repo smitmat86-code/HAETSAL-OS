@@ -12,10 +12,10 @@
 schema exists, Pages UI has approval queue and settings.
 
 ### Session 1.1 — Infrastructure Bedrock
-**What:** Hindsight Container + Neon Postgres + Hyperdrive + D1 schema (all Brain tables) + R2 buckets + KV namespace + wrangler.toml bindings
+**What:** Hindsight Container + Neon Postgres + D1 schema (all Brain tables) + R2 buckets + KV namespace + wrangler.toml bindings
 **Spec covers:**
 - Hindsight Container setup (pinned commit hash — set it here)
-- Neon Postgres connection via Hyperdrive from Container
+- Neon Postgres connection via direct secret from the Hindsight container
 - D1 schema: all Brain tables (1001–1005 migrations)
 - R2 buckets: ARTIFACTS + OBSERVABILITY
 - KV: SESSION namespace

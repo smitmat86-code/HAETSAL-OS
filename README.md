@@ -1,7 +1,7 @@
 # THE Brain
 
 > Personal AI second brain built on Cloudflare + Hindsight + Neon Postgres.
-> Zero-knowledge. Action-capable. Self-improving.
+> Private by default. Action-capable. Self-improving.
 
 ---
 
@@ -11,35 +11,38 @@ Full system design: `THE_BRAIN_ARCHITECTURE.md` (in project root or reference do
 
 Constitutional law for this codebase: `ARCHITECTURE.md`
 
+Long-term advanced open-brain target:
+`docs/advanced-open-brain-architecture.md`
+
 ---
 
 ## Getting Started (AI Coding Agent)
 
 Read these files in order before writing any code:
 
-1. `MANIFEST.md` — module registry and binding status
-2. `SESSION_LOG.md` — last 3 session entries
-3. `LESSONS.md` — relevant section for your work area
-4. `ARCHITECTURE.md` — three laws + state tiers + compute continuum
+1. `MANIFEST.md` - module registry and binding status
+2. `SESSION_LOG.md` - last 3 session entries
+3. `LESSONS.md` - relevant section for your work area
+4. `ARCHITECTURE.md` - three laws + state tiers + compute continuum
 5. Your active spec in `specs/active/`
 
 ---
 
 ## The Three Laws
 
-**Law 1 — One Public Face**
+**Law 1 - One Public Face**
 McpAgent Worker is the only public surface. Hindsight (Container) and Neon
-are internal only, reachable via service binding and Hyperdrive respectively.
+are internal only, reachable via service binding and direct Postgres secret respectively.
 
-**Law 2 — Zero-Knowledge Platform**
-All memory content encrypted AES-256-GCM with tenant keys before Neon write.
-Cron jobs use a time-bound Cron KEK (provisioned during active session, stored
-encrypted in KV). Platform operator never sees plaintext content.
+**Law 2 - Key-Isolated Platform**
+Tenant keys stay scoped to authenticated session work. Hindsight receives
+plaintext through its official API, while HAETSAL-owned archives, traces, and
+cron material remain encrypted at rest with tenant-scoped or cron-scoped keys.
 
-**Law 3 — Agents Write Facts, Crons Write Patterns**
+**Law 3 - Agents Write Facts, Crons Write Patterns**
 Domain agents write episodic and semantic memories only.
 Procedural memories are exclusively written by the consolidation cron.
-Enforced structurally in `brain_v1_retain` middleware — not by prompt.
+Enforced structurally in `brain_v1_retain` middleware - not by prompt.
 
 ---
 
@@ -48,14 +51,14 @@ Enforced structurally in `brain_v1_retain` middleware — not by prompt.
 | Layer | Technology |
 |-------|-----------|
 | Runtime | Cloudflare Workers (Hono routing) |
-| Memory engine | Hindsight (Cloudflare Container, service binding) |
-| Database | Neon Postgres via Cloudflare Hyperdrive |
+| Memory engine | Hindsight API-only container + dedicated Hindsight worker containers |
+| Database | Neon Postgres (direct from Hindsight container) |
 | Session state | Cloudflare Durable Objects (McpAgent) |
 | Operational metadata | Cloudflare D1 |
 | Semantic search | Cloudflare Vectorize |
 | Artifact storage | Cloudflare R2 |
 | Async jobs | Cloudflare Queues + Workflows |
-| AI routing | Cloudflare AI Gateway (brain-gateway) |
+| AI routing | Cloudflare AI Gateway (haetsal-brain-gateway) |
 | Web UI | Cloudflare Pages |
 | Browser automation | Cloudflare Browser Rendering (CDP) |
 | SMS / Voice | Telnyx |
@@ -66,11 +69,11 @@ Enforced structurally in `brain_v1_retain` middleware — not by prompt.
 ## Hindsight Version Pin
 
 ```
-Commit: 58fdac44f78c60afa09871430c375c0459d14cb6
-Tag: v0.4.16
-Date: 2026-03-10
-Reason: Initial pin — latest stable release. Schema migration threading fix,
-        GIN index on source_memory_ids, Dependabot security fixes.
+Image: ghcr.io/vectorize-io/hindsight-api:0.5.2
+Date: 2026-04-17
+Reason: API-only runtime for HAETSAL, paired with dedicated Hindsight worker
+        containers and direct Neon. This is the production shape for the
+        repaired async retain/recall/reflect path.
 ```
 
 **Before any Hindsight upgrade:**
@@ -78,13 +81,23 @@ Reason: Initial pin — latest stable release. Schema migration threading fix,
 2. Test on a Neon branch
 3. Update the pin above with date and reason
 
+## Current Hindsight Topology
+
+- API service: Cloudflare Container on port `8888`
+- Background processing: dedicated `hindsight-worker` container instances on `8889`
+- Database: direct `NEON_CONNECTION_STRING`
+- LLM routing: Cloudflare AI Gateway (`haetsal-brain-gateway`)
+- Interactive writes: direct Hindsight `async=true` retain with HAETSAL-side
+  operation tracking in D1
+- External and bulk ingestion: HAETSAL queues feeding the canonical retain pipeline
+
 ---
 
 ## Key Development Commands
 
 ```bash
-npm run postflight    # Convention checks — must pass at session end
-npm test              # Integration tests — must pass at session end
+npm run postflight    # Convention checks - must pass at session end
+npm test              # Integration tests - must pass at session end
 npm run manifest      # Regenerate MANIFEST.md module registry
 npm run dev           # Local development (wrangler dev)
 ```
@@ -93,11 +106,11 @@ npm run dev           # Local development (wrangler dev)
 
 ## Build Sequence
 
-See `docs/build-sequence.md` for the full Phase 1–5 spec roadmap.
+See `docs/build-sequence.md` for the full Phase 1-5 spec roadmap.
 
-**Current phase:** Phase 1 — Foundation
-**Last completed:** Session 1.1 — Infrastructure Bedrock
-**Next spec:** Session 1.2 — McpAgent Worker + auth + TMK derivation
+**Current phase:** Phase 1 - Foundation
+**Last completed:** Session 1.1 - Infrastructure Bedrock
+**Next spec:** Session 1.2 - McpAgent Worker + auth + TMK derivation
 
 ---
 

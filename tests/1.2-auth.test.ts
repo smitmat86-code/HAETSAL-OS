@@ -1,24 +1,22 @@
 // tests/1.2-auth.test.ts
 // Auth + tenant bootstrap integration tests
-// Tests JWT validation, tenant creation, KEK provisioning
-// Tests run against real D1/KV/R2 bindings via vitest-pool-workers
+// Tests JWT validation, tenant creation, and KEK provisioning.
 
 import { env } from 'cloudflare:test'
 import { describe, it, expect } from 'vitest'
 import { deriveTenantId, deriveTmk } from '../src/middleware/auth'
 import { getOrCreateTenant, provisionOrRenewKek } from '../src/services/tenant'
+import { getMcpAgentObjectName } from '../src/workers/mcpagent/do/identity'
 
-// Test constants — match vitest.config.ts bindings
 const TEST_AUD = 'test-aud-brain-access'
 const TEST_SUB = 'test-user-sub-12345'
 
-describe('1.2 Auth — Tenant ID Derivation', () => {
-
+describe('1.2 Auth - Tenant ID Derivation', () => {
   it('deriveTenantId produces deterministic hex string', async () => {
     const id1 = await deriveTenantId(TEST_SUB, TEST_AUD)
     const id2 = await deriveTenantId(TEST_SUB, TEST_AUD)
     expect(id1).toBe(id2)
-    expect(id1).toMatch(/^[0-9a-f]{64}$/) // 256 bits = 64 hex chars
+    expect(id1).toMatch(/^[0-9a-f]{64}$/)
   })
 
   it('different sub produces different tenant_id', async () => {
@@ -34,8 +32,7 @@ describe('1.2 Auth — Tenant ID Derivation', () => {
   })
 })
 
-describe('1.2 Auth — TMK Derivation', () => {
-
+describe('1.2 Auth - TMK Derivation', () => {
   it('deriveTmk produces non-extractable AES-GCM key', async () => {
     const tmk = await deriveTmk(TEST_SUB, TEST_AUD)
     expect(tmk.type).toBe('secret')
@@ -48,7 +45,6 @@ describe('1.2 Auth — TMK Derivation', () => {
   it('same sub produces same TMK behavior', async () => {
     const tmk1 = await deriveTmk(TEST_SUB, TEST_AUD)
     const tmk2 = await deriveTmk(TEST_SUB, TEST_AUD)
-    // Can't compare keys directly (non-extractable), but both should encrypt/decrypt
     const plaintext = new TextEncoder().encode('test-data')
     const iv = crypto.getRandomValues(new Uint8Array(12))
     const ct1 = await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, tmk1, plaintext)
@@ -57,27 +53,34 @@ describe('1.2 Auth — TMK Derivation', () => {
   })
 })
 
-describe('1.2 Auth — Tenant Bootstrap', () => {
+describe('1.2 Auth - Tenant Bootstrap', () => {
+  it('maps tenant ids to streamable-http MCP agent ids', async () => {
+    const tenantId = await deriveTenantId('mcp-agent-id-sub', TEST_AUD)
+    const objectName = getMcpAgentObjectName(tenantId)
+
+    expect(objectName).toBe(`streamable-http:${tenantId}`)
+  })
 
   it('creates tenant with 4 scheduled_tasks atomically', async () => {
     const tenantId = await deriveTenantId(TEST_SUB, TEST_AUD)
     const result = await getOrCreateTenant(tenantId, TEST_SUB, env)
     expect(result.isNew).toBe(true)
     expect(result.tenant.id).toBe(tenantId)
+    expect(result.tenant.hindsight_tenant_id).toBeTruthy()
+    expect(result.tenant.hindsight_tenant_id).not.toBe(tenantId)
 
-    // Verify 4 platform default tasks created
     const tasks = await env.D1_US.prepare(
       'SELECT * FROM scheduled_tasks WHERE tenant_id = ?',
     ).bind(tenantId).all()
     expect(tasks.results.length).toBe(4)
-    const taskNames = tasks.results.map((t: Record<string, unknown>) => t.task_name)
+    const taskNames = tasks.results.map((task: Record<string, unknown>) => task.task_name)
     expect(taskNames).toContain('consolidation_cron')
     expect(taskNames).toContain('morning_brief')
     expect(taskNames).toContain('gap_discovery')
     expect(taskNames).toContain('weekly_synthesis')
   })
 
-  it('second auth is idempotent — does not duplicate', async () => {
+  it('second auth is idempotent and does not duplicate', async () => {
     const tenantId = await deriveTenantId('idempotent-test-sub', TEST_AUD)
     await getOrCreateTenant(tenantId, 'idempotent-test-sub', env)
     const result2 = await getOrCreateTenant(tenantId, 'idempotent-test-sub', env)
@@ -89,7 +92,18 @@ describe('1.2 Auth — Tenant Bootstrap', () => {
     expect(tenants!.count).toBe(1)
   })
 
-  it('provisions KEK — ciphertext differs from plaintext', async () => {
+  it('different tenants get different persisted hindsight bank ids', async () => {
+    const tenantA = await deriveTenantId('bank-a-sub', TEST_AUD)
+    const tenantB = await deriveTenantId('bank-b-sub', TEST_AUD)
+    const resultA = await getOrCreateTenant(tenantA, 'bank-a-sub', env)
+    const resultB = await getOrCreateTenant(tenantB, 'bank-b-sub', env)
+
+    expect(resultA.tenant.hindsight_tenant_id).toBeTruthy()
+    expect(resultB.tenant.hindsight_tenant_id).toBeTruthy()
+    expect(resultA.tenant.hindsight_tenant_id).not.toBe(resultB.tenant.hindsight_tenant_id)
+  })
+
+  it('provisions KEK and ciphertext differs from plaintext', async () => {
     const tenantId = await deriveTenantId('kek-test-sub', TEST_AUD)
     const { tenant } = await getOrCreateTenant(tenantId, 'kek-test-sub', env)
     const tmk = await deriveTmk('kek-test-sub', TEST_AUD)
@@ -100,7 +114,7 @@ describe('1.2 Auth — Tenant Bootstrap', () => {
     ).bind(tenantId).first<{ cron_kek_encrypted: string; cron_kek_expires_at: number }>()
 
     expect(updated!.cron_kek_encrypted).toBeTruthy()
-    expect(updated!.cron_kek_encrypted!.length).toBeGreaterThan(10)
+    expect(updated!.cron_kek_encrypted.length).toBeGreaterThan(10)
     expect(updated!.cron_kek_expires_at).toBeGreaterThan(Date.now())
   })
 
@@ -109,7 +123,7 @@ describe('1.2 Auth — Tenant Bootstrap', () => {
     await getOrCreateTenant(tenantId, 'audit-test-sub', env)
 
     const audit = await env.D1_US.prepare(
-      `SELECT * FROM memory_audit WHERE tenant_id = ? AND operation = ?`,
+      'SELECT * FROM memory_audit WHERE tenant_id = ? AND operation = ?',
     ).bind(tenantId, 'auth.tenant_created').first()
 
     expect(audit).toBeTruthy()

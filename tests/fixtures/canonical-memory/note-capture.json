@@ -1,0 +1,9 @@
+{
+  "tenantId": "test-tenant-canonical",
+  "sourceSystem": "mcp_retain",
+  "sourceRef": "note-001",
+  "scope": "general",
+  "title": "Daily note",
+  "body": "I had a productive planning session and committed to following up with two open questions tomorrow.",
+  "capturedAt": 1760188800000
+}

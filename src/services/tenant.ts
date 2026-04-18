@@ -1,10 +1,9 @@
 // src/services/tenant.ts
-// Tenant bootstrap, KEK provision/renewal, scheduled_tasks seed
-// All D1 writes are batched — never sequential for paired operations
+// Tenant bootstrap, KEK provision/renewal, scheduled_tasks seed.
+// Bank identity is local metadata; the real Hindsight bank is created lazily through the v1 API.
 
 import type { Env } from '../types/env'
 import type { TenantRow } from '../types/tenant'
-
 const PLATFORM_DEFAULT_TASKS = [
   { task_name: 'consolidation_cron', cron_expression: '0 3 * * *', description: 'Nightly memory consolidation' },
   { task_name: 'morning_brief', cron_expression: '0 7 * * *', description: 'Daily morning brief generation' },
@@ -12,19 +11,10 @@ const PLATFORM_DEFAULT_TASKS = [
   { task_name: 'weekly_synthesis', cron_expression: '0 8 * * 1', description: 'Weekly synthesis and reflection' },
 ]
 
-// Register tenant with Hindsight Container via service binding
-async function registerHindsightTenant(tenantId: string, env: Env): Promise<string> {
-  const hindsightTenantId = crypto.randomUUID()
-  try {
-    await env.HINDSIGHT.fetch('http://internal/api/tenants', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ tenant_id: tenantId, hindsight_tenant_id: hindsightTenantId }),
-    })
-  } catch {
-    // Container may be stubbed in dev/test — proceed with generated ID
-  }
-  return hindsightTenantId
+// The official Hindsight API does not require a separate tenant-registration call.
+// We generate a stable bank id locally and let the first bank-scoped API call materialize it.
+function createHindsightBankId(): string {
+  return crypto.randomUUID()
 }
 
 export async function getOrCreateTenant(
@@ -40,7 +30,7 @@ export async function getOrCreateTenant(
   if (existing) return { tenant: existing, isNew: false }
 
   // First auth — register with Hindsight and create tenant row atomically
-  const hindsightTenantId = await registerHindsightTenant(tenantId, env)
+  const hindsightTenantId = createHindsightBankId()
 
   const now = Date.now()
   const taskRows = PLATFORM_DEFAULT_TASKS.map(t => ({

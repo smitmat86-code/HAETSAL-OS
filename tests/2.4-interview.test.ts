@@ -1,7 +1,7 @@
 // tests/2.4-interview.test.ts
 // Bootstrap interview tests — question flow, answer retention, write policy
 
-import { describe, it, expect, beforeAll } from 'vitest'
+import { describe, it, expect, beforeAll, afterEach, vi } from 'vitest'
 import { env } from 'cloudflare:test'
 import {
   createInitialState, currentQuestion, currentDomain,
@@ -10,6 +10,10 @@ import {
 import { INTERVIEW_DOMAINS } from '../src/types/bootstrap'
 
 const TEST_TENANT = 'interview-test-tenant'
+
+afterEach(() => {
+  vi.restoreAllMocks()
+})
 
 async function deriveTestTmk(): Promise<CryptoKey> {
   const keyMaterial = await crypto.subtle.importKey(
@@ -87,19 +91,18 @@ describe('Interview question flow', () => {
     }
   })
 
-  it('answers retained as semantic, user_authored, tier 3', async () => {
+  it('answers queue a semantic, user_authored, tier 3 retain artifact', async () => {
     const tmk = await deriveTestTmk()
     const state = createInitialState()
+    const sendSpy = vi.spyOn(env.QUEUE_HIGH, 'send').mockResolvedValue(undefined as never)
     await recordAnswer(state, 'I am a software engineer', TEST_TENANT, tmk, env)
 
-    // Verify memory_audit has the retain entry
-    const audit = await env.D1_US.prepare(
-      `SELECT * FROM memory_audit WHERE tenant_id = ? AND provenance = 'user_authored'
-       ORDER BY created_at DESC LIMIT 1`,
-    ).bind(TEST_TENANT).first()
-
-    expect(audit).not.toBeNull()
-    expect(audit!.memory_type).toBe('semantic')
-    expect(audit!.provenance).toBe('user_authored')
+    expect(sendSpy).toHaveBeenCalledTimes(1)
+    const payload = sendSpy.mock.calls[0]?.[0] as any
+    expect(payload.type).toBe('retain_artifact')
+    expect(payload.tenantId).toBe(TEST_TENANT)
+    expect(payload.payload.artifact.memoryType).toBe('semantic')
+    expect(payload.payload.artifact.provenance).toBe('user_authored')
+    expect(payload.payload.artifact.metadata.salience_override).toBe(3)
   })
 })

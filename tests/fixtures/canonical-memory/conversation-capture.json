@@ -1,0 +1,9 @@
+{
+  "tenantId": "test-tenant-canonical",
+  "sourceSystem": "mcp_memory_write",
+  "sourceRef": "conversation-001",
+  "scope": "general",
+  "title": "Conversation recap",
+  "body": "User: I want to simplify the launch plan before next week.\nAssistant: We can turn the current draft into three milestones and keep the optional work out of the critical path.\n\nUser: Please also remember that the operations checklist still needs an owner.\nAssistant: Captured. I will keep the checklist owner as an explicit follow-up item in the rollout notes.",
+  "capturedAt": 1760192400000
+}

@@ -43,10 +43,10 @@ export async function runPass3(
     .join('\n---\n')
 
   const llmResult = await env.AI.run(
-    '@cf/meta/llama-3.3-70b-instruct-fp8-fast' as BaseAiTextGenerationModels,
+    '@cf/meta/llama-3.3-70b-instruct-fp8-fast',
     { messages: [{ role: 'user', content:
       `Extract behavioral patterns from these session memories. A behavioral pattern is a recurring tendency visible across multiple sessions. Return JSON: {"patterns":[{"pattern":"1-2 sentences","confidence":0.0-1.0,"domain":"string","evidence_count":number}]}. Only confidence > 0.6. Max 3.\n\n${sessionContent}` }] },
-    { gateway: { id: 'brain-gateway' } },
+    { gateway: { id: env.AI_GATEWAY_ID } },
   ) as { response?: string }
 
   let patterns: PatternResult[] = []

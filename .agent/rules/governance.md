@@ -85,6 +85,43 @@ do not invent platform semantics.
 
 ---
 
+## External Integration Gate
+
+> **Origin**: Hindsight Postmortem (April 2026). An AI agent fabricated an entire API
+> contract (routes, types, fields) that looked professional but hit 404 on every call.
+> See `docs/hindsight_postmortem.md`.
+
+**Before writing ANY code that calls an external API, SDK, or service:**
+
+1. **Read the actual documentation first.** Fetch the official docs URL and read it.
+   Do NOT guess what an API should look like based on the product name or concept.
+
+2. **Cite your source.** Before writing types or fetch calls, state:
+   "Per [URL], the endpoint is X, the request body requires Y, the response returns Z."
+   If you cannot cite a URL, you are guessing. STOP.
+
+3. **Use the official SDK if one exists.** Check npm/PyPI for an official client before
+   writing raw `fetch()` calls. Official SDKs encode the correct API contract.
+
+4. **Never invent type fields.** If a field doesn't appear in the official docs, it
+   doesn't exist. Common hallucination patterns:
+   - `content_encrypted` → real field is `content` (plaintext)
+   - `query_encrypted` → real field is `query`
+   - Invented enums (`episodic | semantic | procedural`) when the real ones are different
+   - Custom route paths (`/api/retain`) when the real path is versioned (`/v1/...`)
+
+5. **Verify connectivity.** After writing integration code, test against the real
+   service. A 404 or 400 means your contract is wrong — go back to step 1.
+
+6. **Check for benchmarks and best practices.** Many services publish model leaderboards,
+   configuration guides, and anti-pattern lists. Read them before choosing defaults.
+   Do NOT recommend models or configurations based on "general reputation."
+
+**This rule applies to ALL external services**: Hindsight, Neon, Telegram, Twilio,
+Cloudflare APIs, AI model providers, and any future integration.
+
+---
+
 ## Structural Reminders
 
 These are enforced by the platform and MUST NOT be re-implemented:
@@ -157,6 +194,7 @@ All three must pass before marking work complete.
 - [ ] All action proposals include capability class + payload hash
 - [ ] All state-mutating operations use atomic D1 batch (operation + audit together)
 - [ ] No LLM calls bypass AI Gateway
+- [ ] All external API integrations verified against official docs (cite URL or SDK version)
 
 ### Step 3: Standard Self-Check
 

@@ -32,7 +32,7 @@ export function scoreSalience(artifact: IngestionArtifact): SalienceResult {
   const surpriseScore = 0.5 // Stub — Phase 3 refines
 
   // Tier 3: explicit retain via MCP tool
-  if (source === 'mcp_retain') {
+  if (source === 'mcp_retain' || source === 'mcp:memory_write') {
     reasons.push('explicit_retain')
     return { tier: 3, surpriseScore, queue: 'QUEUE_HIGH', reasons }
   }

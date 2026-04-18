@@ -12,9 +12,9 @@ export interface RetainInput {
 }
 
 export interface RetainOutput {
-  memory_id: string   // Hindsight UUID (stub: generated crypto.randomUUID)
+  memory_id: string   // Stable retained document reference or async operation id
   salience_tier: number
-  status: 'retained' | 'deferred'
+  status: 'retained' | 'queued' | 'deferred'
 }
 
 export interface RecallInput {

@@ -7,7 +7,7 @@
 import type { Env } from '../../types/env'
 import type { InterviewState } from '../../types/bootstrap'
 import { INTERVIEW_DOMAINS } from '../../types/bootstrap'
-import { retainContent } from '../ingestion/retain'
+import { enqueueRetainArtifact } from '../ingestion/enqueue'
 
 export function createInitialState(): InterviewState {
   return { domainIndex: 0, questionIndex: 0, answers: [] }
@@ -45,20 +45,16 @@ export async function recordAnswer(
   const newAnswers = [...state.answers, { domain: domain.domain, question, answer }]
 
   // Retain answer as semantic memory — highest trust (user_authored)
-  await retainContent(
-    {
-      tenantId,
-      source: 'mcp_retain',
-      content: `Q: ${question}\nA: ${answer}`,
-      occurredAt: Date.now(),
-      memoryType: 'semantic',
-      domain: domain.domain,
-      provenance: 'user_authored',
-      metadata: { bootstrap_interview: 'true', salience_override: 3 },
-    },
-    tmk,
-    env,
-  )
+  await enqueueRetainArtifact({
+    tenantId,
+    source: 'mcp_retain',
+    content: `Q: ${question}\nA: ${answer}`,
+    occurredAt: Date.now(),
+    memoryType: 'semantic',
+    domain: domain.domain,
+    provenance: 'user_authored',
+    metadata: { bootstrap_interview: 'true', salience_override: 3 },
+  }, env, undefined, tmk)
 
   // Advance question pointer
   let newDomainIdx = state.domainIndex

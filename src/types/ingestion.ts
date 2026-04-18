@@ -1,7 +1,16 @@
 // src/types/ingestion.ts
 // Ingestion pipeline types — used by all ingest sources (SMS, Gmail, Calendar, Obsidian, file, MCP retain)
 
-export type IngestionSource = 'sms' | 'gmail' | 'calendar' | 'obsidian' | 'file' | 'mcp_retain'
+export type IngestionSource =
+  | 'sms'
+  | 'gmail'
+  | 'calendar'
+  | 'obsidian'
+  | 'file'
+  | 'mcp_retain'
+  | 'mcp:memory_write'
+  | 'cron:consolidation'
+  | `agent:${string}`
 
 export interface IngestionArtifact {
   tenantId: string
@@ -22,13 +31,16 @@ export interface SalienceResult {
 }
 
 export interface RetainResult {
-  memoryId: string         // Hindsight UUID
+  memoryId: string         // Stable retained document reference or operation id
+  operationId?: string | null
+  documentId?: string | null
   salienceTier: number
   dedupHash: string
   stoneR2Key: string | null
 }
 
 export type IngestionQueueMessageType =
+  | 'retain_artifact'
   | 'sms_inbound'
   | 'gmail_thread'
   | 'calendar_event'
@@ -36,6 +48,12 @@ export type IngestionQueueMessageType =
   | 'bootstrap_gmail_thread'
   | 'bootstrap_calendar_event'
   | 'bootstrap_drive_file'
+
+export interface QueuedRetainPayload {
+  requestId: string
+  artifact: Omit<IngestionArtifact, 'tenantId'>
+  contentEncrypted?: string
+}
 
 export interface IngestionQueueMessage {
   type: IngestionQueueMessageType

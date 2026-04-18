@@ -512,3 +512,13 @@
   detached task.
   Ref: Session OPS.3 - `tests/2.1-retain.test.ts` only became clean once
   async reconcile work in `retain-persistence.ts` stopped escaping the test.
+
+- **Tool-Level Worker Tests Must Drain Captured `waitUntil()` Promises.**
+  When a Worker-side test registers MCP tools or other handlers that call
+  `ctx.waitUntil()` for D1-backed audit work, a no-op `waitUntil` stub is not
+  enough. The promise still runs detached and can leave Miniflare D1 handles
+  open through suite teardown, producing isolated-storage failures even when the
+  assertions themselves pass. In test harnesses, capture those promises and
+  `await Promise.allSettled(...)` after the handler returns.
+  Ref: Session 6.2 - canonical MCP memory surface tests only became stable once
+  the harness drained metadata-only audit `waitUntil()` promises explicitly.

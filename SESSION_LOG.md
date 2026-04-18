@@ -5,6 +5,27 @@
 
 ---
 
+## Session OPS.5 - 2026-04-18
+
+**Spec:** Operational - Session 6.2 checkout completion
+**Built:**
+- `LESSONS.md` - added the Worker-test `waitUntil()` drainage lesson discovered while stabilizing the canonical MCP surface harness
+- `specs/completed/6.2-canonical-mcp-memory-surface.md` - moved Session 6.2 out of `specs/active/` after As-Built completion
+- `SESSION_LOG.md` / `MANIFEST.md` - checkout-closeout truth files refreshed after the spec lifecycle move
+**Decisions:**
+- **The governance checkout protocol is the source of truth, not just the automated commands.** A session is not fully checked out until the spec lifecycle step is complete when a spec was finished.
+- **The 6.2 harness issue warranted a lessons entry.** The captured `waitUntil()` drain pattern is now explicit so future Worker-side tool tests do not rediscover the same D1 teardown failure.
+**Verification:**
+- `npm run postflight` - passed
+- `npm test` - passed (`291 passed`, `1 skipped`)
+- `npm run manifest` - passed
+**Hindsight Pin:** unchanged (`ghcr.io/vectorize-io/hindsight-api:0.5.2`)
+**Fixture Data:** N/A - checkout completion only
+**Blockers:** None
+**Next:** Continue from the now-completed Session 6.2 baseline when the next reviewed spec is ready
+
+---
+
 ## Session 6.2 - 2026-04-18
 
 **Spec:** Phase 6.2 - Canonical MCP Memory Surface

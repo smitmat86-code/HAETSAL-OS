@@ -1,0 +1,30 @@
+{
+  "structuralExisting": {
+    "fromCanonicalKey": "canonical://captures/capture-1",
+    "toCanonicalKey": "canonical://scopes/general",
+    "relation": "within_scope",
+    "temporalMode": "snapshot",
+    "validAt": 1760188800000
+  },
+  "structuralIncoming": {
+    "fromCanonicalKey": "canonical://captures/capture-1",
+    "toCanonicalKey": "canonical://scopes/general",
+    "relation": "within_scope",
+    "temporalMode": "snapshot",
+    "validAt": 1760188800000
+  },
+  "temporalExisting": {
+    "fromCanonicalKey": "canonical://participants/user",
+    "toCanonicalKey": "canonical://participants/assistant",
+    "relation": "conversed_with",
+    "temporalMode": "append_valid_time",
+    "validAt": 1760192400000
+  },
+  "temporalIncoming": {
+    "fromCanonicalKey": "canonical://participants/user",
+    "toCanonicalKey": "canonical://participants/assistant",
+    "relation": "conversed_with",
+    "temporalMode": "append_valid_time",
+    "validAt": 1760278800000
+  }
+}

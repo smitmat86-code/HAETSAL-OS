@@ -3,6 +3,7 @@ import type {
   CanonicalMemoryStatusInput,
   CanonicalMemoryStatusResult,
 } from '../types/canonical-memory-query'
+import { buildCanonicalGraphProjectionStatus } from './canonical-graph-projection-design'
 import { readCanonicalHindsightReflectionStatus } from './canonical-hindsight-reflection-status'
 
 interface OperationRow {
@@ -83,6 +84,7 @@ export async function getCanonicalMemoryStatus(
      ORDER BY j.projection_kind ASC`,
   ).bind(tenantId, operation.id).all<ProjectionRow>()
   const compatibility = (projections.results ?? []).find(row => row.projection_kind === 'hindsight')
+  const graph = (projections.results ?? []).find(row => row.projection_kind === 'graphiti')
   const compatibilityStatus = normalizeCompatibilityStatus(compatibility?.result_status ?? compatibility?.status ?? null)
   const reflection = await readCanonicalHindsightReflectionStatus({
     env,
@@ -115,6 +117,18 @@ export async function getCanonicalMemoryStatus(
       semanticReady: isSemanticReady(row),
       updatedAt: row.result_updated_at,
     })),
+    graph: buildCanonicalGraphProjectionStatus(graph
+      ? {
+        jobId: graph.job_id,
+        kind: graph.projection_kind,
+        status: graph.status,
+        resultStatus: graph.result_status,
+        targetRef: graph.target_ref,
+        errorMessage: graph.error_message,
+        projectionResultId: graph.projection_result_id,
+        updatedAt: graph.result_updated_at,
+      }
+      : null),
     compatibility: compatibility && compatibilityStatus
       ? {
         mode: 'current_hindsight',

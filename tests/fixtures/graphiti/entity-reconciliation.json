@@ -1,0 +1,23 @@
+{
+  "existing": {
+    "canonicalKey": "canonical://scopes/general",
+    "kind": "scope",
+    "label": "general",
+    "identityStrategy": "canonical_anchor",
+    "source": "metadata_anchor"
+  },
+  "incomingSame": {
+    "canonicalKey": "canonical://scopes/general",
+    "kind": "scope",
+    "label": "general",
+    "identityStrategy": "canonical_anchor",
+    "source": "metadata_anchor"
+  },
+  "incomingNew": {
+    "canonicalKey": "canonical://topics/research-brief",
+    "kind": "topic",
+    "label": "Research brief",
+    "identityStrategy": "stable_literal",
+    "source": "metadata_anchor"
+  }
+}

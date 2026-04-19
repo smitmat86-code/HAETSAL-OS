@@ -1,0 +1,32 @@
+{
+  "accepted": {
+    "jobId": "job-accepted",
+    "kind": "graphiti",
+    "status": "accepted",
+    "resultStatus": null,
+    "targetRef": null,
+    "errorMessage": null,
+    "projectionResultId": null,
+    "updatedAt": null
+  },
+  "queued": {
+    "jobId": "job-queued",
+    "kind": "graphiti",
+    "status": "queued",
+    "resultStatus": "queued",
+    "targetRef": null,
+    "errorMessage": null,
+    "projectionResultId": "result-queued",
+    "updatedAt": 1760196000000
+  },
+  "failed": {
+    "jobId": "job-failed",
+    "kind": "graphiti",
+    "status": "failed",
+    "resultStatus": "failed",
+    "targetRef": null,
+    "errorMessage": "graphiti runtime unavailable",
+    "projectionResultId": "result-failed",
+    "updatedAt": 1760199600000
+  }
+}

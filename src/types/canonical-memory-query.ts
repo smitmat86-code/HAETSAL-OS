@@ -1,3 +1,5 @@
+import type { CanonicalGraphProjectionStatus } from './canonical-graph-projection'
+
 export interface CanonicalSearchInput {
   tenantId: string
   query: string
@@ -116,6 +118,7 @@ export interface CanonicalMemoryStatusResult {
     semanticReady: boolean
     updatedAt: number | null
   }>
+  graph: CanonicalGraphProjectionStatus | null
   reflection: CanonicalReflectionStatus | null
   compatibility: {
     mode: 'current_hindsight'

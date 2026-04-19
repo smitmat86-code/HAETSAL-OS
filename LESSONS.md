@@ -537,3 +537,10 @@
   than an exact textual echo. Judge smoke tests on factual correctness and
   operation completion, not strict byte-for-byte recall of the original token.
   Ref: Session OPS.3 — service-token `/mcp` parity proof.
+
+- **A Fresh Dedicated-Worker Re-Proof Is Worth Doing Before Declaring Full Recovery.**
+  A general live parity proof is strong, but if dedicated workers were part of
+  the original incident history, do one explicit fresh retain -> complete ->
+  recall run after the parity patch while dedicated workers are definitely on.
+  That closes the ambiguity and turns “probably fixed” into “re-proven.”
+  Ref: Session OPS.4 — final dedicated-worker re-proof on HAETSAL.

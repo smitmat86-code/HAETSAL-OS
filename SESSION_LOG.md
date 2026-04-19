@@ -651,3 +651,29 @@
 **Next:** Compare this passing parity state against Fold, or do a dedicated-worker v0.5.3 follow-up if we want to re-open the upstream worker-fix lane
 
 ---
+
+## Session OPS.4 — 2026-04-19
+
+**Spec:** Operational — final dedicated-worker re-proof
+**Built:** No code changes; this session was a live proof run against the parity-aligned dedicated-worker deployment
+**Decisions:**
+- HAETSAL’s dedicated-worker topology is now explicitly re-proven under the current parity config; Hindsight can be treated as operationally healthy again.
+- The clean-room baseline and HAETSAL now agree on the Hindsight runtime contract closely enough that future regressions should be investigated as config/runtime drift first, not as assumed Hindsight defects.
+- Recall validation remains semantic: the fresh `31.8M-*` write came back as `31.8 million`, which is acceptable and expected for Hindsight’s synthesis-oriented recall surface.
+**Verification:**
+- fresh service-token `/mcp` dedicated-worker write:
+  - `memory_id` / operation id: `aebae39b-639a-4f9b-a117-2d2c094469fd`
+  - requested at: `1776574129991`
+  - completed at: `1776574146576`
+  - available at: `1776574165730`
+- remote D1 final state:
+  - `status = completed`
+  - `slow_at = null`
+  - `stuck_at = null`
+- live `memory_search` returned the fresh dedicated-worker fact as semantically normalized recall (`31.8 million`)
+**Hindsight Pin:** `ghcr.io/vectorize-io/hindsight-api:0.5.2`
+**Fixture Data:** Service-token smoke tenant derived from `haetsal-brain-shell-smoke`
+**Blockers:** None
+**Next:** Shift Hindsight work back to normal maintenance; any further Hindsight work should be deliberate follow-up, not emergency repair
+
+---

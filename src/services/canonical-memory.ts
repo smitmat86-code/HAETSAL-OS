@@ -3,7 +3,7 @@ import type {
   CanonicalCaptureInput,
   CanonicalCaptureResult,
 } from '../types/canonical-memory'
-import { buildCanonicalAuditBatch } from './canonical-memory-audit'
+import { buildCanonicalCaptureAcceptedAuditBatch } from './canonical-memory-audit'
 import { persistCanonicalPayloads, sha256Hex } from './canonical-memory-artifacts'
 import {
   assertCanonicalIdentity,
@@ -78,13 +78,11 @@ export async function captureCanonicalMemory(
     ...projectionJobs.map(job => env.D1_US.prepare(
       `INSERT INTO canonical_projection_jobs
        (id, tenant_id, operation_id, capture_id, document_id, projection_kind, status, created_at, enqueued_at)
-       VALUES (?, ?, ?, ?, ?, ?, 'pending', ?, ?)`,
+       VALUES (?, ?, ?, ?, ?, ?, 'accepted', ?, ?)`,
     ).bind(job.id, tenantId, capture.operationId, capture.captureId, capture.documentId, job.kind, createdAt, createdAt)),
-    ...buildCanonicalAuditBatch(env.D1_US, {
+    ...buildCanonicalCaptureAcceptedAuditBatch(env.D1_US, {
       tenantId,
       captureId: capture.captureId,
-      operationId: capture.operationId,
-      projectionKinds: capture.projectionKinds,
       createdAt,
     }),
   ])

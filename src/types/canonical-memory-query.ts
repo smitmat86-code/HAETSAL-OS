@@ -82,6 +82,13 @@ export interface CanonicalMemoryStatusResult {
     errorMessage: string | null
     updatedAt: number | null
   }>
+  compatibility: {
+    mode: 'current_hindsight'
+    status: 'queued' | 'retained' | 'failed'
+    targetRef: string | null
+    errorMessage: string | null
+    updatedAt: number | null
+  } | null
 }
 
 export interface CanonicalMemoryStatsResult {

@@ -1,16 +1,11 @@
 import type { Env } from '../../types/env'
 import type { IngestionArtifact, RetainResult } from '../../types/ingestion'
-import type { HindsightRetainResponse } from '../../types/hindsight'
 import { computeDedupHash, checkDedup } from './dedup'
 import { scoreSalience } from './salience'
 import { inferDomain, inferMemoryType } from './domain'
 import { runWritePolicyValidator } from './write-policy'
 import { encryptContentForArchive } from './encryption'
-import { ensureHindsightBankConfigured } from '../bootstrap/hindsight-config'
-import { maybeShadowWriteCanonicalCapture } from '../canonical-memory'
-import { retainMemory } from '../hindsight'
-import { archiveEncryptedContent, persistQueuedRetain, persistRetained, scheduleQueuedRetainFollowUps } from './retain-persistence'
-import { buildHindsightRetainRequest } from './retain-request'
+import { captureThroughCanonicalPipeline } from '../canonical-capture-pipeline'
 
 export async function retainContent(
   artifact: IngestionArtifact,
@@ -56,89 +51,44 @@ export async function retainContent(
   if (!contentEncrypted) {
     throw new Error('retainContent requires TMK or pre-encrypted archival content')
   }
-  ctx?.waitUntil(maybeShadowWriteCanonicalCapture({ tenantId, sourceSystem: source, scope: domain, body: content, bodyEncrypted: contentEncrypted }, env).catch((error) => {
-    console.error('RETAIN_CONTENT_CANONICAL_SHADOW_FAILED', {
-      tenantId,
-      source,
-      error: error instanceof Error ? error.message : String(error),
-    })
-  }))
-
-  const stoneR2Key = await archiveEncryptedContent(env, tenantId, contentEncrypted, ctx)
-
-  const { documentId, request: hindsightReq } = buildHindsightRetainRequest(
-    artifact,
-    dedupHash,
+  const pipeline = await captureThroughCanonicalPipeline({
+    tenantId,
+    sourceSystem: source,
+    sourceRef: dedupHash,
+    scope: domain,
+    title: typeof artifact.metadata?.title === 'string' ? artifact.metadata.title : null,
+    body: content,
+    bodyEncrypted: contentEncrypted,
+    capturedAt: artifact.occurredAt,
     memoryType,
-    domain,
-    salience.tier,
-    options?.hindsightAsync ?? false,
-  )
-  console.log('RETAIN_CONTENT_HINDSIGHT_REQUEST', {
-    tenantId,
-    source,
-    documentId,
-    tags: hindsightReq.items[0]?.tags ?? [],
-  })
-  await ensureHindsightBankConfigured(tenantId, tenantId, env)
-  let hindsightData: HindsightRetainResponse
-  try {
-    hindsightData = await retainMemory(tenantId, hindsightReq, env) as HindsightRetainResponse
-  } catch (error) {
-    console.error('RETAIN_CONTENT_HINDSIGHT_ERROR', {
-      tenantId,
-      source,
-      documentId,
-      error: error instanceof Error ? error.message : String(error),
-    })
-    throw error
-  }
-  const memoryId = hindsightData.operation_id ?? documentId
-  const operationId = hindsightData.operation_id ?? null
-  console.log('RETAIN_CONTENT_HINDSIGHT_DONE', {
-    tenantId,
-    source,
-    documentId,
-    memoryId,
-    operationId,
-    async: hindsightReq.async ?? false,
-  })
-
-  if (hindsightReq.async) {
-    await persistQueuedRetain({
-      artifact, env, dedupHash, stoneR2Key, memoryType, domain,
-      salienceTier: salience.tier,
-      salienceSurpriseScore: salience.surpriseScore,
-      documentId, hindsightData, memoryId, operationId,
-    })
-
-    console.log('RETAIN_CONTENT_QUEUED', {
-      tenantId,
-      memoryId,
-      operationId,
-      bankId: hindsightData.bank_id,
-      dedupHash,
-      stoneR2Key,
-    })
-
-    await scheduleQueuedRetainFollowUps({ env, tenantId, operationId, memoryId, ctx })
-
-    return { memoryId, operationId, documentId, salienceTier: salience.tier, dedupHash, stoneR2Key }
-  }
-
-  await persistRetained({
-    artifact, env, dedupHash, stoneR2Key, memoryType, domain,
+    compatibilityMode: 'current_hindsight',
+    provenance: artifact.provenance ?? source,
+    metadata: artifact.metadata,
+    dedupHash,
     salienceTier: salience.tier,
     salienceSurpriseScore: salience.surpriseScore,
-    memoryId,
-  })
+    hindsightAsync: options?.hindsightAsync ?? false,
+  }, env, tenantId, ctx)
 
-  console.log('RETAIN_CONTENT_D1_DONE', {
+  console.log('RETAIN_CONTENT_CANONICAL_PIPELINE_DONE', {
     tenantId,
-    memoryId,
-    dedupHash,
-    stoneR2Key,
+    source,
+    canonicalCaptureId: pipeline.capture.captureId,
+    canonicalOperationId: pipeline.capture.operationId,
+    compatibilityStatus: pipeline.compatibility.status,
   })
 
-  return { memoryId, operationId, documentId, salienceTier: salience.tier, dedupHash, stoneR2Key }
+  return {
+    memoryId: pipeline.compatibility.memoryId ?? pipeline.capture.operationId,
+    operationId: pipeline.compatibility.operationId ?? pipeline.capture.operationId,
+    documentId: pipeline.compatibility.documentId ?? pipeline.capture.documentId,
+    salienceTier: salience.tier,
+    dedupHash,
+    stoneR2Key: pipeline.compatibility.stoneR2Key,
+    canonicalCaptureId: pipeline.capture.captureId,
+    canonicalDocumentId: pipeline.capture.documentId,
+    canonicalOperationId: pipeline.capture.operationId,
+    canonicalDispatchStatus: pipeline.dispatch.status,
+    compatibilityStatus: pipeline.compatibility.status,
+  }
 }

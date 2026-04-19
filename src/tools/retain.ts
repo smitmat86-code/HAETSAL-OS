@@ -47,5 +47,10 @@ export async function retainViaService(
     memory_id: result?.memoryId ?? '',
     salience_tier: result?.salienceTier ?? 0,
     status: result ? 'queued' : 'deferred',
+    canonical_capture_id: result?.canonicalCaptureId ?? undefined,
+    canonical_document_id: result?.canonicalDocumentId ?? undefined,
+    canonical_operation_id: result?.canonicalOperationId ?? undefined,
+    dispatch_status: result?.canonicalDispatchStatus ?? undefined,
+    compatibility_status: result?.compatibilityStatus ?? undefined,
   }
 }

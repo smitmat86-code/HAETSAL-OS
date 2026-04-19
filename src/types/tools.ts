@@ -15,6 +15,11 @@ export interface RetainOutput {
   memory_id: string   // Stable retained document reference or async operation id
   salience_tier: number
   status: 'retained' | 'queued' | 'deferred'
+  canonical_capture_id?: string
+  canonical_document_id?: string
+  canonical_operation_id?: string
+  dispatch_status?: 'queued' | 'failed'
+  compatibility_status?: 'skipped' | 'queued' | 'retained' | 'failed'
 }
 
 export interface RecallInput {

@@ -72,7 +72,15 @@ export function registerMemoryTools(server: McpServer, ctx: MemoryToolContext): 
         status: result ? 'queued' : 'deferred',
       })
       return { content: [{ type: 'text' as const,
-        text: JSON.stringify({ memory_id: result?.memoryId ?? null, status: result ? 'queued' : 'deferred' }) }] }
+        text: JSON.stringify({
+          memory_id: result?.memoryId ?? null,
+          status: result ? 'queued' : 'deferred',
+          canonical_capture_id: result?.canonicalCaptureId ?? null,
+          canonical_document_id: result?.canonicalDocumentId ?? null,
+          canonical_operation_id: result?.canonicalOperationId ?? null,
+          dispatch_status: result?.canonicalDispatchStatus ?? null,
+          compatibility_status: result?.compatibilityStatus ?? null,
+        }) }] }
     },
   )
 }

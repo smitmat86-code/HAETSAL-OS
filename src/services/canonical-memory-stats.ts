@@ -27,7 +27,7 @@ export async function getCanonicalMemoryStats(
        (SELECT COUNT(*) FROM canonical_documents WHERE tenant_id = ?) AS document_count,
        (SELECT COUNT(*) FROM canonical_chunks WHERE tenant_id = ?) AS chunk_count,
        (SELECT COUNT(*) FROM canonical_memory_operations WHERE tenant_id = ?) AS operation_count,
-       (SELECT COUNT(*) FROM canonical_projection_jobs WHERE tenant_id = ? AND status = 'pending') AS pending_projection_count,
+       (SELECT COUNT(*) FROM canonical_projection_jobs WHERE tenant_id = ? AND status IN ('accepted', 'queued')) AS pending_projection_count,
        (SELECT COUNT(*) FROM canonical_projection_jobs WHERE tenant_id = ? AND status = 'completed') AS completed_projection_count,
        (SELECT COUNT(*) FROM canonical_projection_jobs WHERE tenant_id = ? AND status = 'failed') AS failed_projection_count,
        (SELECT MAX(captured_at) FROM canonical_captures WHERE tenant_id = ?) AS last_capture_at`,

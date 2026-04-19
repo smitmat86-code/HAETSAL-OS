@@ -37,9 +37,15 @@ export interface RetainResult {
   salienceTier: number
   dedupHash: string
   stoneR2Key: string | null
+  canonicalCaptureId?: string | null
+  canonicalDocumentId?: string | null
+  canonicalOperationId?: string | null
+  canonicalDispatchStatus?: 'queued' | 'failed'
+  compatibilityStatus?: 'skipped' | 'queued' | 'retained' | 'failed'
 }
 
 export type IngestionQueueMessageType =
+  | 'canonical_projection_dispatch'
   | 'retain_artifact'
   | 'sms_inbound'
   | 'gmail_thread'

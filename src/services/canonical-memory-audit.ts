@@ -1,19 +1,31 @@
 import type { D1Database } from '@cloudflare/workers-types'
 import type { CanonicalProjectionKind } from '../types/canonical-memory'
 
-interface CanonicalAuditArgs {
+interface CanonicalCaptureAcceptedArgs {
   tenantId: string
   captureId: string
+  createdAt: number
+}
+
+interface CanonicalProjectionAuditArgs {
+  tenantId: string
   operationId: string
   projectionKinds: CanonicalProjectionKind[]
   createdAt: number
 }
 
-export function buildCanonicalAuditBatch(
+interface CanonicalCompatibilityAuditArgs {
+  tenantId: string
+  operationId: string
+  createdAt: number
+  failed?: boolean
+}
+
+export function buildCanonicalCaptureAcceptedAuditBatch(
   db: D1Database,
-  args: CanonicalAuditArgs,
+  args: CanonicalCaptureAcceptedArgs,
 ): D1PreparedStatement[] {
-  const accepted = db.prepare(
+  return [db.prepare(
     `INSERT INTO memory_audit
      (id, tenant_id, created_at, operation, memory_id, provenance, domain)
      VALUES (?, ?, ?, 'memory.capture.accepted', ?, 'canonical', 'canonical')`,
@@ -22,12 +34,17 @@ export function buildCanonicalAuditBatch(
     args.tenantId,
     args.createdAt,
     args.captureId,
-  )
+  )]
+}
 
-  const projections = args.projectionKinds.map(kind => db.prepare(
+export function buildCanonicalProjectionQueuedAuditBatch(
+  db: D1Database,
+  args: CanonicalProjectionAuditArgs,
+): D1PreparedStatement[] {
+  return args.projectionKinds.map(kind => db.prepare(
     `INSERT INTO memory_audit
-     (id, tenant_id, created_at, operation, memory_id, provenance, domain)
-     VALUES (?, ?, ?, 'memory.projection.enqueued', ?, ?, 'canonical')`,
+     (id, tenant_id, created_at, operation, memory_id, provenance, domain, memory_type)
+     VALUES (?, ?, ?, 'memory.projection.queued', ?, ?, 'canonical', 'world')`,
   ).bind(
     crypto.randomUUID(),
     args.tenantId,
@@ -35,6 +52,39 @@ export function buildCanonicalAuditBatch(
     args.operationId,
     kind,
   ))
+}
 
-  return [accepted, ...projections]
+export function buildCanonicalCaptureFailedAuditBatch(
+  db: D1Database,
+  args: Pick<CanonicalProjectionAuditArgs, 'tenantId' | 'operationId' | 'createdAt'>,
+): D1PreparedStatement[] {
+  return [db.prepare(
+    `INSERT INTO memory_audit
+     (id, tenant_id, created_at, operation, memory_id, provenance, domain)
+     VALUES (?, ?, ?, 'memory.capture.failed', ?, 'canonical', 'canonical')`,
+  ).bind(
+    crypto.randomUUID(),
+    args.tenantId,
+    args.createdAt,
+    args.operationId,
+  )]
+}
+
+export function buildCanonicalCompatibilityAuditBatch(
+  db: D1Database,
+  args: CanonicalCompatibilityAuditArgs,
+): D1PreparedStatement[] {
+  return [db.prepare(
+    `INSERT INTO memory_audit
+     (id, tenant_id, created_at, operation, memory_id, provenance, domain)
+     VALUES (?, ?, ?, ?, ?, 'current_hindsight', 'canonical')`,
+  ).bind(
+    crypto.randomUUID(),
+    args.tenantId,
+    args.createdAt,
+    args.failed
+      ? 'memory.capture.compatibility_retain_failed'
+      : 'memory.capture.compatibility_retain_started',
+    args.operationId,
+  )]
 }

@@ -7,6 +7,7 @@
 import type { Env } from '../../types/env'
 import type { IngestionQueueMessage } from '../../types/ingestion'
 import { getMcpAgentObjectId } from '../mcpagent/do/identity'
+import { processCanonicalProjectionDispatch } from './canonical-projection-consumer'
 import { processQueuedRetainArtifact } from './retain-consumer'
 import {
   handleSmsInbound,
@@ -48,6 +49,12 @@ async function processIngestionMessage(
   ctx: ExecutionContext,
 ): Promise<void> {
   const { type, tenantId, payload } = msg.body
+
+  if (type === 'canonical_projection_dispatch') {
+    await processCanonicalProjectionDispatch(tenantId, payload, env)
+    msg.ack()
+    return
+  }
 
   if (type === 'retain_artifact') {
     console.log('INGESTION_RETAIN_ARTIFACT_START', { tenantId, requestId: payload.requestId })

@@ -1,4 +1,4 @@
-# Architecture - THE Brain
+# Architecture - HAETSAL OS
 
 > **This document is constitutional law.** Changes require explicit justification
 > and agreement with Matt. Day-to-day patterns live in CONVENTIONS.md.
@@ -25,6 +25,9 @@ public internet - directly or indirectly.
 
 This boundary is also the authorization boundary. Everything that crosses
 into the system goes through McpAgent's auth gate first.
+Publicly, this surface is presented as HAETSAL at
+`https://haetsalos.specialdarksystems.com/mcp`; the underlying Worker may
+remain named `the-brain` as a legacy internal/runtime identifier.
 
 ### Law 2: Key-Isolated Platform
 

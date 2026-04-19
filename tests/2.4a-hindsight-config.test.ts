@@ -38,11 +38,11 @@ describe('2.4a Hindsight Configuration', () => {
     let postCalled = false
     const mockEnv = withHindsight(async (request) => {
       if (request.method === 'GET') {
-        return new Response(JSON.stringify({ items: [{ url: 'https://brain.workers.dev/hindsight/webhook', enabled: true }] }))
+        return new Response(JSON.stringify({ items: [{ url: 'https://haetsalos.specialdarksystems.com/hindsight/webhook', enabled: true }] }))
       }
       postCalled = true
       return new Response('', { status: 201 })
-    }, { WORKER_DOMAIN: 'brain.workers.dev', HINDSIGHT_WEBHOOK_SECRET: 'test-secret' })
+    }, { WORKER_DOMAIN: 'haetsalos.specialdarksystems.com', HINDSIGHT_WEBHOOK_SECRET: 'test-secret' })
     await registerConsolidationWebhook('test-bank', mockEnv)
     expect(postCalled).toBe(false)
   })
@@ -53,10 +53,10 @@ describe('2.4a Hindsight Configuration', () => {
       if (request.method === 'GET') return new Response(JSON.stringify({ items: [] }))
       postBody = await request.text()
       return new Response('', { status: 201 })
-    }, { WORKER_DOMAIN: 'brain.workers.dev', HINDSIGHT_WEBHOOK_SECRET: 'test-secret' })
+    }, { WORKER_DOMAIN: 'haetsalos.specialdarksystems.com', HINDSIGHT_WEBHOOK_SECRET: 'test-secret' })
     await registerConsolidationWebhook('test-bank', mockEnv)
     const parsed = JSON.parse(postBody)
-    expect(parsed.url).toBe('https://brain.workers.dev/hindsight/webhook')
+    expect(parsed.url).toBe('https://haetsalos.specialdarksystems.com/hindsight/webhook')
     expect(parsed.event_types).toEqual(['consolidation.completed'])
     expect(parsed.secret).toBe('test-secret')
     expect(parsed.enabled).toBe(true)
@@ -85,7 +85,7 @@ describe('2.4a Hindsight Configuration', () => {
     await registerConsolidationWebhook('test-bank', mockEnv)
     const parsed = JSON.parse(postBody)
     expect(parsed.url).toContain('custom-domain.example.com')
-    expect(parsed.url).not.toContain('the-brain.workers.dev')
+    expect(parsed.url).not.toContain('the-brain.ct-trading-bot1.workers.dev')
   })
 
   it('mental model partial failure does not throw', async () => {
@@ -105,7 +105,7 @@ describe('2.4a Hindsight Configuration', () => {
 
   it('ensureHindsightBankConfigured skips when config hash already matches', async () => {
     let fetchCalls = 0
-    const spec = buildHindsightBankProvisioningSpec('brain.workers.dev', 'test-secret')
+    const spec = buildHindsightBankProvisioningSpec('haetsalos.specialdarksystems.com', 'test-secret')
     const configVersion = computeHindsightConfigVersion(spec)
     const mockEnv = withHindsight(async () => {
       fetchCalls++
@@ -119,7 +119,7 @@ describe('2.4a Hindsight Configuration', () => {
           }),
         }),
       },
-      WORKER_DOMAIN: 'brain.workers.dev',
+      WORKER_DOMAIN: 'haetsalos.specialdarksystems.com',
       HINDSIGHT_WEBHOOK_SECRET: 'test-secret',
     })
     await ensureHindsightBankConfigured('test-bank', 'tenant-a', mockEnv)

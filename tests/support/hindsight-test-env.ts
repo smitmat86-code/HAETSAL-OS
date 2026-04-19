@@ -35,7 +35,7 @@ export function createHindsightTestEnv(options: CreateHindsightTestEnvOptions = 
   return {
     ...env,
     HINDSIGHT_DEDICATED_WORKERS_ENABLED: 'false',
-    WORKER_DOMAIN: 'brain.workers.dev',
+    WORKER_DOMAIN: 'haetsalos.specialdarksystems.com',
     HINDSIGHT_WEBHOOK_SECRET: 'test-secret',
     HINDSIGHT: {
       fetch: async (input: RequestInfo | URL, init?: RequestInit) => {

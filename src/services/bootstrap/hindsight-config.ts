@@ -99,7 +99,7 @@ export async function ensureHindsightBankConfigured(
 
 function defaultSpec(env: Env) {
   return buildHindsightBankProvisioningSpec(
-    env.WORKER_DOMAIN || 'the-brain.workers.dev',
+    env.WORKER_DOMAIN || 'haetsalos.specialdarksystems.com',
     env.HINDSIGHT_WEBHOOK_SECRET || '',
   )
 }

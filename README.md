@@ -1,7 +1,10 @@
-# THE Brain
+# HAETSAL OS
 
 > Personal AI second brain built on Cloudflare + Hindsight + Neon Postgres.
 > Private by default. Action-capable. Self-improving.
+>
+> Public MCP face: `https://haetsalos.specialdarksystems.com/mcp`
+> Internal legacy Worker/runtime name: `the-brain`
 
 ---
 
@@ -33,6 +36,8 @@ Read these files in order before writing any code:
 **Law 1 - One Public Face**
 McpAgent Worker is the only public surface. Hindsight (Container) and Neon
 are internal only, reachable via service binding and direct Postgres secret respectively.
+The public MCP endpoint is `https://haetsalos.specialdarksystems.com/mcp`;
+the Worker can remain named `the-brain` internally.
 
 **Law 2 - Key-Isolated Platform**
 Tenant keys stay scoped to authenticated session work. Hindsight receives

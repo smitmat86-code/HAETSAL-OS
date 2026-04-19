@@ -170,7 +170,7 @@ crons = ["*/1 * * * *", "*/15 * * * *", "0 7 * * *", "*/30 * * * *", "0 17 * * 5
 
 [vars]
 TELEGRAM_BOT_USERNAME = "haetsal_os_bot"
-WORKER_DOMAIN = "the-brain.ct-trading-bot1.workers.dev"
+WORKER_DOMAIN = "haetsalos.specialdarksystems.com"
 TELNYX_FROM_NUMBER = "+13236785761"
 AI_GATEWAY_ID = "haetsal-brain-gateway"
 AI_GATEWAY_ACCOUNT_ID = "d3f0a1c579945862edc9c6f6e36e448a"

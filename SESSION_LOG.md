@@ -5,6 +5,29 @@
 
 ---
 
+## Session OPS.6 - 2026-04-19
+
+**Spec:** Operational - HAETSAL-first public MCP identity cleanup
+**Built:**
+- `wrangler.toml`, `src/services/bootstrap/hindsight-config.ts`, `src/types/env.ts` - public Worker domain defaults and examples now point to `haetsalos.specialdarksystems.com` instead of the legacy `the-brain` `workers.dev` hostname
+- `src/workers/mcpagent/do/McpAgent.ts` - MCP server identity now advertises `haetsal` while leaving the underlying Worker script name unchanged
+- `README.md`, `ARCHITECTURE.md` - repo truth docs now describe HAETSAL as the public MCP face and explicitly demote `the-brain` to an internal/runtime legacy name
+- `tests/2.4a-hindsight-config.test.ts`, `tests/support/hindsight-test-env.ts` - domain-facing test fixtures now use the HAETSAL endpoint
+**Decisions:**
+- **The Worker script name stays `the-brain` for now.** This pass only cleans up the public MCP/domain story and avoids a broader Cloudflare runtime rename.
+- **`haetsalos.specialdarksystems.com/mcp` is now the primary public endpoint.** The legacy `the-brain.ct-trading-bot1.workers.dev` hostname is treated as compatibility-only.
+- **The MCP server label is part of the public face.** Renaming the SDK server from `the-brain` to `haetsal` keeps client-visible identity aligned with the new domain story.
+**Verification:**
+- `npm test` - passed (`344 passed`, `1 skipped`)
+- `npm run postflight` - passed
+- `npm run manifest` - passed
+**Hindsight Pin:** unchanged (`ghcr.io/vectorize-io/hindsight-api:0.5.2`)
+**Fixture Data:** Reused the existing Hindsight webhook/config harnesses with the HAETSAL custom-domain endpoint substituted for the public-facing examples
+**Blockers:** None
+**Next:** If and when runtime cleanup is desired, do a separate Worker/script rename pass; this change intentionally stops at public identity/domain cleanup
+
+---
+
 ## Session 9.1 - 2026-04-19
 
 **Spec:** Phase 9.1 - Multi-Mode Memory Router

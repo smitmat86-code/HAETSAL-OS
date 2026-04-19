@@ -18,7 +18,7 @@ export class McpAgentDO extends BaseMcpAgent<Env, unknown, McpAgentProps> {
   private _tenantId: string | null = null
   private wsConnections: Set<WebSocket> = new Set()
   private interviewState: InterviewState | null = null
-  server = new McpServer({ name: 'the-brain', version: '6.2.0' })
+  server = new McpServer({ name: 'haetsal', version: '6.2.0' })
 
   async init() {
     this.ensureSessionTable()

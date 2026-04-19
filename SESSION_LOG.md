@@ -5,6 +5,31 @@
 
 ---
 
+## Session 7.2 - 2026-04-18
+
+**Spec:** Phase 7.2 - Semantic Recall Through Canonical Interface
+**Built:**
+- `src/services/canonical-semantic-recall.ts`, `canonical-semantic-linkback.ts` - canonical semantic query orchestration plus metadata-only Hindsight-to-canonical provenance resolution
+- `src/services/canonical-memory-query.ts`, `canonical-memory-status.ts`, `src/types/canonical-memory-query.ts`, `src/tools/canonical-memory.ts` - canonical `search_memory` now supports `mode: 'semantic'`, returns truthful semantic status/provenance metadata, and exposes engine-linkback/readiness through `memory_status`
+- `src/types/hindsight.ts` - updated to the runtime request/response shapes already used by HAETSAL's Hindsight shell so semantic recall normalization can rely on typed recall results
+- `tests/7.2-semantic-recall-through-canonical-interface.test.ts` - note recall, conversation recall, mixed canonical/local-source linkback, missing-projection truthfulness, status exposure, and engine-failure fallback coverage
+- `specs/active/7.2-semantic-recall-through-canonical-interface.md` - As-Built Record completed with migration decision, shipped result shape, provenance strategy, verification, and explicit deviations
+**Decisions:**
+- **Semantic recall extends the canonical search surface instead of adding a new tool.** `search_memory` now accepts `mode: 'lexical' | 'semantic'`, keeping Hindsight behind the canonical MCP contract.
+- **7.2 reuses the 7.1 projection schema as-is.** Linkback is resolved from `engine_document_id`, `engine_operation_id`, and `target_ref`, so no `1015` migration was needed.
+- **Engine failure falls back truthfully, not deceptively.** When Hindsight recall is unavailable, canonical semantic search returns `status = 'unavailable'` with no items rather than silently substituting lexical search results.
+**Verification:**
+- `npx vitest run tests/7.2-semantic-recall-through-canonical-interface.test.ts` - passed
+- `npm test` - passed (`308 passed`, `1 skipped`)
+- `npm run postflight` - passed
+- `npm run manifest` - passed
+**Hindsight Pin:** unchanged (`ghcr.io/vectorize-io/hindsight-api:0.5.2`)
+**Fixture Data:** Reused canonical note/conversation fixtures and 7.1 projection behavior; added 7.2 coverage for canonical semantic reads, mixed linkback, missing projection truth, and semantic-engine failure fallback
+**Blockers:** None
+**Next:** Session 7.3 if and when reflection/consolidation needs to be attached back onto the canonical semantic surface
+
+---
+
 ## Session 7.1 - 2026-04-18
 
 **Spec:** Phase 7.1 - Hindsight Projection Adapter

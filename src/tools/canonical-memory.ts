@@ -24,6 +24,7 @@ const searchSchema = z.object({
   query: z.string().describe('Canonical memory search query'),
   scope: z.string().optional().describe('Optional scope filter'),
   limit: z.number().optional().describe('Maximum results to return'),
+  mode: z.enum(['lexical', 'semantic']).optional().describe('Search mode; semantic uses the canonical Hindsight-backed recall path'),
 })
 const recentSchema = z.object({
   scope: z.string().optional().describe('Optional scope filter'),
@@ -56,7 +57,13 @@ export function registerCanonicalMemoryTools(server: McpServer, ctx: CanonicalMe
   server.tool('search_memory', 'Search canonical memories', searchSchema.shape, async (input) => {
     const typed = input as z.infer<typeof searchSchema>
     const result = await searchCanonicalMemory(
-      { tenantId: ctx.getTenantId(), query: typed.query, scope: typed.scope ?? null, limit: typed.limit },
+      {
+        tenantId: ctx.getTenantId(),
+        query: typed.query,
+        scope: typed.scope ?? null,
+        limit: typed.limit,
+        mode: typed.mode ?? 'lexical',
+      },
       ctx.getEnv(),
       ctx.getTenantId(),
       { tmk: ctx.getTmk() },

@@ -66,14 +66,16 @@ Last updated: 2026-04-18 | Session: 7.1 (Hindsight Projection Adapter)
 | src\services\canonical-hindsight-reconcile.ts | 58 | — | ✅ |
 | src\services\canonical-memory-artifacts.ts | 66 | PersistedCanonicalPayloads | ✅ |
 | src\services\canonical-memory-audit.ts | 118 | buildCanonicalCaptureAcceptedAuditBatch, buildCanonicalProjectionQueuedAuditBatch, buildCanonicalCaptureFailedAuditBatch... | ✅ |
-| src\services\canonical-memory-query.ts | 142 | — | ✅ |
+| src\services\canonical-memory-query.ts | 149 | — | ✅ |
 | src\services\canonical-memory-read-model.ts | 67 | CanonicalMemoryReadOptions, CanonicalListRow, CanonicalDocumentRow... | ✅ |
 | src\services\canonical-memory-schema.ts | 75 | CANONICAL_PROJECTION_KINDS, normalizeCanonicalBody, assertCanonicalIdentity... | ✅ |
 | src\services\canonical-memory-stats.ts | 56 | — | ✅ |
-| src\services\canonical-memory-status.ts | 106 | — | ✅ |
+| src\services\canonical-memory-status.ts | 121 | — | ✅ |
 | src\services\canonical-memory-types.ts | 52 | CanonicalChunkPlan, CanonicalArtifactPlan, NormalizedCanonicalCapture... | ✅ |
 | src\services\canonical-memory.ts | 114 | — | ✅ |
 | src\services\canonical-projection-dispatch.ts | 92 | — | ✅ |
+| src\services\canonical-semantic-linkback.ts | 146 | CanonicalSemanticLinkback, extractSemanticLookup | ✅ |
+| src\services\canonical-semantic-recall.ts | 135 | — | ✅ |
 | src\services\delivery\obsidian-write.ts | 52 | — | ✅ |
 | src\services\delivery\sms.ts | 35 | — | ✅ |
 | src\services\delivery\telegram.ts | 31 | — | ✅ |
@@ -108,18 +110,18 @@ Last updated: 2026-04-18 | Session: 7.1 (Hindsight Projection Adapter)
 | src\tools\act\search.ts | 33 | searchSchema | ✅ |
 | src\tools\act\send-message.ts | 33 | sendMessageSchema | ✅ |
 | src\tools\bootstrap.ts | 104 | registerBootstrapTools | ✅ |
-| src\tools\canonical-memory.ts | 107 | registerCanonicalMemoryTools | ✅ |
+| src\tools\canonical-memory.ts | 114 | registerCanonicalMemoryTools | ✅ |
 | src\tools\memory.ts | 87 | registerMemoryTools | ✅ |
 | src\tools\recall.ts | 73 | — | ✅ |
 | src\tools\retain.ts | 57 | — | ✅ |
 | src\types\action.ts | 105 | CapabilityClass, AuthorizationLevel, AUTH_LEVEL_ORDINAL... | ✅ |
 | src\types\bootstrap.ts | 76 | BootstrapStatus, BootstrapParams, InterviewDomain... | ✅ |
 | src\types\canonical-capture-pipeline.ts | 91 | CanonicalCompatibilityMode, CanonicalPipelineCaptureInput, CanonicalProjectionDispatchMessage... | ✅ |
-| src\types\canonical-memory-query.ts | 105 | CanonicalSearchInput, CanonicalRecentInput, CanonicalDocumentInput... | ✅ |
+| src\types\canonical-memory-query.ts | 131 | CanonicalSearchInput, CanonicalRecentInput, CanonicalDocumentInput... | ✅ |
 | src\types\canonical-memory.ts | 34 | CanonicalProjectionKind, CanonicalArtifactMode, CanonicalArtifactRef... | ✅ |
 | src\types\env.ts | 62 | Env | ✅ |
 | src\types\google.ts | 53 | GoogleOAuthTokens, GoogleThread, GoogleMessage... | ✅ |
-| src\types\hindsight.ts | 38 | HindsightRetainRequest, HindsightRetainResponse, HindsightRecallRequest... | ✅ |
+| src\types\hindsight.ts | 103 | HindsightRetainItem, HindsightRetainRequest, HindsightRetainResponse... | ✅ |
 | src\types\ingestion.ts | 70 | IngestionSource, IngestionArtifact, SalienceResult... | ✅ |
 | src\types\tenant.ts | 30 | TenantContext, TenantRow | ✅ |
 | src\types\tools.ts | 58 | RetainInput, RetainOutput, RecallInput... | ✅ |

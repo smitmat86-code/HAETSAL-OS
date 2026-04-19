@@ -1,37 +1,102 @@
-// src/types/hindsight.ts
-// Typed contract for Hindsight memory engine API (v0.4.16 @ 58fdac4)
-// Hindsight is accessed via service binding only (Law 1)
+export interface HindsightRetainItem {
+  content: string
+  context?: string
+  document_id?: string
+  timestamp?: string
+  tags?: string[]
+  metadata?: Record<string, string>
+}
 
 export interface HindsightRetainRequest {
-  tenant_id: string
-  content_encrypted: string   // base64 AES-256-GCM ciphertext
-  memory_type: 'episodic' | 'semantic' | 'procedural' | 'world'
-  domain: string
-  provenance: string
-  salience_tier: number
-  occurred_at: number         // unix ms
-  metadata?: Record<string, unknown>
+  async?: boolean
+  items: HindsightRetainItem[]
 }
 
 export interface HindsightRetainResponse {
-  memory_id: string           // Hindsight-generated UUID
-  status: 'retained' | 'deferred'
+  success?: boolean
+  bank_id?: string | null
+  items_count?: number
+  async?: boolean
+  operation_id?: string | null
 }
 
 export interface HindsightRecallRequest {
-  tenant_id: string
-  query_encrypted: string     // base64 encrypted query
-  domain?: string
-  mode?: 'default' | 'timeline'
-  limit?: number
+  query: string
+  budget?: 'low' | 'mid' | 'high' | string
+  max_tokens?: number
+  query_timestamp?: string
+  tags?: string[]
+  tags_match?: 'all_strict' | 'any' | string
+}
+
+export interface HindsightRecallResult {
+  id?: string
+  memory_id?: string
+  document_id?: string
+  source_document_id?: string
+  target_ref?: string
+  text?: string
+  content?: string
+  content_preview?: string
+  summary?: string
+  score?: number
+  relevance?: number
+  confidence?: number
+  metadata?: Record<string, unknown>
 }
 
 export interface HindsightRecallResponse {
-  results: Array<{
-    memory_id: string
-    content_encrypted: string // base64 ciphertext — decrypt with TMK
-    memory_type: string
-    confidence: number
-    relevance: number
-  }>
+  text?: string
+  results?: HindsightRecallResult[]
+  items?: HindsightRecallResult[]
+  memories?: HindsightRecallResult[]
+}
+
+export interface HindsightReflectRequest {
+  query: string
+  response_schema?: Record<string, unknown>
+  budget?: 'low' | 'mid' | 'high' | string
+  max_tokens?: number
+  tags?: string[]
+  tags_match?: 'all_strict' | 'any' | string
+}
+
+export interface HindsightReflectResponse<TStructured = unknown> {
+  text?: string
+  data?: TStructured
+}
+
+export interface HindsightMentalModelResponse {
+  id?: string
+  [key: string]: unknown
+}
+
+export interface HindsightMentalModelListResponse {
+  items?: HindsightMentalModelResponse[]
+}
+
+export interface HindsightWebhookListResponse {
+  items?: Array<Record<string, unknown>>
+}
+
+export interface HindsightOperationsListResponse {
+  items?: Array<Record<string, unknown>>
+}
+
+export interface HindsightOperationStatusResponse {
+  operation_id?: string
+  status?: string
+  operation_type?: string
+  created_at?: string
+  updated_at?: string
+  completed_at?: string | null
+  error_message?: string | null
+}
+
+export interface HindsightDocumentSummary {
+  id?: string
+  bank_id?: string
+  memory_unit_count?: number
+  created_at?: string
+  updated_at?: string
 }

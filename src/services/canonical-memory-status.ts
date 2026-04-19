@@ -14,6 +14,7 @@ interface OperationRow {
 }
 
 interface ProjectionRow {
+  projection_result_id: string | null
   job_id: string
   document_id: string
   projection_kind: string
@@ -21,6 +22,8 @@ interface ProjectionRow {
   result_status: string | null
   target_ref: string | null
   error_message: string | null
+  engine_document_id: string | null
+  engine_operation_id: string | null
   result_updated_at: number | null
 }
 
@@ -32,6 +35,12 @@ function normalizeCompatibilityStatus(
   if (status === 'failed' || status === 'compatibility_failed') return 'failed'
   if (status === 'queued' || status === 'compatibility_queued') return 'queued'
   return null
+}
+
+function isSemanticReady(row: ProjectionRow): boolean {
+  return row.projection_kind === 'hindsight' &&
+    row.status === 'completed' &&
+    row.result_status === 'completed'
 }
 
 export async function getCanonicalMemoryStatus(
@@ -58,8 +67,9 @@ export async function getCanonicalMemoryStatus(
   if (!operation) throw new Error('Canonical memory status not found')
 
   const projections = await env.D1_US.prepare(
-    `SELECT j.id AS job_id, j.document_id, j.projection_kind, j.status, r.status AS result_status,
-            r.target_ref, r.error_message, r.updated_at AS result_updated_at
+    `SELECT j.id AS job_id, j.document_id, j.projection_kind, j.status,
+            r.id AS projection_result_id, r.status AS result_status, r.target_ref, r.error_message,
+            r.engine_document_id, r.engine_operation_id, r.updated_at AS result_updated_at
      FROM canonical_projection_jobs j
      LEFT JOIN canonical_projection_results r ON r.id = (
        SELECT r2.id
@@ -72,7 +82,7 @@ export async function getCanonicalMemoryStatus(
      ORDER BY j.projection_kind ASC`,
   ).bind(tenantId, operation.id).all<ProjectionRow>()
   const compatibility = (projections.results ?? []).find(row => row.projection_kind === 'hindsight')
-  const compatibilityStatus = normalizeCompatibilityStatus(compatibility?.result_status ?? null)
+  const compatibilityStatus = normalizeCompatibilityStatus(compatibility?.result_status ?? compatibility?.status ?? null)
 
   return {
     captureId: operation.capture_id,
@@ -88,8 +98,13 @@ export async function getCanonicalMemoryStatus(
       documentId: row.document_id,
       kind: row.projection_kind,
       status: row.status,
+      resultStatus: row.result_status,
       targetRef: row.target_ref,
       errorMessage: row.error_message,
+      projectionResultId: row.projection_result_id,
+      engineDocumentId: row.engine_document_id,
+      engineOperationId: row.engine_operation_id,
+      semanticReady: isSemanticReady(row),
       updatedAt: row.result_updated_at,
     })),
     compatibility: compatibility && compatibilityStatus

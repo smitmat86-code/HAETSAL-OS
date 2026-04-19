@@ -3,6 +3,7 @@ export interface CanonicalSearchInput {
   query: string
   scope?: string | null
   limit?: number
+  mode?: 'lexical' | 'semantic'
 }
 
 export interface CanonicalRecentInput {
@@ -23,19 +24,39 @@ export interface CanonicalMemoryStatusInput {
 }
 
 export interface CanonicalMemoryListItem {
-  captureId: string
-  documentId: string
+  captureId: string | null
+  documentId: string | null
   title: string | null
-  scope: string
-  sourceSystem: string
+  scope: string | null
+  sourceSystem: string | null
   sourceRef: string | null
   preview: string
-  capturedAt: number
-  score?: number
+  capturedAt: number | null
+  score?: number | null
+  mode?: 'lexical' | 'semantic'
+  recallText?: string | null
+  provenance?: {
+    projectionKind: 'hindsight'
+    captureId?: string | null
+    documentId?: string | null
+    canonicalOperationId?: string | null
+    projectionJobId?: string | null
+    projectionResultId?: string | null
+    targetRef?: string | null
+    sourceSystem?: string | null
+  } | null
+  semanticStatus?: {
+    projectionKind: 'hindsight'
+    projectionStatus: 'accepted' | 'queued' | 'completed' | 'failed' | 'unknown'
+    resultStatus: 'queued' | 'completed' | 'failed' | 'missing'
+    ready: boolean
+  } | null
 }
 
 export interface CanonicalSearchResult {
   query: string
+  mode: 'lexical' | 'semantic'
+  status: 'ok' | 'partial' | 'unavailable'
   items: CanonicalMemoryListItem[]
 }
 
@@ -78,8 +99,13 @@ export interface CanonicalMemoryStatusResult {
     documentId: string
     kind: string
     status: string
+    resultStatus: string | null
     targetRef: string | null
     errorMessage: string | null
+    projectionResultId: string | null
+    engineDocumentId: string | null
+    engineOperationId: string | null
+    semanticReady: boolean
     updatedAt: number | null
   }>
   compatibility: {

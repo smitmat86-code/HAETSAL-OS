@@ -16,6 +16,7 @@ import {
   type CanonicalListRow,
   type CanonicalMemoryReadOptions,
 } from './canonical-memory-read-model'
+import { searchCanonicalSemanticMemory } from './canonical-semantic-recall'
 
 async function listCanonicalRows(
   env: Env,
@@ -50,7 +51,8 @@ function toMemoryListItem(
     sourceRef: row.source_ref,
     preview: buildCanonicalPreview(body ?? row.title ?? row.source_ref ?? row.scope),
     capturedAt: row.captured_at,
-    ...(score ? { score } : {}),
+    mode: 'lexical',
+    ...(score !== undefined ? { score } : {}),
   }
 }
 
@@ -71,6 +73,9 @@ export async function searchCanonicalMemory(
   tenantId: string,
   options: CanonicalMemoryReadOptions = {},
 ): Promise<CanonicalSearchResult> {
+  if ((input.mode ?? 'lexical') === 'semantic') {
+    return searchCanonicalSemanticMemory(input, env, tenantId)
+  }
   const limit = clampCanonicalLimit(input.limit, 5, 10)
   const rows = await listCanonicalRows(env, tenantId, input.scope ?? null, Math.max(limit * 4, 20))
   const items = await Promise.all(rows.map(async row => {
@@ -80,6 +85,8 @@ export async function searchCanonicalMemory(
   }))
   return {
     query: input.query,
+    mode: 'lexical',
+    status: 'ok',
     items: items.filter(Boolean)
       .sort((left, right) => (right!.score ?? 0) - (left!.score ?? 0) || right!.capturedAt - left!.capturedAt)
       .slice(0, limit) as CanonicalMemoryListItem[],

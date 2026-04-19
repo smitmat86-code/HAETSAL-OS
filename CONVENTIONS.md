@@ -374,3 +374,15 @@ The Pages Function proxy at `pages/functions/api/[[catchall]].ts` forwards all
 4. **Worker auth:** Read from `CF-Access-Jwt-Assertion || X-Forwarded-Access-Jwt`
 5. **Redirect handling:** `redirect: 'manual'` — don't follow CF Access redirects
 6. **WORKER_URL secret:** Set via `wrangler pages secret put WORKER_URL --project-name haetsal`
+## Projection Design Pattern
+
+For a brand-new projection engine that is not live yet, land the canonical
+contract first in the type/service layer:
+
+- choose the deployment posture explicitly
+- define deterministic canonical anchors for episode/entity/edge identity
+- define reconciliation rules separately for structural vs temporal edges
+- expose only a small engine-specific subsection on `memory_status`
+
+Do this before adding runtime fan-out. It keeps the next runtime session from
+inventing status semantics, queue payload shape, or identity rules on the fly.

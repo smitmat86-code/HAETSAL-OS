@@ -569,3 +569,11 @@
   recall run after the parity patch while dedicated workers are definitely on.
   That closes the ambiguity and turns “probably fixed” into “re-proven.”
   Ref: Session OPS.4 — final dedicated-worker re-proof on HAETSAL.
+- **Design A New Projection Engine Contract Before Its Runtime Fan-Out Exists.**
+  When adding a new canonical projection target such as Graphiti, land the
+  deployment posture, canonical episode/entity/edge contract, reconciliation
+  rules, and a small `memory_status` subsection first. If runtime work is
+  allowed to invent those during ingestion implementation, the next session
+  reopens first principles and risks leaking engine-specific assumptions into
+  queue payloads or public status semantics.
+  Ref: Session 8.1 â€” Graphiti Projection Design.

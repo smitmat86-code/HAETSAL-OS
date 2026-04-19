@@ -177,12 +177,15 @@ Before implementing any `brain_v1_retain` call from an agent:
 ### Step 1: Automated Verification
 
 ```bash
-npm run postflight    # Convention enforcement — MUST pass
-npm test              # All tests — MUST pass
-npm run manifest      # Regenerate module registry
+npm run checkout
 ```
 
-All three must pass before marking work complete.
+Invoke `/checkout` in agent chat when you want the agent to run the same
+repo-enforced closeout flow for you.
+
+Use `npm run checkout -- --spec <spec-file>.md --move-spec` when finishing a
+spec in the same session. The checkout command wraps postflight, tests,
+manifest regeneration, and the final postflight pass.
 
 ### Step 2: THE Brain Self-Check
 

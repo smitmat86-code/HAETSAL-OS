@@ -785,3 +785,32 @@
 **Next:** Shift Hindsight work back to normal maintenance; any further Hindsight work should be deliberate follow-up, not emergency repair
 
 ---
+## Session 8.1 â€” 2026-04-19
+
+**Spec:** Phase 8.1 â€” Graphiti Projection Design
+**Built:**
+- src/types/canonical-graph-projection.ts (108 lines) â€” Graphiti deployment posture, canonical graph projection contract, reconciliation/status types
+- src/services/canonical-graph-projection-design.ts (117 lines) â€” staged deployment decision, episode/entity/edge mapping helpers, entity/edge reconciliation, graph status derivation
+- src/services/canonical-memory-status.ts (143 lines) â€” added top-level `graph` subsection to canonical `memory_status`
+- src/types/canonical-memory-query.ts (142 lines) â€” extended canonical status contract with `graph`
+- tests/8.1-graphiti-projection-design.test.ts (114 lines) â€” design-contract coverage for note/conversation/artifact mapping, reconciliation, and graph status
+- tests/fixtures/graphiti/*.json â€” entity, edge, and status design fixtures
+- specs/completed/8.1-graphiti-projection-design.md â€” As-Built finalized and spec moved out of `active`
+- MANIFEST.md â€” regenerated for the new contract/service/test files
+**Decisions:**
+- **Initial Graphiti posture is staged external-first:** Cloudflare remains the canonical auth/queue/orchestration shell while Session 8.2 targets an external Graphiti runtime first, with Cloudflare Containers reserved as the later in-platform steady-state.
+- **Graph contract stays design-only in 8.1:** no live ingestion worker, no queue consumer changes, and no new public Graphiti route.
+- **Canonical graph identity is anchor-first:** scope/source/document/artifact entities reuse deterministic canonical keys; conversation participants and title-derived topics use stable-literal anchors where full extraction/merge is deferred to later Graphiti runtime work.
+- **Temporal rules are asymmetric on purpose:** structural edges dedupe by endpoints + relation, while conversation/history-style edges append observations by valid time instead of replacing prior state.
+- **Canonical status grows before runtime fan-out:** `memory_status` now carries a small top-level `graph` subsection so Session 8.2 can plug into an explicit contract instead of inventing new status semantics during ingestion work.
+**Verification:**
+- `npx vitest run tests/8.1-graphiti-projection-design.test.ts` â€” passed
+- `npm test` â€” passed (`316 passed`, `1 skipped`)
+- `npm run postflight` â€” passed
+- `npm run manifest` â€” passed
+**Hindsight Pin:** unchanged (`ghcr.io/vectorize-io/hindsight-api:0.5.2`)
+**Fixture Data:** Reused canonical note/conversation/artifact fixtures and added graphiti entity/edge/status fixtures
+**Blockers:** None
+**Next:** Phase 8.2 â€” Graphiti ingestion projection
+
+---

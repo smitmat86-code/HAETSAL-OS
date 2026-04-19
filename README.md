@@ -97,6 +97,8 @@ Reason: API-only runtime for HAETSAL, paired with dedicated Hindsight worker
 ## Key Development Commands
 
 ```bash
+/checkout              # Ask the coding agent to run the repo checkout workflow
+npm run checkout      # Full checkout workflow (postflight + tests + manifest + final gate)
 npm run postflight    # Convention checks - must pass at session end
 npm test              # Integration tests - must pass at session end
 npm run manifest      # Regenerate MANIFEST.md module registry

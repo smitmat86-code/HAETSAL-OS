@@ -7,7 +7,8 @@
     "dev": "wrangler dev",
     "test": "vitest run",
     "postflight": "tsx scripts/postflight-check.ts",
-    "manifest": "tsx scripts/generate-manifest.ts"
+    "manifest": "tsx scripts/generate-manifest.ts",
+    "checkout": "tsx scripts/checkout.ts"
   },
   "dependencies": {
     "@cloudflare/containers": "^0.3.2",

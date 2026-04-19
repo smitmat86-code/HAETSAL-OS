@@ -6,16 +6,27 @@ description: Run the full checkout protocol before marking any spec or session c
 
 Run every step in order. Do not skip. Do not mark complete until all pass.
 
+Preferred invocation:
+
+- Slash command: `/checkout`
+- General closeout: `npm run checkout`
+- Spec closeout: `npm run checkout -- --spec 8.1-graphiti-projection-design.md --move-spec`
+
+Run it before the final commit or hand-off, while `SESSION_LOG.md` is still
+dirty with the current session entry.
+
 ## Step 1: Automated Verification
 
 // turbo
-1. Run postflight: `npx tsx scripts/postflight-check.ts`
-// turbo
-2. Run tests: `npx vitest run`
-// turbo
-3. Regenerate manifest: `npx tsx scripts/generate-manifest.ts`
+1. Run checkout command: `npm run checkout`
 
-All three MUST pass before proceeding.
+If you are closing a spec in the same session, use:
+
+// turbo
+2. `npm run checkout -- --spec 8.1-graphiti-projection-design.md --move-spec`
+
+The checkout command runs postflight, tests, manifest regeneration, spec
+lifecycle checks, and the final postflight pass.
 
 ## Step 2: THE Brain Self-Check
 
@@ -57,4 +68,4 @@ Mark items as N/A if the spec didn't touch that area.
 ## Step 6: Final Verification
 
 // turbo
-12. Run postflight one final time after all doc updates: `npx tsx scripts/postflight-check.ts`
+12. The checkout command runs the final postflight after all doc/spec updates.

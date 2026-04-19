@@ -86,9 +86,11 @@ Last updated: 2026-04-18 | Session: 7.1 (Hindsight Projection Adapter)
 | src\services\canonical-semantic-linkback.ts | 146 | CanonicalSemanticLinkback, extractSemanticLookup | ✅ |
 | src\services\canonical-semantic-recall.ts | 135 | — | ✅ |
 | src\services\canonical-source-attribution.ts | 56 | buildCanonicalSourceAttribution, applyCanonicalRoute | ✅ |
+| src\services\chief-of-staff-context.ts | 107 | — | ✅ |
 | src\services\delivery\obsidian-write.ts | 52 | — | ✅ |
 | src\services\delivery\sms.ts | 35 | — | ✅ |
 | src\services\delivery\telegram.ts | 31 | — | ✅ |
+| src\services\external-brain-contract.ts | 122 | EXTERNAL_BRAIN_SURFACES, EXTERNAL_BRAIN_CLIENT_MAPPINGS, EXTERNAL_CLIENT_FIXTURES... | ✅ |
 | src\services\google\calendar.ts | 62 | — | ✅ |
 | src\services\google\drive.ts | 74 | ObsidianFrontmatter, parseObsidianFrontmatter, extractWikilinks | ✅ |
 | src\services\google\gmail.ts | 84 | — | ✅ |
@@ -120,7 +122,8 @@ Last updated: 2026-04-18 | Session: 7.1 (Hindsight Projection Adapter)
 | src\tools\act\search.ts | 33 | searchSchema | ✅ |
 | src\tools\act\send-message.ts | 33 | sendMessageSchema | ✅ |
 | src\tools\bootstrap.ts | 104 | registerBootstrapTools | ✅ |
-| src\tools\canonical-memory.ts | 117 | registerCanonicalMemoryTools | ✅ |
+| src\tools\brain-memory-surface.ts | 29 | BRAIN_MEMORY_TOOL_NAMES, BrainMemoryToolName, BrainMemorySurfaceContext... | ✅ |
+| src\tools\canonical-memory.ts | 131 | registerCanonicalMemoryTools | ✅ |
 | src\tools\memory.ts | 87 | registerMemoryTools | ✅ |
 | src\tools\recall.ts | 73 | — | ✅ |
 | src\tools\retain.ts | 57 | — | ✅ |
@@ -131,7 +134,9 @@ Last updated: 2026-04-18 | Session: 7.1 (Hindsight Projection Adapter)
 | src\types\canonical-graph-query.ts | 67 | TraceRelationshipInput, EntityTimelineInput, CanonicalProjectionProvenance... | ✅ |
 | src\types\canonical-memory-query.ts | 144 | MemoryQueryMode, MemoryQueryModePreference, CanonicalMemoryRouteDecision... | ✅ |
 | src\types\canonical-memory.ts | 34 | CanonicalProjectionKind, CanonicalArtifactMode, CanonicalArtifactRef... | ✅ |
+| src\types\chief-of-staff-context.ts | 60 | ContextBundleIntent, ContextConfidenceLevel, PrepareContextForAgentInput... | ✅ |
 | src\types\env.ts | 64 | Env | ✅ |
+| src\types\external-brain.ts | 89 | BrainSurfaceId, BrainSurfaceStatus, BrainRiskLevel... | ✅ |
 | src\types\google.ts | 53 | GoogleOAuthTokens, GoogleThread, GoogleMessage... | ✅ |
 | src\types\hindsight.ts | 103 | HindsightRetainItem, HindsightRetainRequest, HindsightRetainResponse... | ✅ |
 | src\types\ingestion.ts | 70 | IngestionSource, IngestionArtifact, SalienceResult... | ✅ |

@@ -157,6 +157,7 @@ describe('6.2 canonical MCP memory surface', () => {
       'get_recent_memories',
       'memory_stats',
       'memory_status',
+      'prepare_context_for_agent',
       'search_memory',
       'trace_relationship',
     ])

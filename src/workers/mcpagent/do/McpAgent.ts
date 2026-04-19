@@ -4,9 +4,9 @@ import type { Env } from '../../../types/env'
 import { deriveTenantId, deriveTmk } from '../../../middleware/auth'
 import { getOrCreateTenant, provisionOrRenewKek } from '../../../services/tenant'
 import { ensureHindsightWorkersRunning, prewarmHindsight } from '../../../services/hindsight'
+import { registerBrainMemorySurface } from '../../../tools/brain-memory-surface'
 import type { InterviewState } from '../../../types/bootstrap'
 import { registerBootstrapTools } from '../../../tools/bootstrap'
-import { registerCanonicalMemoryTools } from '../../../tools/canonical-memory'
 import { registerMemoryTools } from '../../../tools/memory'
 import { processInboundMessage } from './inbound-message'
 import { registerActTools, registerLegacyMemoryTools } from './register-tools'
@@ -33,7 +33,7 @@ export class McpAgentDO extends BaseMcpAgent<Env, unknown, McpAgentProps> {
     registerActTools({ env: this.env, server: this.server, getTenantId: () => this._tenantId! })
     const ctx = { getEnv: () => this.env, getTenantId: () => this._tenantId!, getTmk: () => this.tmk, getHindsightTenantId: () => this._tenantId!,
       getExecutionContext: () => ({ waitUntil: this.ctx.waitUntil.bind(this.ctx) }) }
-    registerCanonicalMemoryTools(this.server, ctx)
+    registerBrainMemorySurface(this.server, ctx)
     registerMemoryTools(this.server, ctx)
     registerBootstrapTools(this.server, {
       getEnv: () => this.env, getTenantId: () => this._tenantId!,

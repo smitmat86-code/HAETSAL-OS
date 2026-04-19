@@ -916,3 +916,58 @@
 **Next:** Once the unrelated 9.1 active spec is lifecycle-complete, plain checkout can infer the lone active spec and move it without extra flags
 
 ---
+## Session 9.2 - 2026-04-19
+
+**Spec:** Phase 9.2 - Chief-of-Staff Context Builder
+**Built:**
+- `src/types/chief-of-staff-context.ts` - typed context-bundle contract for `prepare_context_for_agent`
+- `src/services/chief-of-staff-context.ts` - read-only bundle assembly on top of canonical raw, semantic, and graph reads
+- `src/tools/canonical-memory.ts` - canonical memory tool surface now registers `prepare_context_for_agent`
+- `src/tools/brain-memory-surface.ts` - brain-memory registry updated for the additive canonical tool
+- `tests/9.2-chief-of-staff-context-builder.test.ts` - person bundle, project bundle, sparse-graph fallback, provenance, and public-contract coverage
+- `tests/6.2-canonical-mcp-memory-surface.test.ts` - canonical tool inventory updated for the new surface
+- `specs/active/9.2-chief-of-staff-context-builder.md` - As-Built Record completed
+**Decisions:**
+- Session 9.2 stays a read-side context assembly layer only. No Chief-of-Staff action workflow, new HTTP surface, or raw-content cache was introduced.
+- `prepare_context_for_agent` remains on the canonical memory surface rather than becoming a private Chief-of-Staff API.
+- The builder reuses the 9.1 router plus existing raw/semantic/graph paths instead of inventing a separate retrieval stack.
+- `person` and `project` ship as the primary supported bundles; `scope` and `meeting_prep` were added as thin aliases on the same read-only policy without broadening into orchestration work.
+- Public bundle output preserves provenance, uncertainty, and gaps while keeping engine-internal Hindsight identifiers out of the surface.
+**Verification:**
+- `npx vitest run tests/9.2-chief-of-staff-context-builder.test.ts` - passed
+- `npm test` - passed (`340 passed`, `1 skipped`)
+- `npm run postflight` - passed
+- `npm run manifest` - passed
+**Hindsight Pin:** unchanged (`ghcr.io/vectorize-io/hindsight-api:0.5.2`)
+**Fixture Data:** Reused canonical note/conversation style fixtures and added 9.2 context-bundle scenarios for person, project, and sparse-graph fallback
+**Blockers:** None for 9.2 implementation; plain checkout still depends on the repo's active-spec lifecycle state
+**Next:** Session 9.3 or later agent-behavior work only when explicitly requested
+
+---
+## Session 9.3 - 2026-04-19
+
+**Spec:** Phase 9.3 - External Client And Source Integration Architecture
+**Built:**
+- `src/types/external-brain.ts` - typed contract for integration surfaces, client/source classes, provenance classes, BYOC working-identity artifacts, and rollout-order fixtures
+- `src/services/external-brain-contract.ts` - executable 9.3 architecture fixture layer for `brain-memory`, `brain-sources-read`, `brain-actions`, client mappings, selective source-ingestion patterns, provenance classes, BYOC artifacts, and implementation order
+- `src/tools/brain-memory-surface.ts` - smallest scoped-surface wrapper around the existing canonical memory tool family
+- `src/workers/mcpagent/do/McpAgent.ts` - live canonical memory registration now goes through the named `brain-memory` surface wrapper
+- `tests/9.3-external-client-and-source-integration-architecture.test.ts` - capability-scope, client/source mapping, provenance, BYOC artifact family, rollout-order, and registry-separation coverage
+- `specs/active/9.3-external-client-and-source-integration-architecture.md` - As-Built completed with shipped scope, implementation decision, and deviations
+**Decisions:**
+- Session 9.3 stayed intentionally narrow: one brain, one canonical substrate, no new public HTTP surface, and no broad Chief-of-Staff expansion.
+- `brain-memory` is the first real external-client surface and is defined by capability class, not AI vendor brand.
+- `brain-sources-read` and `brain-actions` are now explicit architecture contracts, but only `brain-memory` is live; source-read remains planned and actions remain deferred.
+- BYOC shipped in the smallest useful form as a portable working-identity artifact family contract with both file and MCP-record delivery assumptions.
+- The live `brain-memory` surface mirrors the current canonical registrar at repo head; in this worktree that includes parallel 9.2 `prepare_context_for_agent` work, which 9.3 documents truthfully without broadening into implementing the full 9.2 lane itself.
+**Verification:**
+- `npx vitest run tests/9.3-external-client-and-source-integration-architecture.test.ts` - passed
+- `npm test` - passed (`340 passed`, `1 skipped`)
+- `npm run postflight` - passed
+- `npm run manifest` - passed
+**Hindsight Pin:** unchanged (`ghcr.io/vectorize-io/hindsight-api:0.5.2`)
+**Fixture Data:** Added architecture fixtures for memory-only clients, non-MCP web clients, Google source-read connectors, capability scopes, provenance classes, BYOC artifacts, and rollout order
+**Blockers:** None for 9.3 itself; plain checkout remains subject to the repo's active-spec lifecycle state when multiple active specs are present
+**Next:** Keep 9.3 as the parallel integration-architecture lane; future follow-up should land `brain-sources-read` selectively without widening into a separate brain or premature action surface
+
+---

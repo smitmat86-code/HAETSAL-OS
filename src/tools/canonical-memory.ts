@@ -2,8 +2,10 @@ import { z } from 'zod'
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import type { Env } from '../types/env'
 import type { EntityTimelineInput, TraceRelationshipInput } from '../types/canonical-graph-query'
+import type { PrepareContextForAgentInput } from '../types/chief-of-staff-context'
 import { writeAuditLog } from '../middleware/audit'
 import { getCanonicalEntityTimeline, traceCanonicalRelationship } from '../services/canonical-graph-query'
+import { prepareContextForAgent } from '../services/chief-of-staff-context'
 import { getCanonicalDocument, listRecentCanonicalMemories, searchCanonicalMemory } from '../services/canonical-memory-query'
 import { getCanonicalMemoryStats } from '../services/canonical-memory-stats'
 import { getCanonicalMemoryStatus } from '../services/canonical-memory-status'
@@ -47,6 +49,13 @@ const entityTimelineSchema = z.object({
   end_at: z.number().optional().describe('Optional inclusive end timestamp in unix milliseconds'),
   limit: z.number().optional().describe('Maximum timeline events to return'),
 })
+const prepareContextSchema = z.object({
+  agent: z.string().describe('First-party agent identity requesting the bundle'),
+  intent: z.enum(['person', 'project', 'scope', 'meeting_prep']).describe('Context bundle intent'),
+  target: z.string().describe('Person, project, or scope to assemble context for'),
+  scope: z.string().optional().describe('Optional canonical scope filter'),
+  limit: z.number().optional().describe('Maximum memories to pull per retrieval mode'),
+})
 
 const asText = (value: unknown) => ({ content: [{ type: 'text' as const, text: JSON.stringify(value) }] })
 
@@ -88,6 +97,11 @@ export function registerCanonicalMemoryTools(server: McpServer, ctx: CanonicalMe
       endAt: typed.end_at ?? null,
       limit: typed.limit,
     }, ctx.getEnv(), ctx.getTenantId()))
+  })
+
+  server.tool('prepare_context_for_agent', 'Assemble a read-only context bundle for a first-party agent', prepareContextSchema.shape, async (input) => {
+    const typed = input as PrepareContextForAgentInput
+    return asText(await prepareContextForAgent({ ...typed, scope: typed.scope ?? null }, ctx.getEnv(), ctx.getTenantId(), { tmk: ctx.getTmk() }))
   })
 
   server.tool('get_recent_memories', 'List recent canonical memories', recentSchema.shape, async (input) => {

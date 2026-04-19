@@ -59,8 +59,11 @@ Last updated: 2026-04-18 | Session: 7.1 (Hindsight Projection Adapter)
 | src\services\bootstrap\historical-import.ts | 140 | historicalSalienceMultiplier | ✅ |
 | src\services\bootstrap\interview.ts | 76 | createInitialState, currentQuestion, currentDomain... | ✅ |
 | src\services\canonical-capture-compat.ts | 49 | — | ✅ |
-| src\services\canonical-capture-pipeline.ts | 85 | — | ✅ |
-| src\services\canonical-graph-projection-design.ts | 118 | GRAPHITI_DEPLOYMENT_POSTURE, GRAPHITI_RECONCILIATION_RULES, buildCanonicalGraphProjectionPlan... | ✅ |
+| src\services\canonical-capture-pipeline.ts | 94 | — | ✅ |
+| src\services\canonical-graph-projection-design.ts | 122 | GRAPHITI_DEPLOYMENT_POSTURE, GRAPHITI_RECONCILIATION_RULES, buildCanonicalGraphProjectionPlan... | ✅ |
+| src\services\canonical-graphiti-payload.ts | 95 | GraphitiProjectionJobContext | ✅ |
+| src\services\canonical-graphiti-projection.ts | 148 | — | ✅ |
+| src\services\canonical-graphiti-reconcile.ts | 122 | — | ✅ |
 | src\services\canonical-hindsight-projection-payload.ts | 135 | ProjectionJobContext, HindsightProjectionPayload, resolveProjectionSourceRef... | ✅ |
 | src\services\canonical-hindsight-projection-state.ts | 118 | HindsightProjectionJobRow | ✅ |
 | src\services\canonical-hindsight-projection.ts | 137 | — | ✅ |
@@ -68,7 +71,7 @@ Last updated: 2026-04-18 | Session: 7.1 (Hindsight Projection Adapter)
 | src\services\canonical-hindsight-reflection-status.ts | 124 | — | ✅ |
 | src\services\canonical-hindsight-reflection.ts | 139 | CanonicalHindsightReflectionAuditAction, CanonicalHindsightReflectionRun | ✅ |
 | src\services\canonical-memory-artifacts.ts | 66 | PersistedCanonicalPayloads | ✅ |
-| src\services\canonical-memory-audit.ts | 144 | buildCanonicalCaptureAcceptedAuditBatch, buildCanonicalProjectionQueuedAuditBatch, buildCanonicalCaptureFailedAuditBatch... | ✅ |
+| src\services\canonical-memory-audit.ts | 132 | buildCanonicalCaptureAcceptedAuditBatch, buildCanonicalProjectionQueuedAuditBatch, buildCanonicalCaptureFailedAuditBatch... | ✅ |
 | src\services\canonical-memory-query.ts | 149 | — | ✅ |
 | src\services\canonical-memory-read-model.ts | 67 | CanonicalMemoryReadOptions, CanonicalListRow, CanonicalDocumentRow... | ✅ |
 | src\services\canonical-memory-schema.ts | 75 | CANONICAL_PROJECTION_KINDS, normalizeCanonicalBody, assertCanonicalIdentity... | ✅ |
@@ -120,10 +123,10 @@ Last updated: 2026-04-18 | Session: 7.1 (Hindsight Projection Adapter)
 | src\types\action.ts | 105 | CapabilityClass, AuthorizationLevel, AUTH_LEVEL_ORDINAL... | ✅ |
 | src\types\bootstrap.ts | 76 | BootstrapStatus, BootstrapParams, InterviewDomain... | ✅ |
 | src\types\canonical-capture-pipeline.ts | 91 | CanonicalCompatibilityMode, CanonicalPipelineCaptureInput, CanonicalProjectionDispatchMessage... | ✅ |
-| src\types\canonical-graph-projection.ts | 109 | GraphitiDeploymentPostureId, GraphProjectionEpisodeKind, GraphProjectionEntityKind... | ✅ |
+| src\types\canonical-graph-projection.ts | 136 | GraphitiDeploymentPostureId, GraphProjectionEpisodeKind, GraphProjectionEntityKind... | ✅ |
 | src\types\canonical-memory-query.ts | 143 | CanonicalSearchInput, CanonicalRecentInput, CanonicalDocumentInput... | ✅ |
 | src\types\canonical-memory.ts | 34 | CanonicalProjectionKind, CanonicalArtifactMode, CanonicalArtifactRef... | ✅ |
-| src\types\env.ts | 62 | Env | ✅ |
+| src\types\env.ts | 64 | Env | ✅ |
 | src\types\google.ts | 53 | GoogleOAuthTokens, GoogleThread, GoogleMessage... | ✅ |
 | src\types\hindsight.ts | 103 | HindsightRetainItem, HindsightRetainRequest, HindsightRetainResponse... | ✅ |
 | src\types\ingestion.ts | 70 | IngestionSource, IngestionArtifact, SalienceResult... | ✅ |
@@ -131,7 +134,7 @@ Last updated: 2026-04-18 | Session: 7.1 (Hindsight Projection Adapter)
 | src\types\tools.ts | 58 | RetainInput, RetainOutput, RecallInput... | ✅ |
 | src\workers\action\index.ts | 105 | — | ✅ |
 | src\workers\ingestion\bootstrap-handlers.ts | 91 | — | ✅ |
-| src\workers\ingestion\canonical-projection-consumer.ts | 40 | — | ✅ |
+| src\workers\ingestion\canonical-projection-consumer.ts | 60 | — | ✅ |
 | src\workers\ingestion\consumer.ts | 115 | — | ✅ |
 | src\workers\ingestion\handlers.ts | 104 | — | ✅ |
 | src\workers\ingestion\retain-consumer.ts | 21 | — | ✅ |

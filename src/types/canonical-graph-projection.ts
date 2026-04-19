@@ -60,6 +60,7 @@ export interface GraphProjectionEntity {
 }
 
 export interface GraphProjectionEdge {
+  canonicalKey: string
   fromCanonicalKey: string
   toCanonicalKey: string
   relation: string
@@ -105,4 +106,30 @@ export interface CanonicalGraphProjectionStatus {
   errorMessage: string | null
   updatedAt: number | null
   reconciliationMode: 'episode_entity_edge_projection'
+}
+
+export type CanonicalGraphIdentityKind = 'episode' | 'entity' | 'edge'
+
+export interface CanonicalGraphIdentityMapping {
+  canonicalKey: string
+  graphRef: string
+  graphKind: CanonicalGraphIdentityKind
+}
+
+export interface GraphitiProjectionDispatchInput {
+  tenantId: string
+  captureId: string
+  operationId: string
+  projectionJobId: string
+  projectionKind: 'graphiti'
+}
+
+export interface GraphitiProjectionSubmissionResult {
+  targetRef: string
+  status: 'queued' | 'completed'
+  operationRef?: string | null
+  episodeRefs?: string[]
+  entityRefs?: string[]
+  edgeRefs?: string[]
+  mappings: CanonicalGraphIdentityMapping[]
 }

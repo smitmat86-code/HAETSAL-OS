@@ -58,4 +58,6 @@ export interface Env {
   HINDSIGHT_DEDICATED_WORKERS_ENABLED: string // 'true' to disable API internal worker and use dedicated Hindsight workers
   HINDSIGHT_DEDICATED_WORKER_COUNT: string    // Number of dedicated Hindsight worker container instances to keep available
   CANONICAL_MEMORY_SHADOW_WRITES?: string     // 'true' enables best-effort canonical shadow writes
+  GRAPHITI_API_URL?: string                  // Trusted external Graphiti runtime base URL
+  GRAPHITI_API_TOKEN?: string                // Optional bearer token for the Graphiti runtime
 }

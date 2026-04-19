@@ -38,7 +38,11 @@ function pushEntity(list: GraphProjectionEntity[], entity: GraphProjectionEntity
 }
 
 function pushEdge(list: GraphProjectionEdge[], edge: GraphProjectionEdge): void {
-  if (!list.some(item => item.fromCanonicalKey === edge.fromCanonicalKey && item.toCanonicalKey === edge.toCanonicalKey && item.relation === edge.relation && item.validAt === edge.validAt)) list.push(edge)
+  if (!list.some(item => item.canonicalKey === edge.canonicalKey && item.validAt === edge.validAt)) list.push(edge)
+}
+
+function buildEdgeKey(fromCanonicalKey: string, relation: string, toCanonicalKey: string): string {
+  return `canonical://edges/${encodeURIComponent(fromCanonicalKey)}:${relation}:${encodeURIComponent(toCanonicalKey)}`
 }
 
 export function buildCanonicalGraphProjectionPlan(input: CanonicalGraphProjectionDesignInput): CanonicalGraphProjectionPlan {
@@ -50,32 +54,32 @@ export function buildCanonicalGraphProjectionPlan(input: CanonicalGraphProjectio
   const edges: GraphProjectionEdge[] = []
   pushEntity(entities, { canonicalKey: scopeKey, kind: 'scope', label: input.scope, identityStrategy: 'canonical_anchor', source: 'metadata_anchor' })
   pushEntity(entities, { canonicalKey: sourceKey, kind: 'source', label: input.sourceRef?.trim() || input.sourceSystem, identityStrategy: 'canonical_anchor', source: 'metadata_anchor' })
-  pushEdge(edges, { fromCanonicalKey: episodeKey, toCanonicalKey: scopeKey, relation: 'within_scope', temporalMode: 'snapshot', validAt: input.capturedAt ?? null })
-  pushEdge(edges, { fromCanonicalKey: episodeKey, toCanonicalKey: sourceKey, relation: 'captured_via', temporalMode: 'snapshot', validAt: input.capturedAt ?? null })
+  pushEdge(edges, { canonicalKey: buildEdgeKey(episodeKey, 'within_scope', scopeKey), fromCanonicalKey: episodeKey, toCanonicalKey: scopeKey, relation: 'within_scope', temporalMode: 'snapshot', validAt: input.capturedAt ?? null })
+  pushEdge(edges, { canonicalKey: buildEdgeKey(episodeKey, 'captured_via', sourceKey), fromCanonicalKey: episodeKey, toCanonicalKey: sourceKey, relation: 'captured_via', temporalMode: 'snapshot', validAt: input.capturedAt ?? null })
 
   const topicSlug = slugify(input.title)
   if (topicSlug) {
     const topicKey = `canonical://topics/${topicSlug}`
     pushEntity(entities, { canonicalKey: topicKey, kind: 'topic', label: input.title!.trim(), identityStrategy: 'stable_literal', source: 'metadata_anchor' })
-    pushEdge(edges, { fromCanonicalKey: episodeKey, toCanonicalKey: topicKey, relation: 'about_topic', temporalMode: 'snapshot', validAt: input.capturedAt ?? null })
+    pushEdge(edges, { canonicalKey: buildEdgeKey(episodeKey, 'about_topic', topicKey), fromCanonicalKey: episodeKey, toCanonicalKey: topicKey, relation: 'about_topic', temporalMode: 'snapshot', validAt: input.capturedAt ?? null })
   }
   if (episodeKind === 'conversation') {
     const userKey = 'canonical://participants/user'
     const assistantKey = 'canonical://participants/assistant'
     pushEntity(entities, { canonicalKey: userKey, kind: 'speaker', label: 'User', identityStrategy: 'stable_literal', source: 'metadata_anchor' })
     pushEntity(entities, { canonicalKey: assistantKey, kind: 'speaker', label: 'Assistant', identityStrategy: 'stable_literal', source: 'metadata_anchor' })
-    pushEdge(edges, { fromCanonicalKey: episodeKey, toCanonicalKey: userKey, relation: 'has_participant', temporalMode: 'append_valid_time', validAt: input.capturedAt ?? null })
-    pushEdge(edges, { fromCanonicalKey: episodeKey, toCanonicalKey: assistantKey, relation: 'has_participant', temporalMode: 'append_valid_time', validAt: input.capturedAt ?? null })
-    pushEdge(edges, { fromCanonicalKey: userKey, toCanonicalKey: assistantKey, relation: 'conversed_with', temporalMode: 'append_valid_time', validAt: input.capturedAt ?? null })
+    pushEdge(edges, { canonicalKey: buildEdgeKey(episodeKey, 'has_participant', userKey), fromCanonicalKey: episodeKey, toCanonicalKey: userKey, relation: 'has_participant', temporalMode: 'append_valid_time', validAt: input.capturedAt ?? null })
+    pushEdge(edges, { canonicalKey: buildEdgeKey(episodeKey, 'has_participant', assistantKey), fromCanonicalKey: episodeKey, toCanonicalKey: assistantKey, relation: 'has_participant', temporalMode: 'append_valid_time', validAt: input.capturedAt ?? null })
+    pushEdge(edges, { canonicalKey: buildEdgeKey(userKey, 'conversed_with', assistantKey), fromCanonicalKey: userKey, toCanonicalKey: assistantKey, relation: 'conversed_with', temporalMode: 'append_valid_time', validAt: input.capturedAt ?? null })
   }
   if (episodeKind === 'artifact') {
     const documentKey = `canonical://documents/${input.documentId}`
     pushEntity(entities, { canonicalKey: documentKey, kind: 'document', label: input.title?.trim() || input.documentId, identityStrategy: 'canonical_anchor', source: 'metadata_anchor' })
-    pushEdge(edges, { fromCanonicalKey: episodeKey, toCanonicalKey: documentKey, relation: 'describes_document', temporalMode: 'snapshot', validAt: input.capturedAt ?? null })
+    pushEdge(edges, { canonicalKey: buildEdgeKey(episodeKey, 'describes_document', documentKey), fromCanonicalKey: episodeKey, toCanonicalKey: documentKey, relation: 'describes_document', temporalMode: 'snapshot', validAt: input.capturedAt ?? null })
     if (input.artifactRef?.filename) {
       const artifactKey = `${documentKey}#artifact`
       pushEntity(entities, { canonicalKey: artifactKey, kind: 'artifact', label: input.artifactRef.filename, identityStrategy: 'canonical_anchor', source: 'metadata_anchor' })
-      pushEdge(edges, { fromCanonicalKey: documentKey, toCanonicalKey: artifactKey, relation: 'backed_by_artifact', temporalMode: 'snapshot', validAt: input.capturedAt ?? null })
+      pushEdge(edges, { canonicalKey: buildEdgeKey(documentKey, 'backed_by_artifact', artifactKey), fromCanonicalKey: documentKey, toCanonicalKey: artifactKey, relation: 'backed_by_artifact', temporalMode: 'snapshot', validAt: input.capturedAt ?? null })
     }
   }
   return {

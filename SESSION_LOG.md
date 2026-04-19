@@ -814,3 +814,34 @@
 **Next:** Phase 8.2 â€” Graphiti ingestion projection
 
 ---
+## Session 8.2 - 2026-04-19
+
+**Spec:** Phase 8.2 - Graphiti Ingestion Projection
+**Built:**
+- `src/services/canonical-graphiti-payload.ts` - KEK-encrypted Graphiti payload materialization and projection-job context loading
+- `src/services/canonical-graphiti-projection.ts` - live Graphiti submission path behind the canonical projection consumer
+- `src/services/canonical-graphiti-reconcile.ts` - truthful graph projection state writes plus canonical-to-graph identity mapping persistence
+- `src/workers/ingestion/canonical-projection-consumer.ts` - fan-out now routes both `hindsight` and `graphiti` jobs through the shared canonical dispatch lane
+- `src/services/canonical-capture-pipeline.ts` - canonical capture now materializes both Hindsight and Graphiti projection payloads without leaking content into D1/KV/queue payloads
+- `src/types/canonical-graph-projection.ts` and `src/services/canonical-graph-projection-design.ts` - added deterministic edge canonical keys plus live Graphiti submission/mapping types
+- `migrations/1018_graphiti_ingestion_projection.sql` - added `canonical_graph_identity_mappings`
+- `tests/8.2-graphiti-ingestion-projection.test.ts` - note, conversation, and failure/retry Graphiti ingestion coverage
+- `specs/active/8.2-graphiti-ingestion-projection.md` - As-Built completed
+- `MANIFEST.md` - regenerated
+**Decisions:**
+- Graphiti follows the 8.1 staged posture: trusted external runtime first, Cloudflare queue shell now, Containers later if we choose to internalize the service.
+- Queue payloads remain metadata-only; Graphiti reads decrypted content only from a KEK-encrypted R2 payload inside the trusted projection runtime path.
+- Canonical-to-graph identity truth needs its own table. Episode, entity, and edge refs now persist in `canonical_graph_identity_mappings` keyed by projection job plus canonical anchor.
+- Deterministic edge canonical keys shipped in 8.2 so edge mappings can be persisted and retried coherently instead of being inferred ad hoc.
+- Graphiti execution is configuration-gated by `GRAPHITI_API_URL`; when the runtime is not configured, canonical graph jobs stay queued rather than being marked failed by a missing engine.
+**Verification:**
+- `npx vitest run tests/8.2-graphiti-ingestion-projection.test.ts` - passed
+- `npm run postflight` - passed
+- `npm test` - passed (`319 passed`, `1 skipped`)
+- `npm run manifest` - passed
+**Hindsight Pin:** unchanged (`ghcr.io/vectorize-io/hindsight-api:0.5.2`)
+**Fixture Data:** Reused canonical note/conversation fixtures and added Graphiti ingestion assertions for episode/entity/edge mappings plus failure/retry recovery
+**Blockers:** None
+**Next:** Phase 8.3 - graph and timeline query surface
+
+---

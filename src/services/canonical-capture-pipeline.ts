@@ -3,6 +3,7 @@ import type {
   CanonicalCapturePipelineResult,
   CanonicalPipelineCaptureInput,
 } from '../types/canonical-capture-pipeline'
+import { materializeGraphitiProjectionPayload } from './canonical-graphiti-projection'
 import { materializeHindsightProjectionPayload } from './canonical-hindsight-projection'
 import { captureCanonicalMemory } from './canonical-memory'
 import { CANONICAL_PROJECTION_KINDS } from './canonical-memory-schema'
@@ -42,16 +43,24 @@ export async function captureThroughCanonicalPipeline(
     enqueuedAt: Date.now(),
   }
 
-  await materializeHindsightProjectionPayload({
+  const projectionInput = {
     ...input,
     canonicalCaptureId: capture.captureId,
     canonicalDocumentId: capture.documentId,
     canonicalOperationId: capture.operationId,
-  }, capture.captureId, env).catch((error) => {
-    console.error('HINDSIGHT_PROJECTION_PAYLOAD_MATERIALIZE_FAILED', {
-      tenantId,
-      captureId: capture.captureId,
-      error: error instanceof Error ? error.message : String(error),
+  }
+  await Promise.allSettled([
+    materializeHindsightProjectionPayload(projectionInput, capture.captureId, env),
+    materializeGraphitiProjectionPayload(projectionInput, capture.captureId, env),
+  ]).then((results) => {
+    results.forEach((result, index) => {
+      if (result.status === 'fulfilled') return
+      const lane = index === 0 ? 'HINDSIGHT' : 'GRAPHITI'
+      console.error(`${lane}_PROJECTION_PAYLOAD_MATERIALIZE_FAILED`, {
+        tenantId,
+        captureId: capture.captureId,
+        error: result.reason instanceof Error ? result.reason.message : String(result.reason),
+      })
     })
   })
 

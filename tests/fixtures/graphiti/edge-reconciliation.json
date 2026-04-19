@@ -1,5 +1,6 @@
 {
   "structuralExisting": {
+    "canonicalKey": "canonical://edges/capture-1-within-scope-general",
     "fromCanonicalKey": "canonical://captures/capture-1",
     "toCanonicalKey": "canonical://scopes/general",
     "relation": "within_scope",
@@ -7,6 +8,7 @@
     "validAt": 1760188800000
   },
   "structuralIncoming": {
+    "canonicalKey": "canonical://edges/capture-1-within-scope-general",
     "fromCanonicalKey": "canonical://captures/capture-1",
     "toCanonicalKey": "canonical://scopes/general",
     "relation": "within_scope",
@@ -14,6 +16,7 @@
     "validAt": 1760188800000
   },
   "temporalExisting": {
+    "canonicalKey": "canonical://edges/user-conversed-with-assistant",
     "fromCanonicalKey": "canonical://participants/user",
     "toCanonicalKey": "canonical://participants/assistant",
     "relation": "conversed_with",
@@ -21,6 +24,7 @@
     "validAt": 1760192400000
   },
   "temporalIncoming": {
+    "canonicalKey": "canonical://edges/user-conversed-with-assistant",
     "fromCanonicalKey": "canonical://participants/user",
     "toCanonicalKey": "canonical://participants/assistant",
     "relation": "conversed_with",

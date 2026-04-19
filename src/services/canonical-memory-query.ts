@@ -1,47 +1,19 @@
 import type { Env } from '../types/env'
-import type {
-  CanonicalDocumentInput,
-  CanonicalDocumentResult,
-  CanonicalMemoryListItem,
-  CanonicalRecentInput,
-  CanonicalRecentResult,
-  CanonicalSearchInput,
-  CanonicalSearchResult,
-} from '../types/canonical-memory-query'
-import {
-  buildCanonicalPreview,
-  clampCanonicalLimit,
-  readCanonicalDocumentBody,
-  type CanonicalDocumentRow,
-  type CanonicalListRow,
-  type CanonicalMemoryReadOptions,
-} from './canonical-memory-read-model'
+import type { CanonicalDocumentInput, CanonicalDocumentResult, CanonicalMemoryListItem, CanonicalRecentInput, CanonicalRecentResult, CanonicalSearchInput, CanonicalSearchResult } from '../types/canonical-memory-query'
+import { buildCanonicalPreview, clampCanonicalLimit, readCanonicalDocumentBody, type CanonicalDocumentRow, type CanonicalListRow, type CanonicalMemoryReadOptions } from './canonical-memory-read-model'
+import { searchCanonicalGraphMemory } from './canonical-composed-graph-context'
 import { searchCanonicalSemanticMemory } from './canonical-semantic-recall'
 
-async function listCanonicalRows(
-  env: Env,
-  tenantId: string,
-  scope: string | null,
-  limit: number,
-): Promise<CanonicalListRow[]> {
+async function listCanonicalRows(env: Env, tenantId: string, scope: string | null, limit: number): Promise<CanonicalListRow[]> {
   const rows = await env.D1_US.prepare(
-    `SELECT c.id AS capture_id, d.id AS document_id, d.title, c.scope, c.source_system,
-            c.source_ref, c.captured_at, d.body_r2_key
-     FROM canonical_documents d
-     INNER JOIN canonical_captures c ON c.id = d.capture_id
-     WHERE d.tenant_id = ?
-       AND (? IS NULL OR c.scope = ?)
-     ORDER BY c.captured_at DESC
-     LIMIT ?`,
+    `SELECT c.id AS capture_id, d.id AS document_id, d.title, c.scope, c.source_system, c.source_ref, c.captured_at, d.body_r2_key
+     FROM canonical_documents d INNER JOIN canonical_captures c ON c.id = d.capture_id
+     WHERE d.tenant_id = ? AND (? IS NULL OR c.scope = ?) ORDER BY c.captured_at DESC LIMIT ?`,
   ).bind(tenantId, scope, scope, limit).all<CanonicalListRow>()
   return rows.results ?? []
 }
 
-function toMemoryListItem(
-  row: CanonicalListRow,
-  body: string | null,
-  score?: number,
-): CanonicalMemoryListItem {
+function toMemoryListItem(row: CanonicalListRow, body: string | null, score?: number): CanonicalMemoryListItem {
   return {
     captureId: row.capture_id,
     documentId: row.document_id,
@@ -62,20 +34,14 @@ function scoreCanonicalRow(query: string, row: CanonicalListRow, body: string | 
   const haystacks = [row.title, row.source_ref, row.scope, body ?? ''].map(value => (value ?? '').toLowerCase())
   if (haystacks.some(value => value === needle)) return 5
   if (haystacks.some(value => value.includes(needle))) return 3
-  const terms = needle.split(/\s+/).filter(Boolean)
-  const matchedTerms = terms.filter(term => haystacks.some(value => value.includes(term))).length
+  const matchedTerms = needle.split(/\s+/).filter(Boolean).filter(term => haystacks.some(value => value.includes(term))).length
   return matchedTerms > 0 ? matchedTerms : 0
 }
 
-export async function searchCanonicalMemory(
-  input: CanonicalSearchInput,
-  env: Env,
-  tenantId: string,
-  options: CanonicalMemoryReadOptions = {},
-): Promise<CanonicalSearchResult> {
-  if ((input.mode ?? 'lexical') === 'semantic') {
-    return searchCanonicalSemanticMemory(input, env, tenantId)
-  }
+export async function searchCanonicalMemory(input: CanonicalSearchInput, env: Env, tenantId: string, options: CanonicalMemoryReadOptions = {}): Promise<CanonicalSearchResult> {
+  const mode = input.mode ?? 'lexical'
+  if (mode === 'semantic') return searchCanonicalSemanticMemory(input, env, tenantId)
+  if (mode === 'graph') return searchCanonicalGraphMemory(input, env, tenantId)
   const limit = clampCanonicalLimit(input.limit, 5, 10)
   const rows = await listCanonicalRows(env, tenantId, input.scope ?? null, Math.max(limit * 4, 20))
   const items = await Promise.all(rows.map(async row => {
@@ -87,42 +53,27 @@ export async function searchCanonicalMemory(
     query: input.query,
     mode: 'lexical',
     status: 'ok',
-    items: items.filter(Boolean)
-      .sort((left, right) => (right!.score ?? 0) - (left!.score ?? 0) || right!.capturedAt - left!.capturedAt)
-      .slice(0, limit) as CanonicalMemoryListItem[],
+    items: items.filter(Boolean).sort((left, right) => ((right!.score ?? 0) - (left!.score ?? 0)) || ((right!.capturedAt ?? 0) - (left!.capturedAt ?? 0))).slice(0, limit) as CanonicalMemoryListItem[],
   }
 }
 
-export async function listRecentCanonicalMemories(
-  input: CanonicalRecentInput,
-  env: Env,
-  tenantId: string,
-  options: CanonicalMemoryReadOptions = {},
-): Promise<CanonicalRecentResult> {
-  const limit = clampCanonicalLimit(input.limit, 10, 20)
-  const rows = await listCanonicalRows(env, tenantId, input.scope ?? null, limit)
-  const items = await Promise.all(rows.map(async row => {
-    const body = options.tmk ? await readCanonicalDocumentBody(env, row.body_r2_key, options.tmk) : null
-    return toMemoryListItem(row, body)
-  }))
-  return { items }
+export async function listRecentCanonicalMemories(input: CanonicalRecentInput, env: Env, tenantId: string, options: CanonicalMemoryReadOptions = {}): Promise<CanonicalRecentResult> {
+  const rows = await listCanonicalRows(env, tenantId, input.scope ?? null, clampCanonicalLimit(input.limit, 10, 20))
+  return {
+    items: await Promise.all(rows.map(async row => toMemoryListItem(
+      row,
+      options.tmk ? await readCanonicalDocumentBody(env, row.body_r2_key, options.tmk) : null,
+    ))),
+  }
 }
 
-export async function getCanonicalDocument(
-  input: CanonicalDocumentInput,
-  env: Env,
-  tenantId: string,
-  options: CanonicalMemoryReadOptions = {},
-): Promise<CanonicalDocumentResult> {
+export async function getCanonicalDocument(input: CanonicalDocumentInput, env: Env, tenantId: string, options: CanonicalMemoryReadOptions = {}): Promise<CanonicalDocumentResult> {
   if (!options.tmk) throw new Error('Active session key required for canonical document reads')
   const row = await env.D1_US.prepare(
-    `SELECT c.id AS capture_id, d.id AS document_id, d.title, c.scope, c.source_system, c.source_ref,
-            c.captured_at, d.body_r2_key, d.chunk_count, d.created_at AS document_created_at,
-            a.id AS artifact_id, a.filename, a.media_type, a.byte_length
-     FROM canonical_documents d
-     INNER JOIN canonical_captures c ON c.id = d.capture_id
-     LEFT JOIN canonical_artifacts a ON a.id = d.artifact_id
-     WHERE d.tenant_id = ? AND d.id = ?`,
+    `SELECT c.id AS capture_id, d.id AS document_id, d.title, c.scope, c.source_system, c.source_ref, c.captured_at,
+            d.body_r2_key, d.chunk_count, d.created_at AS document_created_at, a.id AS artifact_id, a.filename, a.media_type, a.byte_length
+     FROM canonical_documents d INNER JOIN canonical_captures c ON c.id = d.capture_id
+     LEFT JOIN canonical_artifacts a ON a.id = d.artifact_id WHERE d.tenant_id = ? AND d.id = ?`,
   ).bind(tenantId, input.documentId).first<CanonicalDocumentRow>()
   if (!row) throw new Error(`Canonical document not found: ${input.documentId}`)
   return {
@@ -136,13 +87,6 @@ export async function getCanonicalDocument(
     chunkCount: row.chunk_count,
     capturedAt: row.captured_at,
     createdAt: row.document_created_at,
-    artifact: row.artifact_id
-      ? {
-        artifactId: row.artifact_id,
-        filename: row.filename,
-        mediaType: row.media_type,
-        byteLength: row.byte_length,
-      }
-      : null,
+    artifact: row.artifact_id ? { artifactId: row.artifact_id, filename: row.filename, mediaType: row.media_type, byteLength: row.byte_length } : null,
   }
 }

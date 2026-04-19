@@ -845,3 +845,34 @@
 **Next:** Phase 8.3 - graph and timeline query surface
 
 ---
+## Session 8.3 - 2026-04-19
+
+**Spec:** Phase 8.3 - Graph / Timeline Query Surface
+**Built:**
+- `src/services/canonical-graph-query.ts` - canonical graph/timeline reads over completed Graphiti projection mappings with canonical provenance linkback
+- `src/services/canonical-composed-graph-context.ts` - narrow explicit graph-backed composed retrieval helper for `search_memory(mode = 'graph')`
+- `src/types/canonical-graph-query.ts` - graph/timeline query/result contracts separated from the broader canonical memory types to stay within file-size limits
+- `src/services/canonical-memory-query.ts` - canonical query path now supports explicit `graph` mode while preserving lexical default and semantic mode behavior
+- `src/tools/canonical-memory.ts` - canonical MCP surface now registers `trace_relationship` and `get_entity_timeline`
+- `src/types/canonical-memory-query.ts` - canonical list item now supports graph-backed provenance/context metadata without widening into a Phase 9 router
+- `tests/8.3-graph-timeline-query-surface.test.ts` - relationship tracing, ordered entity timeline, narrow graph-mode search, and lexical-regression coverage
+- `tests/6.2-canonical-mcp-memory-surface.test.ts` - canonical tool-surface expectation updated for the additive 8.3 tools
+- `specs/active/8.3-graph-timeline-query-surface.md` - As-Built completed with shipped surface, migration decision, scope, and deviations
+- `MANIFEST.md` - regenerated
+**Decisions:**
+- `trace_relationship` ships as the smallest architecture-consistent canonical read: direct single-hop relationship tracing over completed Graphiti projection mappings rather than arbitrary multi-hop traversal.
+- `get_entity_timeline` uses canonical graph identity mappings plus canonical capture metadata as the timeline truth source, keeping Graphiti internal and preserving canonical provenance/linkback.
+- The narrow graph-backed composed retrieval path ships as `search_memory(mode = 'graph')`; Phase 9 automatic routing, cross-engine ranking, and multi-mode heuristics remain intentionally out of scope.
+- No new public HTTP surface and no query-side content cache were introduced. Graph reads remain metadata-first and do not copy raw memory content into D1, KV, Analytics Engine, or caches.
+- No migration was needed for 8.3; existing 8.2 graph identity mappings plus projection job/result rows were sufficient.
+**Verification:**
+- `npx vitest run tests/8.3-graph-timeline-query-surface.test.ts` - passed
+- `npm test` - passed (`323 passed`, `1 skipped`)
+- `npm run postflight` - passed
+- `npm run manifest` - passed
+**Hindsight Pin:** unchanged (`ghcr.io/vectorize-io/hindsight-api:0.5.2`)
+**Fixture Data:** Reused canonical note/conversation fixtures and 8.2 Graphiti projection behavior; added 8.3 graph/timeline assertions through the canonical MCP surface
+**Blockers:** None
+**Next:** Phase 9 only when explicitly requested; Session 8.3 stops at explicit graph/timeline reads plus the narrow graph-mode composed path
+
+---

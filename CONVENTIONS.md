@@ -386,3 +386,23 @@ contract first in the type/service layer:
 
 Do this before adding runtime fan-out. It keeps the next runtime session from
 inventing status semantics, queue payload shape, or identity rules on the fly.
+
+---
+
+## Canonical Graph Query Pattern
+
+When graph reads become product-visible before the broader retrieval router
+exists, extend the existing canonical MCP family instead of creating a second
+Graphiti namespace:
+
+- add explicit canonical tools such as `trace_relationship` and
+  `get_entity_timeline`
+- if composed retrieval is needed, use an explicit mode selector like
+  `search_memory(mode = 'graph')` rather than auto-routing
+- resolve graph answers from canonical graph identity mappings plus canonical
+  capture/projection metadata so provenance stays truthful
+- keep raw graph/query content out of D1, KV, Analytics Engine, and query-side
+  caches
+
+This is the default narrow pattern until Phase 9-style retrieval routing is
+explicitly in scope.

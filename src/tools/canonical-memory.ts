@@ -1,7 +1,9 @@
 import { z } from 'zod'
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import type { Env } from '../types/env'
+import type { EntityTimelineInput, TraceRelationshipInput } from '../types/canonical-graph-query'
 import { writeAuditLog } from '../middleware/audit'
+import { getCanonicalEntityTimeline, traceCanonicalRelationship } from '../services/canonical-graph-query'
 import { getCanonicalDocument, listRecentCanonicalMemories, searchCanonicalMemory } from '../services/canonical-memory-query'
 import { getCanonicalMemoryStats } from '../services/canonical-memory-stats'
 import { getCanonicalMemoryStatus } from '../services/canonical-memory-status'
@@ -24,90 +26,91 @@ const searchSchema = z.object({
   query: z.string().describe('Canonical memory search query'),
   scope: z.string().optional().describe('Optional scope filter'),
   limit: z.number().optional().describe('Maximum results to return'),
-  mode: z.enum(['lexical', 'semantic']).optional().describe('Search mode; semantic uses the canonical Hindsight-backed recall path'),
+  mode: z.enum(['lexical', 'semantic', 'graph']).optional()
+    .describe('Search mode; graph is the explicit graph-backed composed retrieval path'),
 })
-const recentSchema = z.object({
-  scope: z.string().optional().describe('Optional scope filter'),
-  limit: z.number().optional().describe('Maximum results to return'),
-})
-const documentSchema = z.object({
-  document_id: z.string().describe('Canonical document id'),
-})
+const recentSchema = z.object({ scope: z.string().optional().describe('Optional scope filter'), limit: z.number().optional().describe('Maximum results to return') })
+const documentSchema = z.object({ document_id: z.string().describe('Canonical document id') })
 const statusSchema = z.object({
   capture_id: z.string().optional().describe('Canonical capture id'),
   operation_id: z.string().optional().describe('Canonical memory operation id'),
 })
+const traceRelationshipSchema = z.object({
+  from: z.string().describe('Starting entity, topic, scope, or canonical graph key'),
+  to: z.string().optional().describe('Optional target entity to constrain the trace'),
+  relation: z.string().optional().describe('Optional relation filter, such as conversed_with'),
+  limit: z.number().optional().describe('Maximum relationships to return'),
+})
+const entityTimelineSchema = z.object({
+  entity: z.string().describe('Entity, topic, scope, or canonical graph key to inspect over time'),
+  start_at: z.number().optional().describe('Optional inclusive start timestamp in unix milliseconds'),
+  end_at: z.number().optional().describe('Optional inclusive end timestamp in unix milliseconds'),
+  limit: z.number().optional().describe('Maximum timeline events to return'),
+})
 
-function asText(value: unknown) {
-  return { content: [{ type: 'text' as const, text: JSON.stringify(value) }] }
-}
+const asText = (value: unknown) => ({ content: [{ type: 'text' as const, text: JSON.stringify(value) }] })
 
 export function registerCanonicalMemoryTools(server: McpServer, ctx: CanonicalMemoryToolContext): void {
-  server.tool('capture_memory', 'Capture memory through the canonical memory contract', captureSchema.shape,
-    async (input) => {
-      const typed = input as z.infer<typeof captureSchema>
-      return asText(await retainViaService({
-        content: typed.content,
-        domain: typed.scope ?? 'general',
-        memory_type: typed.memory_type,
-        provenance: typed.provenance,
-      }, ctx.getTenantId(), ctx.getTmk(), ctx.getEnv(), ctx.getExecutionContext()))
-    })
+  server.tool('capture_memory', 'Capture memory through the canonical memory contract', captureSchema.shape, async (input) => {
+    const typed = input as z.infer<typeof captureSchema>
+    return asText(await retainViaService({
+      content: typed.content,
+      domain: typed.scope ?? 'general',
+      memory_type: typed.memory_type,
+      provenance: typed.provenance,
+    }, ctx.getTenantId(), ctx.getTmk(), ctx.getEnv(), ctx.getExecutionContext()))
+  })
 
   server.tool('search_memory', 'Search canonical memories', searchSchema.shape, async (input) => {
     const typed = input as z.infer<typeof searchSchema>
-    const result = await searchCanonicalMemory(
-      {
-        tenantId: ctx.getTenantId(),
-        query: typed.query,
-        scope: typed.scope ?? null,
-        limit: typed.limit,
-        mode: typed.mode ?? 'lexical',
-      },
-      ctx.getEnv(),
-      ctx.getTenantId(),
-      { tmk: ctx.getTmk() },
-    )
+    const result = await searchCanonicalMemory({
+      tenantId: ctx.getTenantId(),
+      query: typed.query,
+      scope: typed.scope ?? null,
+      limit: typed.limit,
+      mode: typed.mode ?? 'lexical',
+    }, ctx.getEnv(), ctx.getTenantId(), { tmk: ctx.getTmk() })
     ctx.getExecutionContext().waitUntil(writeAuditLog(ctx.getEnv(), 'memory.search.executed', ctx.getTenantId(), { agentIdentity: 'mcpagent/tool' }))
     return asText(result)
   })
 
+  server.tool('trace_relationship', 'Trace direct graph relationships through the canonical memory surface', traceRelationshipSchema.shape, async (input) => {
+    const typed = input as TraceRelationshipInput
+    return asText(await traceCanonicalRelationship({ ...typed, tenantId: ctx.getTenantId(), to: typed.to ?? null, relation: typed.relation ?? null }, ctx.getEnv(), ctx.getTenantId()))
+  })
+
+  server.tool('get_entity_timeline', 'View graph-backed entity activity over time through the canonical surface', entityTimelineSchema.shape, async (input) => {
+    const typed = input as EntityTimelineInput & { start_at?: number; end_at?: number }
+    return asText(await getCanonicalEntityTimeline({
+      tenantId: ctx.getTenantId(),
+      entity: typed.entity,
+      startAt: typed.start_at ?? null,
+      endAt: typed.end_at ?? null,
+      limit: typed.limit,
+    }, ctx.getEnv(), ctx.getTenantId()))
+  })
+
   server.tool('get_recent_memories', 'List recent canonical memories', recentSchema.shape, async (input) => {
     const typed = input as z.infer<typeof recentSchema>
-    const result = await listRecentCanonicalMemories(
-      { tenantId: ctx.getTenantId(), scope: typed.scope ?? null, limit: typed.limit },
-      ctx.getEnv(),
-      ctx.getTenantId(),
-      { tmk: ctx.getTmk() },
-    )
+    const result = await listRecentCanonicalMemories({ tenantId: ctx.getTenantId(), scope: typed.scope ?? null, limit: typed.limit }, ctx.getEnv(), ctx.getTenantId(), { tmk: ctx.getTmk() })
     ctx.getExecutionContext().waitUntil(writeAuditLog(ctx.getEnv(), 'memory.recent.viewed', ctx.getTenantId(), { agentIdentity: 'mcpagent/tool' }))
     return asText(result)
   })
 
   server.tool('get_document', 'Get one canonical document', documentSchema.shape, async (input) => {
     const typed = input as z.infer<typeof documentSchema>
-    const result = await getCanonicalDocument(
-      { tenantId: ctx.getTenantId(), documentId: typed.document_id },
-      ctx.getEnv(),
-      ctx.getTenantId(),
-      { tmk: ctx.getTmk() },
-    )
+    const result = await getCanonicalDocument({ tenantId: ctx.getTenantId(), documentId: typed.document_id }, ctx.getEnv(), ctx.getTenantId(), { tmk: ctx.getTmk() })
     ctx.getExecutionContext().waitUntil(writeAuditLog(ctx.getEnv(), 'memory.document.viewed', ctx.getTenantId(), { memoryId: result.documentId, agentIdentity: 'mcpagent/tool' }))
     return asText(result)
   })
 
   server.tool('memory_status', 'Get canonical memory operation status', statusSchema.shape, async (input) => {
     const typed = input as z.infer<typeof statusSchema>
-    const result = await getCanonicalMemoryStatus(
-      { tenantId: ctx.getTenantId(), captureId: typed.capture_id, operationId: typed.operation_id },
-      ctx.getEnv(),
-      ctx.getTenantId(),
-    )
+    const result = await getCanonicalMemoryStatus({ tenantId: ctx.getTenantId(), captureId: typed.capture_id, operationId: typed.operation_id }, ctx.getEnv(), ctx.getTenantId())
     ctx.getExecutionContext().waitUntil(writeAuditLog(ctx.getEnv(), 'memory.status.viewed', ctx.getTenantId(), { memoryId: result.operation.operationId, agentIdentity: 'mcpagent/tool' }))
     return asText(result)
   })
 
-  server.tool('memory_stats', 'Get canonical memory stats', {}, async () => asText(
-    await getCanonicalMemoryStats(ctx.getEnv(), ctx.getTenantId()),
-  ))
+  server.tool('memory_stats', 'Get canonical memory stats', {}, async () =>
+    asText(await getCanonicalMemoryStats(ctx.getEnv(), ctx.getTenantId())))
 }

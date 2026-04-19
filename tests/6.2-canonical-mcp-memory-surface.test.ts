@@ -152,10 +152,12 @@ describe('6.2 canonical MCP memory surface', () => {
     expect(Array.from(registry.handlers.keys()).sort()).toEqual([
       'capture_memory',
       'get_document',
+      'get_entity_timeline',
       'get_recent_memories',
       'memory_stats',
       'memory_status',
       'search_memory',
+      'trace_relationship',
     ])
     expect(result.status).toBe('deferred')
   })

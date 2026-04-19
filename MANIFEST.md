@@ -60,7 +60,9 @@ Last updated: 2026-04-18 | Session: 7.1 (Hindsight Projection Adapter)
 | src\services\bootstrap\interview.ts | 76 | createInitialState, currentQuestion, currentDomain... | ✅ |
 | src\services\canonical-capture-compat.ts | 49 | — | ✅ |
 | src\services\canonical-capture-pipeline.ts | 94 | — | ✅ |
+| src\services\canonical-composed-graph-context.ts | 48 | — | ✅ |
 | src\services\canonical-graph-projection-design.ts | 122 | GRAPHITI_DEPLOYMENT_POSTURE, GRAPHITI_RECONCILIATION_RULES, buildCanonicalGraphProjectionPlan... | ✅ |
+| src\services\canonical-graph-query.ts | 134 | — | ✅ |
 | src\services\canonical-graphiti-payload.ts | 95 | GraphitiProjectionJobContext | ✅ |
 | src\services\canonical-graphiti-projection.ts | 148 | — | ✅ |
 | src\services\canonical-graphiti-reconcile.ts | 122 | — | ✅ |
@@ -72,7 +74,7 @@ Last updated: 2026-04-18 | Session: 7.1 (Hindsight Projection Adapter)
 | src\services\canonical-hindsight-reflection.ts | 139 | CanonicalHindsightReflectionAuditAction, CanonicalHindsightReflectionRun | ✅ |
 | src\services\canonical-memory-artifacts.ts | 66 | PersistedCanonicalPayloads | ✅ |
 | src\services\canonical-memory-audit.ts | 132 | buildCanonicalCaptureAcceptedAuditBatch, buildCanonicalProjectionQueuedAuditBatch, buildCanonicalCaptureFailedAuditBatch... | ✅ |
-| src\services\canonical-memory-query.ts | 149 | — | ✅ |
+| src\services\canonical-memory-query.ts | 93 | — | ✅ |
 | src\services\canonical-memory-read-model.ts | 67 | CanonicalMemoryReadOptions, CanonicalListRow, CanonicalDocumentRow... | ✅ |
 | src\services\canonical-memory-schema.ts | 75 | CANONICAL_PROJECTION_KINDS, normalizeCanonicalBody, assertCanonicalIdentity... | ✅ |
 | src\services\canonical-memory-stats.ts | 56 | — | ✅ |
@@ -116,7 +118,7 @@ Last updated: 2026-04-18 | Session: 7.1 (Hindsight Projection Adapter)
 | src\tools\act\search.ts | 33 | searchSchema | ✅ |
 | src\tools\act\send-message.ts | 33 | sendMessageSchema | ✅ |
 | src\tools\bootstrap.ts | 104 | registerBootstrapTools | ✅ |
-| src\tools\canonical-memory.ts | 114 | registerCanonicalMemoryTools | ✅ |
+| src\tools\canonical-memory.ts | 117 | registerCanonicalMemoryTools | ✅ |
 | src\tools\memory.ts | 87 | registerMemoryTools | ✅ |
 | src\tools\recall.ts | 73 | — | ✅ |
 | src\tools\retain.ts | 57 | — | ✅ |
@@ -124,7 +126,8 @@ Last updated: 2026-04-18 | Session: 7.1 (Hindsight Projection Adapter)
 | src\types\bootstrap.ts | 76 | BootstrapStatus, BootstrapParams, InterviewDomain... | ✅ |
 | src\types\canonical-capture-pipeline.ts | 91 | CanonicalCompatibilityMode, CanonicalPipelineCaptureInput, CanonicalProjectionDispatchMessage... | ✅ |
 | src\types\canonical-graph-projection.ts | 136 | GraphitiDeploymentPostureId, GraphProjectionEpisodeKind, GraphProjectionEntityKind... | ✅ |
-| src\types\canonical-memory-query.ts | 143 | CanonicalSearchInput, CanonicalRecentInput, CanonicalDocumentInput... | ✅ |
+| src\types\canonical-graph-query.ts | 67 | TraceRelationshipInput, EntityTimelineInput, CanonicalProjectionProvenance... | ✅ |
+| src\types\canonical-memory-query.ts | 132 | CanonicalSearchInput, CanonicalRecentInput, CanonicalDocumentInput... | ✅ |
 | src\types\canonical-memory.ts | 34 | CanonicalProjectionKind, CanonicalArtifactMode, CanonicalArtifactRef... | ✅ |
 | src\types\env.ts | 64 | Env | ✅ |
 | src\types\google.ts | 53 | GoogleOAuthTokens, GoogleThread, GoogleMessage... | ✅ |

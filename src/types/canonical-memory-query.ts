@@ -1,24 +1,16 @@
 import type { CanonicalGraphProjectionStatus } from './canonical-graph-projection'
+import type { CanonicalProjectionProvenance } from './canonical-graph-query'
 
 export interface CanonicalSearchInput {
   tenantId: string
   query: string
   scope?: string | null
   limit?: number
-  mode?: 'lexical' | 'semantic'
+  mode?: 'lexical' | 'semantic' | 'graph'
 }
 
-export interface CanonicalRecentInput {
-  tenantId: string
-  scope?: string | null
-  limit?: number
-}
-
-export interface CanonicalDocumentInput {
-  tenantId: string
-  documentId: string
-}
-
+export interface CanonicalRecentInput { tenantId: string; scope?: string | null; limit?: number }
+export interface CanonicalDocumentInput { tenantId: string; documentId: string }
 export interface CanonicalMemoryStatusInput {
   tenantId: string
   captureId?: string
@@ -35,37 +27,34 @@ export interface CanonicalMemoryListItem {
   preview: string
   capturedAt: number | null
   score?: number | null
-  mode?: 'lexical' | 'semantic'
+  mode?: 'lexical' | 'semantic' | 'graph'
   recallText?: string | null
-  provenance?: {
-    projectionKind: 'hindsight'
-    captureId?: string | null
-    documentId?: string | null
-    canonicalOperationId?: string | null
-    projectionJobId?: string | null
-    projectionResultId?: string | null
-    targetRef?: string | null
-    sourceSystem?: string | null
-  } | null
+  provenance?: CanonicalProjectionProvenance | null
   semanticStatus?: {
     projectionKind: 'hindsight'
     projectionStatus: 'accepted' | 'queued' | 'completed' | 'failed' | 'unknown'
     resultStatus: 'queued' | 'completed' | 'failed' | 'missing'
     ready: boolean
   } | null
+  graphContext?: {
+    entityKey: string
+    entityLabel: string
+    relation?: string | null
+    relatedEntityKey?: string | null
+    relatedEntityLabel?: string | null
+    graphRef?: string | null
+    targetRef?: string | null
+  } | null
 }
 
 export interface CanonicalSearchResult {
   query: string
-  mode: 'lexical' | 'semantic'
+  mode: 'lexical' | 'semantic' | 'graph'
   status: 'ok' | 'partial' | 'unavailable'
   items: CanonicalMemoryListItem[]
 }
 
-export interface CanonicalRecentResult {
-  items: CanonicalMemoryListItem[]
-}
-
+export interface CanonicalRecentResult { items: CanonicalMemoryListItem[] }
 export interface CanonicalDocumentArtifact {
   artifactId: string
   filename: string | null

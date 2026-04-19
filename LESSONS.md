@@ -6,6 +6,18 @@
 
 ---
 
+## Recent Additions
+
+- **Use Canonical Graph Identity Mappings For Narrow Graph Readbacks Before Building A Router.**
+  For explicit graph and timeline reads, the smallest truthful implementation
+  can reconstruct single-hop relationship traces and ordered entity timelines
+  from `canonical_graph_identity_mappings` plus canonical capture/projection
+  metadata. That preserves canonical provenance and avoids adding a public
+  Graphiti query surface, query-side content cache, or premature Phase 9
+  retrieval router logic. Keep the surface explicit until broader routing is
+  actually in scope.
+  Ref: Session 8.3 - Graph / Timeline Query Surface.
+
 ## Zero-Knowledge & Encryption
 
 - **Cron KEK Expiry Is Silent.** Crons run at 3am while the user is asleep.

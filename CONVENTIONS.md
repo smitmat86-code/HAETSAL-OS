@@ -186,6 +186,21 @@ the ciphertext with a link to the audit record ID.
 // { memory_id: "mem_abc", operation: "recall", agent_identity: "career_coach" }
 ```
 
+### Metadata-first lifecycle alignment
+
+If a later engine lifecycle needs to be attached to an already-canonical
+operation, prefer metadata-only canonical audit events plus the existing
+operation/projection tables before adding new schema. This is the default
+alignment pattern for post-projection states such as Hindsight
+reflection/consolidation when:
+
+- the lifecycle can be described truthfully as `started` / `completed` / `failed`
+- no raw memory body is required in D1
+- the public canonical status surface only needs a small derived subsection
+
+When deriving status from those audit rows, readers must define explicit
+precedence for same-timestamp events instead of trusting timestamp order alone.
+
 ---
 
 ## Action Layer Patterns

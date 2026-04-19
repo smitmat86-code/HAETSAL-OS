@@ -70,6 +70,7 @@ Enforced structurally in `brain_v1_retain` middleware - not by prompt.
 
 ```
 Image: ghcr.io/vectorize-io/hindsight-api:0.5.2
+Upstream commit: 712a862
 Date: 2026-04-17
 Reason: API-only runtime for HAETSAL, paired with dedicated Hindsight worker
         containers and direct Neon. This is the production shape for the

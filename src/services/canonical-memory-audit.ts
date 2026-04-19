@@ -31,6 +31,15 @@ interface CanonicalHindsightProjectionAuditArgs {
     | 'memory.projection.hindsight_failed'
 }
 
+interface CanonicalHindsightReflectionAuditArgs {
+  tenantId: string
+  operationId: string
+  createdAt: number
+  action: 'memory.projection.hindsight_reflect_started'
+    | 'memory.projection.hindsight_reflect_completed'
+    | 'memory.projection.hindsight_reflect_failed'
+}
+
 export function buildCanonicalCaptureAcceptedAuditBatch(
   db: D1Database,
   args: CanonicalCaptureAcceptedArgs,
@@ -102,6 +111,23 @@ export function buildCanonicalCompatibilityAuditBatch(
 export function buildCanonicalHindsightProjectionAuditBatch(
   db: D1Database,
   args: CanonicalHindsightProjectionAuditArgs,
+): D1PreparedStatement[] {
+  return [db.prepare(
+    `INSERT INTO memory_audit
+     (id, tenant_id, created_at, operation, memory_id, provenance, domain, memory_type)
+     VALUES (?, ?, ?, ?, ?, 'hindsight', 'canonical', 'world')`,
+  ).bind(
+    crypto.randomUUID(),
+    args.tenantId,
+    args.createdAt,
+    args.action,
+    args.operationId,
+  )]
+}
+
+export function buildCanonicalHindsightReflectionAuditBatch(
+  db: D1Database,
+  args: CanonicalHindsightReflectionAuditArgs,
 ): D1PreparedStatement[] {
   return [db.prepare(
     `INSERT INTO memory_audit

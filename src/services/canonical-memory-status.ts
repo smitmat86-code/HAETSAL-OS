@@ -3,6 +3,7 @@ import type {
   CanonicalMemoryStatusInput,
   CanonicalMemoryStatusResult,
 } from '../types/canonical-memory-query'
+import { readCanonicalHindsightReflectionStatus } from './canonical-hindsight-reflection-status'
 
 interface OperationRow {
   id: string
@@ -83,6 +84,13 @@ export async function getCanonicalMemoryStatus(
   ).bind(tenantId, operation.id).all<ProjectionRow>()
   const compatibility = (projections.results ?? []).find(row => row.projection_kind === 'hindsight')
   const compatibilityStatus = normalizeCompatibilityStatus(compatibility?.result_status ?? compatibility?.status ?? null)
+  const reflection = await readCanonicalHindsightReflectionStatus({
+    env,
+    tenantId,
+    operationId: operation.id,
+    semanticReady: compatibility ? isSemanticReady(compatibility) : false,
+    projectedAt: compatibility?.result_updated_at ?? null,
+  })
 
   return {
     captureId: operation.capture_id,
@@ -116,5 +124,6 @@ export async function getCanonicalMemoryStatus(
         updatedAt: compatibility.result_updated_at,
       }
       : null,
+    reflection,
   }
 }

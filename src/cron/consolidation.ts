@@ -4,6 +4,11 @@
 // LESSON: INSERT OR IGNORE for dedup — prevents webhook + cron double-run
 
 import type { Env } from '../types/env'
+import {
+  completeCanonicalHindsightReflectionRun,
+  failCanonicalHindsightReflectionRun,
+  startCanonicalHindsightReflectionRun,
+} from '../services/canonical-hindsight-reflection'
 import { fetchAndValidateKek } from './kek'
 import { runPass1 } from './passes/pass1-contradiction'
 import { runPass2 } from './passes/pass2-bridges'
@@ -57,7 +62,15 @@ async function runForTenant(
   // If INSERT was ignored (dedup), skip this tenant
   if (!insertResult.meta.changes) return
 
+  let reflectionRun: Awaited<ReturnType<typeof startCanonicalHindsightReflectionRun>> | null = null
+
   try {
+    reflectionRun = await startCanonicalHindsightReflectionRun({
+      env,
+      tenantId,
+      bankId: hindsightTenantId,
+      runId,
+    })
     // Passes run sequentially — each awaited before next
     const p1 = await runPass1(hindsightTenantId, kek, env)
     const p2 = await runPass2(hindsightTenantId, tenantId, kek, env)
@@ -71,9 +84,15 @@ async function runForTenant(
            pass3_patterns = ?, pass4_gaps = ?
        WHERE id = ?`,
     ).bind(Date.now(), p1, p2, p3, p4, runId).run()
+    if (reflectionRun) {
+      await completeCanonicalHindsightReflectionRun(reflectionRun, env)
+    }
   } catch (err) {
     await env.D1_US.prepare(
       `UPDATE consolidation_runs SET status = 'failed', completed_at = ?, error_message = ? WHERE id = ?`,
     ).bind(Date.now(), (err as Error).message?.slice(0, 500), runId).run()
+    if (reflectionRun) {
+      await failCanonicalHindsightReflectionRun(reflectionRun, env)
+    }
   }
 }

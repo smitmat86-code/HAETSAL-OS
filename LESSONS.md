@@ -152,6 +152,15 @@
   ferry raw content across the queue boundary.
   Ref: Session 7.1 - Hindsight projection adapter.
 
+- **When Lifecycle Audits Share A Timestamp, Status Readers Need Explicit Precedence.**
+  Reflection/consolidation alignment in Session 7.3 records metadata-only audit
+  events such as `..._started` and `..._completed` on the same canonical
+  operation. In fast test/runtime paths those rows can land in the same
+  millisecond. Any status reader that assumes `ORDER BY created_at DESC` is
+  enough can misreport `queued` after completion. Read-side ranking must give
+  `completed` precedence over `failed`, and `failed` over `started`, when
+  timestamps tie.
+
 - **D1 Batch for Every (Operation + Audit) Pair.**
   Audit writes must be atomic with their operations. If the audit write fails,
   the operation must fail too. Use `env.D1_US.batch([...])` for every pair.

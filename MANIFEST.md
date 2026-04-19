@@ -24,7 +24,7 @@ Last updated: 2026-04-18 | Session: 7.1 (Hindsight Projection Adapter)
 | src\agents\helpers.ts | 49 | MODEL_CONTEXT_LIMIT, FLUSH_THRESHOLD, shouldFlush | ✅ |
 | src\agents\types.ts | 73 | EpistemicMemoryType, AgentType, AgentContext... | ✅ |
 | src\cron\brief-sections.ts | 92 | — | ✅ |
-| src\cron\consolidation.ts | 80 | — | ✅ |
+| src\cron\consolidation.ts | 99 | — | ✅ |
 | src\cron\heartbeat.ts | 62 | — | ✅ |
 | src\cron\hindsight-operation-poll.ts | 117 | — | ✅ |
 | src\cron\hindsight-operation-reconcile.ts | 54 | — | ✅ |
@@ -64,13 +64,15 @@ Last updated: 2026-04-18 | Session: 7.1 (Hindsight Projection Adapter)
 | src\services\canonical-hindsight-projection-state.ts | 118 | HindsightProjectionJobRow | ✅ |
 | src\services\canonical-hindsight-projection.ts | 137 | — | ✅ |
 | src\services\canonical-hindsight-reconcile.ts | 58 | — | ✅ |
+| src\services\canonical-hindsight-reflection-status.ts | 124 | — | ✅ |
+| src\services\canonical-hindsight-reflection.ts | 139 | CanonicalHindsightReflectionAuditAction, CanonicalHindsightReflectionRun | ✅ |
 | src\services\canonical-memory-artifacts.ts | 66 | PersistedCanonicalPayloads | ✅ |
-| src\services\canonical-memory-audit.ts | 118 | buildCanonicalCaptureAcceptedAuditBatch, buildCanonicalProjectionQueuedAuditBatch, buildCanonicalCaptureFailedAuditBatch... | ✅ |
+| src\services\canonical-memory-audit.ts | 144 | buildCanonicalCaptureAcceptedAuditBatch, buildCanonicalProjectionQueuedAuditBatch, buildCanonicalCaptureFailedAuditBatch... | ✅ |
 | src\services\canonical-memory-query.ts | 149 | — | ✅ |
 | src\services\canonical-memory-read-model.ts | 67 | CanonicalMemoryReadOptions, CanonicalListRow, CanonicalDocumentRow... | ✅ |
 | src\services\canonical-memory-schema.ts | 75 | CANONICAL_PROJECTION_KINDS, normalizeCanonicalBody, assertCanonicalIdentity... | ✅ |
 | src\services\canonical-memory-stats.ts | 56 | — | ✅ |
-| src\services\canonical-memory-status.ts | 121 | — | ✅ |
+| src\services\canonical-memory-status.ts | 130 | — | ✅ |
 | src\services\canonical-memory-types.ts | 52 | CanonicalChunkPlan, CanonicalArtifactPlan, NormalizedCanonicalCapture... | ✅ |
 | src\services\canonical-memory.ts | 114 | — | ✅ |
 | src\services\canonical-projection-dispatch.ts | 92 | — | ✅ |
@@ -117,7 +119,7 @@ Last updated: 2026-04-18 | Session: 7.1 (Hindsight Projection Adapter)
 | src\types\action.ts | 105 | CapabilityClass, AuthorizationLevel, AUTH_LEVEL_ORDINAL... | ✅ |
 | src\types\bootstrap.ts | 76 | BootstrapStatus, BootstrapParams, InterviewDomain... | ✅ |
 | src\types\canonical-capture-pipeline.ts | 91 | CanonicalCompatibilityMode, CanonicalPipelineCaptureInput, CanonicalProjectionDispatchMessage... | ✅ |
-| src\types\canonical-memory-query.ts | 131 | CanonicalSearchInput, CanonicalRecentInput, CanonicalDocumentInput... | ✅ |
+| src\types\canonical-memory-query.ts | 140 | CanonicalSearchInput, CanonicalRecentInput, CanonicalDocumentInput... | ✅ |
 | src\types\canonical-memory.ts | 34 | CanonicalProjectionKind, CanonicalArtifactMode, CanonicalArtifactRef... | ✅ |
 | src\types\env.ts | 62 | Env | ✅ |
 | src\types\google.ts | 53 | GoogleOAuthTokens, GoogleThread, GoogleMessage... | ✅ |
@@ -219,6 +221,7 @@ No active specs. All Phases 1–3 + 2.4a complete (13 specs in `specs/completed/
 
 ```
 Image: ghcr.io/vectorize-io/hindsight-api:0.5.2
+Upstream commit: 712a862
 Date pinned: 2026-04-17
 Reason: Production HAETSAL topology now uses the API-only Hindsight image,
         dedicated Hindsight worker containers, direct Neon, and D1-backed

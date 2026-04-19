@@ -85,6 +85,14 @@ export interface CanonicalDocumentResult {
   artifact: CanonicalDocumentArtifact | null
 }
 
+export interface CanonicalReflectionStatus {
+  mode: 'hindsight'
+  status: 'pending' | 'queued' | 'completed' | 'failed'
+  targetRef?: string | null
+  updatedAt?: number | null
+  errorMessage?: string | null
+}
+
 export interface CanonicalMemoryStatusResult {
   captureId: string
   operation: {
@@ -108,6 +116,7 @@ export interface CanonicalMemoryStatusResult {
     semanticReady: boolean
     updatedAt: number | null
   }>
+  reflection: CanonicalReflectionStatus | null
   compatibility: {
     mode: 'current_hindsight'
     status: 'queued' | 'retained' | 'failed'

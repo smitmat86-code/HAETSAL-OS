@@ -5,6 +5,32 @@
 
 ---
 
+## Session 7.3 - 2026-04-18
+
+**Spec:** Phase 7.3 - Reflection / Consolidation Alignment
+**Built:**
+- `src/services/canonical-hindsight-reflection.ts`, `canonical-hindsight-reflection-status.ts` - narrow canonical alignment layer for Hindsight reflection/consolidation audit writes plus truthful read-side status derivation
+- `src/cron/consolidation.ts` - existing 3.3 consolidation runner now marks canonical reflection `started` / `completed` / `failed` state for eligible completed Hindsight-backed operations without changing the scheduler model
+- `src/services/canonical-memory-status.ts`, `src/services/canonical-memory-audit.ts`, `src/types/canonical-memory-query.ts` - canonical `memory_status` now exposes a small top-level `reflection` subsection derived from metadata-only audit rows and existing consolidation-run state
+- `tests/7.3-reflection-consolidation-alignment.test.ts` - pending/completed reflection truth, failed-then-retried reflection truth, and “no reflection before semantic projection completion” coverage
+- `LESSONS.md`, `CONVENTIONS.md`, `README.md`, `MANIFEST.md`, `hindsight/Dockerfile`, `specs/completed/7.3-reflection-consolidation-alignment.md` - checkout-closeout docs refreshed, Hindsight upstream release commit documented, and spec lifecycle completed
+**Decisions:**
+- **7.3 reuses the canonical audit lane instead of adding schema.** Reflection/consolidation status is attached to canonical operations through metadata-only audit events and the existing `consolidation_runs` table, so no `1016` migration was required.
+- **The consolidation scheduler stays in place.** Session 7.3 aligns the proven 3.3 runtime instead of introducing a new reflection scheduler or a new public/internal HTTP surface.
+- **Read-side status gives same-timestamp lifecycle events explicit precedence.** When `started` and `completed` land in the same millisecond, canonical status ranks `completed` above `failed`, and `failed` above `started`, so reflection truth stays stable.
+**Verification:**
+- `npx vitest run tests/7.3-reflection-consolidation-alignment.test.ts` - passed
+- `npx tsx scripts/postflight-check.ts` - passed
+- `npx vitest run` - passed (`311 passed`, `1 skipped`)
+- `npx tsx scripts/generate-manifest.ts` - passed
+- `npx tsx scripts/postflight-check.ts` - passed (final checkout run)
+**Hindsight Pin:** documented upstream release commit `712a862` for `ghcr.io/vectorize-io/hindsight-api:0.5.2`
+**Fixture Data:** Reused canonical note/projection fixtures and 3.3 consolidation harness patterns; added 7.3 coverage for reflection pending/completed/failed-retry lifecycle truth
+**Blockers:** None
+**Next:** No active spec remains in `specs/active/`; next work should start from the completed 7.3 baseline
+
+---
+
 ## Session 7.2 - 2026-04-18
 
 **Spec:** Phase 7.2 - Semantic Recall Through Canonical Interface

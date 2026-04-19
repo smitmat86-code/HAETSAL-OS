@@ -876,3 +876,17 @@
 **Next:** Phase 9 only when explicitly requested; Session 8.3 stops at explicit graph/timeline reads plus the narrow graph-mode composed path
 
 ---
+## Session OPS.5 - 2026-04-19
+
+**Spec:** Operational - checkout workflow alignment for active specs
+**Built:**
+- `scripts/checkout.ts` - checkout now auto-detects the single active spec in `specs/active/` and moves it to `specs/completed/` without requiring `--spec` / `--move-spec`
+**Decisions:**
+- A plain session checkout should respect the repo governance workflow when there is exactly one active spec; requiring extra flags in that case creates avoidable operator error and breaks the intended finish-the-session flow.
+- Explicit `--spec` remains supported, but single-active-spec inference is now the default behavior.
+**Verification:**
+- `npm run checkout` - now reaches spec governance correctly; currently blocked by unrelated `specs/active/9.1-multi-mode-memory-router.md` missing `## As-Built Record`
+**Blockers:** None
+**Next:** Once the unrelated 9.1 active spec is lifecycle-complete, plain checkout can infer the lone active spec and move it without extra flags
+
+---

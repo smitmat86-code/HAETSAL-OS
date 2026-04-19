@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 
-import { existsSync, readFileSync, renameSync } from 'fs'
+import { existsSync, readFileSync, readdirSync, renameSync } from 'fs'
 import { basename, dirname, join } from 'path'
 import { spawnSync } from 'child_process'
 import { fileURLToPath } from 'url'
@@ -30,6 +30,12 @@ function option(name: string): string | null {
   return index > -1 ? basename(process.argv[index + 1] ?? '') : null
 }
 
+function activeSpecNames(): string[] {
+  return readdirSync(join(ROOT, 'specs', 'active'), { withFileTypes: true })
+    .filter(entry => entry.isFile() && entry.name !== '.gitkeep')
+    .map(entry => entry.name)
+}
+
 function ensureSessionLogTouched(): void {
   if (!capture('git status --porcelain -- SESSION_LOG.md')) {
     fail('SESSION_LOG.md is not updated. Append the session entry before running checkout.')
@@ -53,8 +59,15 @@ function warnOptionalDocs(changed: string[]): void {
   }
 }
 
+function resolveSpecName(): string | null {
+  const explicit = option('--spec')
+  if (explicit) return explicit
+  const active = activeSpecNames()
+  return active.length === 1 ? active[0]! : null
+}
+
 function handleSpecLifecycle(): void {
-  const specName = option('--spec')
+  const specName = resolveSpecName()
   if (!specName) return
   const active = join(ROOT, 'specs', 'active', specName)
   const completed = join(ROOT, 'specs', 'completed', specName)
@@ -63,10 +76,7 @@ function handleSpecLifecycle(): void {
   if (!readFileSync(current, 'utf8').includes('## As-Built Record')) {
     fail(`Spec is missing "## As-Built Record": ${specName}`)
   }
-  if (existsSync(active) && !process.argv.includes('--move-spec')) {
-    fail(`Spec is still active. Re-run with "--move-spec" after docs are complete: ${specName}`)
-  }
-  if (existsSync(active) && process.argv.includes('--move-spec')) {
+  if (existsSync(active)) {
     renameSync(active, completed)
     console.log(`\nMoved spec to completed: specs/completed/${specName}`)
   }

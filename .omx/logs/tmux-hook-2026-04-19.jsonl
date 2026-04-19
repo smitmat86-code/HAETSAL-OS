@@ -172,3 +172,13 @@
 {"timestamp":"2026-04-19T13:10:21.332Z","type":"auto_nudge_skipped","reason":"unmanaged_session"}
 {"timestamp":"2026-04-19T13:14:03.546Z","type":"tmux_hook","mode":"ralph","reason":"invalid_config","turn_id":"019da5dd-5dd9-77c0-8487-5bef7643fc6d","thread_id":"019da5bf-3614-75b3-ae60-8afa9fc5b049","target":null,"dry_run":false,"sent":false,"event":"injection_skipped"}
 {"timestamp":"2026-04-19T13:14:03.749Z","type":"auto_nudge_skipped","reason":"unmanaged_session"}
+{"timestamp":"2026-04-19T13:15:24.322Z","type":"tmux_hook","mode":"ralph","reason":"invalid_config","turn_id":"019da5e1-4fb2-77e3-b497-f421653d147b","thread_id":"019da5bf-3614-75b3-ae60-8afa9fc5b049","target":null,"dry_run":false,"sent":false,"event":"injection_skipped"}
+{"timestamp":"2026-04-19T13:15:24.472Z","type":"auto_nudge_skipped","reason":"unmanaged_session"}
+{"timestamp":"2026-04-19T13:28:42.994Z","type":"tmux_hook","mode":"ralph","reason":"invalid_config","turn_id":"019da5ed-c5f3-7093-8d41-f20d5d826ba1","thread_id":"019da5ed-c535-7a70-a792-f572334f3462","target":null,"dry_run":false,"sent":false,"event":"injection_skipped"}
+{"timestamp":"2026-04-19T13:28:43.141Z","type":"auto_nudge_skipped","reason":"unmanaged_session"}
+{"timestamp":"2026-04-19T13:50:56.852Z","type":"tmux_hook","mode":"ralph","reason":"invalid_config","turn_id":"019da5ed-c53b-7152-bbba-2f05ca45c256","thread_id":"019da5ed-c049-7f31-a414-6db47c7a50f0","target":null,"dry_run":false,"sent":false,"event":"injection_skipped"}
+{"timestamp":"2026-04-19T13:50:57.079Z","type":"auto_nudge_skipped","reason":"unmanaged_session"}
+{"timestamp":"2026-04-19T16:27:35.712Z","type":"tmux_hook","mode":"ralph","reason":"invalid_config","turn_id":"019da68f-bab1-7cf1-8f5e-051484404bff","thread_id":"019da5ed-c049-7f31-a414-6db47c7a50f0","target":null,"dry_run":false,"sent":false,"event":"injection_skipped"}
+{"timestamp":"2026-04-19T16:27:35.817Z","type":"auto_nudge_skipped","reason":"unmanaged_session"}
+{"timestamp":"2026-04-19T16:28:40.066Z","type":"tmux_hook","mode":"ralph","reason":"invalid_config","turn_id":"019da692-4684-7a61-8860-532bbc5d194b","thread_id":"019da5ed-c049-7f31-a414-6db47c7a50f0","target":null,"dry_run":false,"sent":false,"event":"injection_skipped"}
+{"timestamp":"2026-04-19T16:28:40.178Z","type":"auto_nudge_skipped","reason":"unmanaged_session"}

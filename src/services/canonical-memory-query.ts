@@ -6,6 +6,7 @@ import { applyCanonicalRoute } from './canonical-source-attribution'
 import { searchCanonicalComposedMemory, searchCanonicalGraphMemory } from './canonical-composed-graph-context'
 import { searchCanonicalSemanticMemory } from './canonical-semantic-recall'
 import { parseBrainMemoryRolloutAttribution } from './external-client-memory'
+import { parseGoogleSourceReadAttribution } from './google-source-read-contract'
 
 async function listCanonicalRows(env: Env, tenantId: string, scope: string | null, limit: number): Promise<CanonicalListRow[]> {
   const rows = await env.D1_US.prepare(
@@ -28,6 +29,10 @@ function toMemoryListItem(row: CanonicalListRow, body: string | null, score?: nu
     capturedAt: row.captured_at,
     mode: 'raw',
     brainMemory: parseBrainMemoryRolloutAttribution({
+      sourceSystem: row.source_system,
+      sourceRef: row.source_ref,
+    }),
+    googleSource: parseGoogleSourceReadAttribution({
       sourceSystem: row.source_system,
       sourceRef: row.source_ref,
     }),
@@ -105,6 +110,10 @@ export async function getCanonicalDocument(input: CanonicalDocumentInput, env: E
       sourceSystem: row.source_system,
       sourceRef: row.source_ref,
       artifactRef: row.r2_key,
+    }),
+    googleSource: parseGoogleSourceReadAttribution({
+      sourceSystem: row.source_system,
+      sourceRef: row.source_ref,
     }),
     body: await readCanonicalDocumentBody(env, row.body_r2_key, options.tmk),
     chunkCount: row.chunk_count,

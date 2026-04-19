@@ -6,6 +6,7 @@ import type {
   MemoryQueryMode,
 } from '../types/canonical-memory-query'
 import { parseBrainMemoryRolloutAttribution } from './external-client-memory'
+import { parseGoogleSourceReadAttribution } from './google-source-read-contract'
 
 function projectionKindOf(item: CanonicalMemoryListItem): 'hindsight' | 'graphiti' | null {
   if (item.provenance?.projectionKind) return item.provenance.projectionKind
@@ -51,6 +52,10 @@ export function applyCanonicalRoute(
       ...item,
       mode: route.mode,
       brainMemory: item.brainMemory ?? parseBrainMemoryRolloutAttribution({
+        sourceSystem: item.sourceSystem,
+        sourceRef: item.sourceRef,
+      }),
+      googleSource: item.googleSource ?? parseGoogleSourceReadAttribution({
         sourceSystem: item.sourceSystem,
         sourceRef: item.sourceRef,
       }),

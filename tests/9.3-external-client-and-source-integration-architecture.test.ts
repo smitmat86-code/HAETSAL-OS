@@ -29,8 +29,9 @@ describe('9.3 external client and source integration architecture', () => {
     const sourceRead = getExternalBrainSurface('brain-sources-read')
     const actions = getExternalBrainSurface('brain-actions')
 
-    expect(sourceRead.status).toBe('planned')
+    expect(sourceRead.status).toBe('live')
     expect(sourceRead.operations.every((operation) => operation.actionClass === 'source-read')).toBe(true)
+    expect(sourceRead.operations.some((operation) => operation.live)).toBe(true)
     expect(actions.status).toBe('deferred')
     expect(actions.operations.some((operation) => operation.actionClass === 'source-write')).toBe(true)
     expect(actions.operations.every((operation) => operation.live === false)).toBe(true)
@@ -113,9 +114,14 @@ describe('9.3 external client and source integration architecture', () => {
 
   it('keeps the declared action classes aligned with the surfaced registries', () => {
     const memoryToolSet = new Set(BRAIN_MEMORY_TOOL_NAMES)
-    const liveSurfaceIds = EXTERNAL_BRAIN_SURFACES
+    const liveMemorySurfaceIds = EXTERNAL_BRAIN_SURFACES
+      .filter((surface) => surface.id === 'brain-memory')
+      .flatMap((surface) => surface.operations.filter((operation) => operation.live).map((operation) => operation.id))
+    const liveSourceReadSurfaceIds = EXTERNAL_BRAIN_SURFACES
+      .filter((surface) => surface.id === 'brain-sources-read')
       .flatMap((surface) => surface.operations.filter((operation) => operation.live).map((operation) => operation.id))
 
-    expect(liveSurfaceIds.every((id) => memoryToolSet.has(id))).toBe(true)
+    expect(liveMemorySurfaceIds.every((id) => memoryToolSet.has(id))).toBe(true)
+    expect(liveSourceReadSurfaceIds.every((id) => !memoryToolSet.has(id))).toBe(true)
   })
 })

@@ -74,30 +74,32 @@ Last updated: 2026-04-18 | Session: 7.1 (Hindsight Projection Adapter)
 | src\services\canonical-hindsight-reflection.ts | 139 | CanonicalHindsightReflectionAuditAction, CanonicalHindsightReflectionRun | ✅ |
 | src\services\canonical-memory-artifacts.ts | 66 | PersistedCanonicalPayloads | ✅ |
 | src\services\canonical-memory-audit.ts | 132 | buildCanonicalCaptureAcceptedAuditBatch, buildCanonicalProjectionQueuedAuditBatch, buildCanonicalCaptureFailedAuditBatch... | ✅ |
-| src\services\canonical-memory-query.ts | 125 | — | ✅ |
+| src\services\canonical-memory-query.ts | 134 | — | ✅ |
 | src\services\canonical-memory-read-model.ts | 69 | CanonicalMemoryReadOptions, CanonicalListRow, CanonicalDocumentRow... | ✅ |
 | src\services\canonical-memory-router.ts | 120 | normalizeMemoryQueryMode, decideCanonicalMemoryRoute | ✅ |
 | src\services\canonical-memory-schema.ts | 75 | CANONICAL_PROJECTION_KINDS, normalizeCanonicalBody, assertCanonicalIdentity... | ✅ |
 | src\services\canonical-memory-stats.ts | 56 | — | ✅ |
-| src\services\canonical-memory-status.ts | 126 | — | ✅ |
+| src\services\canonical-memory-status.ts | 128 | — | ✅ |
 | src\services\canonical-memory-types.ts | 52 | CanonicalChunkPlan, CanonicalArtifactPlan, NormalizedCanonicalCapture... | ✅ |
 | src\services\canonical-memory.ts | 117 | — | ✅ |
 | src\services\canonical-projection-dispatch.ts | 92 | — | ✅ |
 | src\services\canonical-semantic-linkback.ts | 146 | CanonicalSemanticLinkback, extractSemanticLookup | ✅ |
 | src\services\canonical-semantic-recall.ts | 135 | — | ✅ |
-| src\services\canonical-source-attribution.ts | 61 | buildCanonicalSourceAttribution, applyCanonicalRoute | ✅ |
+| src\services\canonical-source-attribution.ts | 66 | buildCanonicalSourceAttribution, applyCanonicalRoute | ✅ |
 | src\services\chief-of-staff-context.ts | 107 | — | ✅ |
 | src\services\delivery\obsidian-write.ts | 52 | — | ✅ |
 | src\services\delivery\sms.ts | 35 | — | ✅ |
 | src\services\delivery\telegram.ts | 31 | — | ✅ |
-| src\services\external-brain-contract.ts | 122 | EXTERNAL_BRAIN_SURFACES, EXTERNAL_BRAIN_CLIENT_MAPPINGS, EXTERNAL_CLIENT_FIXTURES... | ✅ |
+| src\services\external-brain-contract.ts | 123 | EXTERNAL_BRAIN_SURFACES, EXTERNAL_BRAIN_CLIENT_MAPPINGS, EXTERNAL_CLIENT_FIXTURES... | ✅ |
 | src\services\external-client-memory-write.ts | 51 | — | ✅ |
 | src\services\external-client-memory.ts | 137 | BRAIN_MEMORY_SURFACE_PROFILE, EXTERNAL_CLIENT_CAPTURE_PATTERNS, usesBrainMemoryRollout... | ✅ |
-| src\services\google\calendar.ts | 62 | — | ✅ |
-| src\services\google\drive.ts | 74 | ObsidianFrontmatter, parseObsidianFrontmatter, extractWikilinks | ✅ |
-| src\services\google\gmail.ts | 84 | — | ✅ |
+| src\services\google\calendar.ts | 82 | extractEventArtifact | ✅ |
+| src\services\google\drive.ts | 89 | ObsidianFrontmatter, parseObsidianFrontmatter, extractWikilinks | ✅ |
+| src\services\google\gmail.ts | 103 | extractThreadArtifact | ✅ |
 | src\services\google\oauth.ts | 115 | — | ✅ |
 | src\services\google\webhook.ts | 43 | — | ✅ |
+| src\services\google-source-read-contract.ts | 72 | GOOGLE_SOURCE_READ_PROFILE, googleSourceUrl, buildGoogleSourceRef... | ✅ |
+| src\services\google-source-read.ts | 110 | — | ✅ |
 | src\services\hindsight-client.ts | 115 | HindsightClient, createHindsightClient | ✅ |
 | src\services\hindsight-formatters.ts | 30 | buildHindsightDocumentId, buildHindsightTags, buildRetainContext | ✅ |
 | src\services\hindsight-ops-webhooks.ts | 37 | HindsightWebhookHealth | ✅ |
@@ -134,22 +136,23 @@ Last updated: 2026-04-18 | Session: 7.1 (Hindsight Projection Adapter)
 | src\types\canonical-capture-pipeline.ts | 91 | CanonicalCompatibilityMode, CanonicalPipelineCaptureInput, CanonicalProjectionDispatchMessage... | ✅ |
 | src\types\canonical-graph-projection.ts | 136 | GraphitiDeploymentPostureId, GraphProjectionEpisodeKind, GraphProjectionEntityKind... | ✅ |
 | src\types\canonical-graph-query.ts | 67 | TraceRelationshipInput, EntityTimelineInput, CanonicalProjectionProvenance... | ✅ |
-| src\types\canonical-memory-query.ts | 86 | MemoryQueryMode, MemoryQueryModePreference, CanonicalMemoryRouteDecision... | ✅ |
+| src\types\canonical-memory-query.ts | 90 | MemoryQueryMode, MemoryQueryModePreference, CanonicalMemoryRouteDecision... | ✅ |
 | src\types\canonical-memory.ts | 34 | CanonicalProjectionKind, CanonicalArtifactMode, CanonicalArtifactRef... | ✅ |
 | src\types\chief-of-staff-context.ts | 60 | ContextBundleIntent, ContextConfidenceLevel, PrepareContextForAgentInput... | ✅ |
 | src\types\env.ts | 64 | Env | ✅ |
 | src\types\external-brain.ts | 89 | BrainSurfaceId, BrainSurfaceStatus, BrainRiskLevel... | ✅ |
 | src\types\external-client-memory.ts | 71 | ExternalClientCaptureMode, BrainMemorySurfaceProfile, ExternalClientCaptureInput... | ✅ |
+| src\types\google-source-read.ts | 29 | GoogleSourceKind, GoogleSourceRef, GoogleSourceReadAttribution... | ✅ |
 | src\types\google.ts | 53 | GoogleOAuthTokens, GoogleThread, GoogleMessage... | ✅ |
 | src\types\hindsight.ts | 103 | HindsightRetainItem, HindsightRetainRequest, HindsightRetainResponse... | ✅ |
-| src\types\ingestion.ts | 71 | IngestionSource, IngestionArtifact, SalienceResult... | ✅ |
+| src\types\ingestion.ts | 72 | IngestionSource, IngestionArtifact, SalienceResult... | ✅ |
 | src\types\tenant.ts | 30 | TenantContext, TenantRow | ✅ |
 | src\types\tools.ts | 59 | RetainInput, RetainOutput, RecallInput... | ✅ |
 | src\workers\action\index.ts | 105 | — | ✅ |
 | src\workers\ingestion\bootstrap-handlers.ts | 91 | — | ✅ |
 | src\workers\ingestion\canonical-projection-consumer.ts | 60 | — | ✅ |
 | src\workers\ingestion\consumer.ts | 115 | — | ✅ |
-| src\workers\ingestion\handlers.ts | 104 | — | ✅ |
+| src\workers\ingestion\handlers.ts | 110 | — | ✅ |
 | src\workers\ingestion\retain-consumer.ts | 21 | — | ✅ |
 | src\workers\mcpagent\do\HindsightContainer.ts | 149 | HINDSIGHT_PING_ENDPOINT, HINDSIGHT_WORKER_PING_ENDPOINT, useDedicatedHindsightWorkers... | ✅ |
 | src\workers\mcpagent\do\identity.ts | 13 | MCP_STREAMABLE_HTTP_PREFIX, getMcpAgentObjectName, getMcpAgentObjectId | ✅ |

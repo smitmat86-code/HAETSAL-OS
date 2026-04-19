@@ -3,6 +3,7 @@ import type { CanonicalMemoryStatusInput, CanonicalMemoryStatusResult } from '..
 import { buildCanonicalGraphProjectionStatus } from './canonical-graph-projection-design'
 import { readCanonicalHindsightReflectionStatus } from './canonical-hindsight-reflection-status'
 import { parseBrainMemoryRolloutAttribution } from './external-client-memory'
+import { parseGoogleSourceReadAttribution } from './google-source-read-contract'
 
 interface OperationRow {
   id: string; capture_id: string; operation_type: string; status: string; created_at: number; updated_at: number
@@ -82,6 +83,7 @@ export async function getCanonicalMemoryStatus(input: CanonicalMemoryStatusInput
     title: operation.title,
     capturedAt: operation.captured_at,
     brainMemory: parseBrainMemoryRolloutAttribution({ sourceSystem: operation.source_system, sourceRef: operation.source_ref }),
+    googleSource: parseGoogleSourceReadAttribution({ sourceSystem: operation.source_system, sourceRef: operation.source_ref }),
     operation: {
       operationId: operation.id,
       operationType: operation.operation_type,

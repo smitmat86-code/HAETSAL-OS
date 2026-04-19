@@ -18,23 +18,31 @@ export async function fetchEvent(
   return await res.json() as GoogleCalendarEvent
 }
 
+export async function listRecentlyUpdatedEventIds(
+  accessToken: string,
+  updatedSinceMs: number,
+  maxResults: number = 10,
+): Promise<string[]> {
+  const updatedMin = new Date(updatedSinceMs).toISOString()
+  const res = await fetch(
+    `${CALENDAR_API}?singleEvents=true&maxResults=${maxResults}&updatedMin=${encodeURIComponent(updatedMin)}`,
+    { headers: { Authorization: `Bearer ${accessToken}` } },
+  )
+  if (!res.ok) return []
+  const data = await res.json() as { items?: Array<{ id: string }> }
+  return data.items?.map((event) => event.id) ?? []
+}
+
 function getEventDurationMinutes(event: GoogleCalendarEvent): number {
   const start = event.start.dateTime ? new Date(event.start.dateTime).getTime() : 0
   const end = event.end.dateTime ? new Date(event.end.dateTime).getTime() : 0
   return (end - start) / 60_000
 }
 
-/**
- * Fetch and extract a Calendar event for ingestion
- * Returns null if event < 15 minutes (skip short blocks)
- * PII: attendee count only, no names/emails
- */
-export async function fetchAndExtractEvent(
-  eventId: string, accessToken: string, tenantId: string,
-): Promise<IngestionArtifact | null> {
-  const event = await fetchEvent(eventId, accessToken)
-  if (!event) return null
-
+export function extractEventArtifact(
+  event: GoogleCalendarEvent,
+  tenantId: string,
+): IngestionArtifact | null {
   const durationMinutes = getEventDurationMinutes(event)
   if (durationMinutes < 15) return null
 
@@ -55,7 +63,19 @@ export async function fetchAndExtractEvent(
     source: 'calendar',
     content,
     occurredAt,
-    domain: 'career', // Calendar events default to career domain
+    domain: 'career',
     provenance: 'calendar',
   }
+}
+
+/**
+ * Fetch and extract a Calendar event for ingestion
+ * Returns null if event < 15 minutes (skip short blocks)
+ * PII: attendee count only, no names/emails
+ */
+export async function fetchAndExtractEvent(
+  eventId: string, accessToken: string, tenantId: string,
+): Promise<IngestionArtifact | null> {
+  const event = await fetchEvent(eventId, accessToken)
+  return event ? extractEventArtifact(event, tenantId) : null
 }

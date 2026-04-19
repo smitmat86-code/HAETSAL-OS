@@ -19,6 +19,19 @@ export async function fetchThread(
   return await res.json() as GoogleThread
 }
 
+export async function listRecentThreadIds(
+  accessToken: string,
+  maxResults: number = 10,
+): Promise<string[]> {
+  const res = await fetch(
+    `${GMAIL_API}/threads?maxResults=${maxResults}&q=${encodeURIComponent('newer_than:7d')}`,
+    { headers: { Authorization: `Bearer ${accessToken}` } },
+  )
+  if (!res.ok) return []
+  const data = await res.json() as { threads?: Array<{ id: string }> }
+  return data.threads?.map((thread) => thread.id) ?? []
+}
+
 function extractMessageText(msg: GoogleMessage): string {
   // Try plain text body
   if (msg.payload.body?.data) {
@@ -49,17 +62,12 @@ function inferEmailDomain(messages: GoogleMessage[]): string {
   return 'general'
 }
 
-/**
- * Fetch and extract a Gmail thread for ingestion
- * Returns null if thread has <2 messages (single-message = skip)
- */
-export async function fetchAndExtractThread(
-  threadId: string, accessToken: string, tenantId: string,
-): Promise<IngestionArtifact | null> {
-  const thread = await fetchThread(threadId, accessToken)
-  if (!thread || !thread.messages || thread.messages.length < 2) return null
+export function extractThreadArtifact(
+  thread: GoogleThread,
+  tenantId: string,
+): IngestionArtifact | null {
+  if (!thread.messages || thread.messages.length < 2) return null
 
-  // Take last 3 messages, extract text, concatenate
   const lastMessages = thread.messages.slice(-3)
   const parts = lastMessages.map(msg => {
     const from = getHeader(msg, 'From')
@@ -80,4 +88,15 @@ export async function fetchAndExtractThread(
     domain,
     provenance: 'email',
   }
+}
+
+/**
+ * Fetch and extract a Gmail thread for ingestion
+ * Returns null if thread has <2 messages (single-message = skip)
+ */
+export async function fetchAndExtractThread(
+  threadId: string, accessToken: string, tenantId: string,
+): Promise<IngestionArtifact | null> {
+  const thread = await fetchThread(threadId, accessToken)
+  return thread ? extractThreadArtifact(thread, tenantId) : null
 }

@@ -30,6 +30,21 @@ export async function downloadDriveFile(
   return await res.text()
 }
 
+export async function downloadDriveDocument(
+  file: Pick<GoogleDriveFile, 'id' | 'mimeType'>,
+  accessToken: string,
+): Promise<string | null> {
+  if (file.mimeType === 'application/vnd.google-apps.document') {
+    const res = await fetch(
+      `${DRIVE_API}/${file.id}/export?mimeType=${encodeURIComponent('text/plain')}`,
+      { headers: { Authorization: `Bearer ${accessToken}` } },
+    )
+    if (!res.ok) return null
+    return await res.text()
+  }
+  return downloadDriveFile(file.id, accessToken)
+}
+
 export interface ObsidianFrontmatter {
   brainFlag: boolean
   generatedByBrain: boolean

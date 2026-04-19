@@ -1002,3 +1002,38 @@
 **Next:** Session 9.5 or later can build selective `brain-sources-read` on top of the now-concrete `brain-memory` rollout without widening into a second brain or transcript-default retention
 
 ---
+## Session 9.5 - 2026-04-19
+
+**Spec:** Phase 9.5 - Google Source-Read Ingestion Rollout
+**Built:**
+- `src/types/google-source-read.ts` - typed `brain-sources-read` Google rollout contract
+- `src/services/google-source-read-contract.ts` - read-only Google source profile plus provenance-rich source-ref encoding/parsing
+- `src/services/google-source-read.ts` - shared Gmail / Calendar / Drive selective source-read orchestration on top of the existing Google and canonical retain plumbing
+- `src/services/google/gmail.ts` - additive recent-thread listing plus shared extraction helper reuse
+- `src/services/google/calendar.ts` - additive recent-event listing plus shared extraction helper reuse
+- `src/services/google/drive.ts` - Docs export/download helper for explicit-inclusion capture
+- `src/workers/ingestion/handlers.ts` - Gmail and Calendar queue handlers now flow through the `brain-sources-read` rollout layer
+- `src/services/canonical-memory-query.ts`, `src/services/canonical-memory-status.ts`, `src/services/canonical-source-attribution.ts`, `src/types/canonical-memory-query.ts` - canonical reads now expose parsed Google source attribution
+- `src/services/external-brain-contract.ts` - `brain-sources-read` moved from planned contract to live rollout for Google read-only ingestion
+- `tests/9.5-google-source-read-ingestion-rollout.test.ts` - Gmail, Calendar, Drive/Docs, provenance, and boundary coverage
+- `tests/9.3-external-client-and-source-integration-architecture.test.ts` - updated to reflect a live `brain-sources-read` surface that remains distinct from `brain-memory`
+- `specs/active/9.5-google-source-read-ingestion-rollout.md` - As-Built Record completed
+- `MANIFEST.md` - regenerated
+**Decisions:**
+- Session 9.5 stayed strictly inside `brain-sources-read`. Google was not blurred into `brain-memory`, and no Google write/action capability was introduced.
+- The rollout reuses the existing Google OAuth, Gmail, Calendar, Drive, and canonical retain/capture plumbing instead of introducing a second ingestion stack.
+- Drive / Docs shipped explicit-inclusion-first. Capture preserves Google-native file references and provenance instead of building a Drive shadow store.
+- Canonical readbacks now surface Google source attribution so the brain can point back to the native Google object truthfully.
+- No migration was needed, and no raw Google content store/cache was added to D1, KV, Analytics Engine, or rollout-side caches.
+- Gmail and Calendar webhook-triggered ingestion shipped as the smallest safe bounded refresh over recent native objects rather than adding sync-cursor state or naive mirroring in this session.
+**Verification:**
+- `npx vitest run tests/9.5-google-source-read-ingestion-rollout.test.ts` - passed
+- `npm test` - passed (`344 passed`, `1 skipped`)
+- `npm run postflight` - passed
+- `npm run manifest` - passed
+**Hindsight Pin:** unchanged (`ghcr.io/vectorize-io/hindsight-api:0.5.2`)
+**Fixture Data:** Added 9.5 fixtures for Gmail selective capture, Calendar selective capture, Drive/Docs explicit-inclusion capture, provenance-rich source refs, and source-read boundary enforcement
+**Blockers:** None
+**Next:** Checkout can now move 9.5 to `specs/completed/`; any future Google write/actions remain a separate `brain-actions` lane
+
+---

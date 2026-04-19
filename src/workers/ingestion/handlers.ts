@@ -1,13 +1,15 @@
 // src/workers/ingestion/handlers.ts
-// Individual message type handlers — called by consumer.ts dispatch
-// Each handler: fetch external data (if needed) → build artifact → retainContent()
+// Individual message type handlers â€” called by consumer.ts dispatch
+// Each handler: fetch external data (if needed) â†’ build artifact â†’ retainContent()
 
 import type { Env } from '../../types/env'
-import type { IngestionArtifact } from '../../types/ingestion'
 import { retainContent } from '../../services/ingestion/retain'
 import { getGoogleToken } from '../../services/google/oauth'
-import { fetchAndExtractThread } from '../../services/google/gmail'
-import { fetchAndExtractEvent } from '../../services/google/calendar'
+import {
+  captureRecentCalendarEventWindow,
+  captureRecentGmailThreadWindow,
+} from '../../services/google-source-read'
+
 export async function handleSmsInbound(
   tenantId: string,
   payload: Record<string, unknown>,
@@ -42,13 +44,15 @@ export async function handleGmailThread(
   ctx: ExecutionContext,
 ): Promise<void> {
   const accessToken = await getGoogleToken(tenantId, 'gmail.readonly', tmk, env)
-  if (!accessToken) return // No Google token — skip silently
-
-  const threadId = payload.historyId as string
-  const artifact = await fetchAndExtractThread(threadId, accessToken, tenantId)
-  if (!artifact) return // Single-message thread or fetch failed
-
-  await retainContent(artifact, tmk, env, ctx)
+  if (!accessToken) return
+  await captureRecentGmailThreadWindow({
+    tenantId,
+    accessToken,
+    tmk,
+    env,
+    ctx,
+    maxThreads: typeof payload.maxThreads === 'number' ? payload.maxThreads : 5,
+  })
 }
 
 export async function handleCalendarEvent(
@@ -60,12 +64,15 @@ export async function handleCalendarEvent(
 ): Promise<void> {
   const accessToken = await getGoogleToken(tenantId, 'calendar.readonly', tmk, env)
   if (!accessToken) return
-
-  const eventId = payload.resourceId as string
-  const artifact = await fetchAndExtractEvent(eventId, accessToken, tenantId)
-  if (!artifact) return // Event < 15 min or fetch failed
-
-  await retainContent(artifact, tmk, env, ctx)
+  await captureRecentCalendarEventWindow({
+    tenantId,
+    accessToken,
+    tmk,
+    env,
+    ctx,
+    updatedSinceMs: typeof payload.updatedSinceMs === 'number' ? payload.updatedSinceMs : undefined,
+    maxEvents: typeof payload.maxEvents === 'number' ? payload.maxEvents : 5,
+  })
 }
 
 export async function handleObsidianNote(
@@ -95,7 +102,6 @@ export async function handleObsidianNote(
   )
 }
 
-// Re-export bootstrap handlers from separate module (postflight line limit)
 export {
   handleBootstrapGmailThread,
   handleBootstrapCalendarEvent,

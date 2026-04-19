@@ -4,9 +4,12 @@
 
 import { env } from 'cloudflare:test'
 import { describe, it, expect } from 'vitest'
+import { SELF } from 'cloudflare:test'
 import { deriveTenantId, deriveTmk } from '../src/middleware/auth'
+import { deriveAccessPrincipalId } from '../src/middleware/cf-access'
 import { getOrCreateTenant, provisionOrRenewKek } from '../src/services/tenant'
 import { getMcpAgentObjectName } from '../src/workers/mcpagent/do/identity'
+import { installCfAccessMock } from './support/cf-access'
 
 const TEST_AUD = 'test-aud-brain-access'
 const TEST_SUB = 'test-user-sub-12345'
@@ -29,6 +32,14 @@ describe('1.2 Auth - Tenant ID Derivation', () => {
     const id = await deriveTenantId(TEST_SUB, TEST_AUD)
     expect(id).not.toBe(TEST_SUB)
     expect(id).not.toContain(TEST_SUB)
+  })
+
+  it('derives a stable service principal id from app tokens', () => {
+    expect(deriveAccessPrincipalId({
+      sub: '',
+      type: 'app',
+      common_name: 'haetsal-brain-shell-smoke',
+    })).toBe('service:haetsal-brain-shell-smoke')
   })
 })
 
@@ -127,5 +138,35 @@ describe('1.2 Auth - Tenant Bootstrap', () => {
     ).bind(tenantId, 'auth.tenant_created').first()
 
     expect(audit).toBeTruthy()
+  })
+})
+
+describe('1.2 Auth - Service Principal Routing', () => {
+  it('maps Cloudflare Access service tokens to a dedicated hashed tenant', async () => {
+    const auth = await installCfAccessMock({
+      sub: '',
+      type: 'app',
+      common_name: 'haetsal-brain-shell-smoke',
+    })
+
+    try {
+      const response = await SELF.fetch('http://localhost/mcp', {
+        method: 'POST',
+        headers: {
+          'CF-Access-Jwt-Assertion': auth.jwt,
+          'Content-Type': 'application/json',
+        },
+        body: '{}',
+      })
+
+      expect(response.status).toBe(200)
+      const body = await response.json() as { status: string; tenantId: string }
+      expect(body.status).toBe('mcp_ok')
+      expect(body.tenantId).toBe(
+        await deriveTenantId('service:haetsal-brain-shell-smoke', TEST_AUD),
+      )
+    } finally {
+      auth.restore()
+    }
   })
 })

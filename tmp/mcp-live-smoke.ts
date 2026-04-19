@@ -3,8 +3,7 @@ const endpoint =
   "https://the-brain.ct-trading-bot1.workers.dev/mcp";
 const accessClientId = process.env.CF_ACCESS_CLIENT_ID;
 const accessClientSecret = process.env.CF_ACCESS_CLIENT_SECRET;
-const syntheticSub =
-  process.env.BRAIN_JWT_SUB ?? "test-user-smoke";
+const syntheticSub = process.env.BRAIN_JWT_SUB?.trim();
 const toolName = process.env.MCP_TOOL_NAME ?? "memory_write";
 
 if (!accessClientId || !accessClientSecret) {
@@ -24,8 +23,11 @@ async function call(body: JsonRpcRequest) {
     accept: "application/json, text/event-stream",
     "CF-Access-Client-Id": accessClientId,
     "CF-Access-Client-Secret": accessClientSecret,
-    "x-brain-jwt-sub": syntheticSub,
   };
+
+  if (syntheticSub) {
+    headers["x-brain-jwt-sub"] = syntheticSub;
+  }
 
   if (sessionId) {
     headers["mcp-session-id"] = sessionId;

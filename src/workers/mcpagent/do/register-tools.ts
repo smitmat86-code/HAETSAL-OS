@@ -1,6 +1,7 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import type { Env } from '../../../types/env'
 import type { RecallInput, RetainInput } from '../../../types/tools'
+import { recallSchema, retainSchema } from '../../../types/tools'
 import { writeAuditLog } from '../../../middleware/audit'
 import { browseSchema, browseStub } from '../../../tools/act/browse'
 import { createEventSchema, createEventStub } from '../../../tools/act/create-event'

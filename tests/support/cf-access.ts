@@ -2,10 +2,21 @@ import { vi } from 'vitest'
 
 const JWKS_URL = 'https://test-team.cloudflareaccess.com/cdn-cgi/access/certs'
 
-export async function installCfAccessMock(sub: string): Promise<{
+interface CfAccessMockOptions {
+  sub?: string
+  aud?: string[]
+  exp?: number
+  type?: string
+  common_name?: string
+}
+
+export async function installCfAccessMock(subOrOptions: string | CfAccessMockOptions): Promise<{
   jwt: string
   restore: () => void
 }> {
+  const options = typeof subOrOptions === 'string'
+    ? { sub: subOrOptions }
+    : subOrOptions
   const keyPair = await crypto.subtle.generateKey(
     {
       name: 'RSASSA-PKCS1-v1_5',
@@ -24,9 +35,11 @@ export async function installCfAccessMock(sub: string): Promise<{
 
   const header = encodeBase64Url(JSON.stringify({ alg: 'RS256', typ: 'JWT', kid: 'test-kid' }))
   const payload = encodeBase64Url(JSON.stringify({
-    sub,
-    aud: ['test-aud-brain-access'],
-    exp: Math.floor(Date.now() / 1000) + 3600,
+    sub: options.sub ?? '',
+    aud: options.aud ?? ['test-aud-brain-access'],
+    exp: options.exp ?? Math.floor(Date.now() / 1000) + 3600,
+    type: options.type,
+    common_name: options.common_name,
   }))
 
   const signature = await crypto.subtle.sign(

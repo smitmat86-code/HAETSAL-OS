@@ -4,6 +4,7 @@
 //         Routes without auditMiddleware must access c.get('tenantId') directly.
 
 import type { Env } from '../types/env'
+import { deriveAccessPrincipalId, validateCfAccessJwt } from './cf-access'
 
 type AuthVariables = {
   tenantId: string
@@ -60,50 +61,6 @@ export async function deriveTmk(sub: string, secret: string): Promise<CryptoKey>
   )
 }
 
-// Validate CF Access JWT against Cloudflare's JWKs endpoint
-// Uses crypto.subtle — no third-party JWT library (workerd-native)
-export async function validateCfAccessJwt(
-  jwt: string,
-  jwksUrl: string,
-  expectedAud: string | string[],
-): Promise<{ sub: string; aud: string | string[]; exp: number }> {
-  const parts = jwt.split('.')
-  if (parts.length !== 3) throw new Error('Invalid JWT format')
-
-  const header = JSON.parse(atob(parts[0]))
-  const payload = JSON.parse(atob(parts[1]))
-
-  // Validate expiry
-  if (payload.exp && payload.exp < Math.floor(Date.now() / 1000)) {
-    throw new Error('JWT expired')
-  }
-
-  // Validate audience — supports multiple expected AUDs (Worker + Pages)
-  const aud = Array.isArray(payload.aud) ? payload.aud : [payload.aud]
-  const expected = Array.isArray(expectedAud) ? expectedAud : [expectedAud]
-  if (!aud.some(a => expected.includes(a))) throw new Error('Invalid audience')
-
-  // Fetch JWKs and find matching key
-  const jwksResponse = await fetch(jwksUrl)
-  const jwks = await jwksResponse.json() as { keys: (JsonWebKey & { kid?: string })[] }
-  const jwk = jwks.keys.find(k => k.kid === header.kid)
-  if (!jwk) throw new Error('No matching JWK found')
-
-  const key = await crypto.subtle.importKey(
-    'jwk', jwk, { name: 'RSASSA-PKCS1-v1_5', hash: 'SHA-256' }, false, ['verify'],
-  )
-
-  const signature = Uint8Array.from(
-    atob(parts[2].replace(/-/g, '+').replace(/_/g, '/')),
-    c => c.charCodeAt(0),
-  )
-  const data = new TextEncoder().encode(`${parts[0]}.${parts[1]}`)
-  const valid = await crypto.subtle.verify('RSASSA-PKCS1-v1_5', key, signature, data)
-  if (!valid) throw new Error('Invalid JWT signature')
-
-  return payload as { sub: string; aud: string | string[]; exp: number }
-}
-
 import { createMiddleware } from 'hono/factory'
 
 export function authMiddleware() {
@@ -120,9 +77,10 @@ export function authMiddleware() {
       // Support comma-separated AUDs: "worker-aud,pages-aud"
       const audiences = c.env.CF_ACCESS_AUD.split(',').map((s: string) => s.trim())
       const payload = await validateCfAccessJwt(jwt, jwksUrl, audiences)
-      const tenantId = await deriveTenantId(payload.sub, audiences[0])
+      const principalId = deriveAccessPrincipalId(payload)
+      const tenantId = await deriveTenantId(principalId, audiences[0])
       c.set('tenantId', tenantId)
-      c.set('jwtSub', payload.sub)
+      c.set('jwtSub', principalId)
     } catch {
       // LESSON: waitUntil for audit — don't block rejection on audit write
       c.executionCtx.waitUntil(writeFailedAuthAudit(c.env))

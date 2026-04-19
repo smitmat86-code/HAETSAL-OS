@@ -1,18 +1,21 @@
-// src/types/tools.ts
-// MCP tool input/output schemas for brain_v1_retain and brain_v1_recall
-// Uses Zod for MCP SDK compatibility (agents SDK requires Zod schemas)
-
 import { z } from 'zod'
+import type { CanonicalArtifactRef } from './canonical-memory'
+import type { IngestionSource } from './ingestion'
 
 export interface RetainInput {
   content: string
   domain?: string
   memory_type?: 'episodic' | 'semantic' | 'world'
   provenance?: string
+  source?: IngestionSource
+  source_ref?: string | null
+  title?: string | null
+  artifact_ref?: CanonicalArtifactRef | null
+  metadata?: Record<string, unknown>
 }
 
 export interface RetainOutput {
-  memory_id: string   // Stable retained document reference or async operation id
+  memory_id: string
   salience_tier: number
   status: 'retained' | 'queued' | 'deferred'
   canonical_capture_id?: string
@@ -32,7 +35,7 @@ export interface RecallInput {
 export interface RecallOutput {
   results: Array<{
     memory_id: string
-    content: string   // stub: placeholder text
+    content: string
     memory_type: string
     confidence: number
     relevance: number
@@ -40,12 +43,10 @@ export interface RecallOutput {
   synthesis: string
 }
 
-// Zod schemas for MCP tool registration (agents SDK requirement)
 export const retainSchema = {
   content: z.string().describe('The memory content to retain'),
   domain: z.string().optional().describe('Knowledge domain (e.g., career, health)'),
-  memory_type: z.enum(['episodic', 'semantic', 'world']).optional()
-    .describe('Type of memory to create'),
+  memory_type: z.enum(['episodic', 'semantic', 'world']).optional().describe('Type of memory to create'),
   provenance: z.string().optional().describe('Source of this memory'),
 }
 

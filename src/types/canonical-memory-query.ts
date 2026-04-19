@@ -1,5 +1,6 @@
 import type { CanonicalGraphProjectionStatus } from './canonical-graph-projection'
 import type { CanonicalProjectionProvenance } from './canonical-graph-query'
+import type { BrainMemoryRolloutAttribution } from './external-client-memory'
 
 export type MemoryQueryMode = 'raw' | 'semantic' | 'graph' | 'composed'
 export type MemoryQueryModePreference = MemoryQueryMode | 'lexical'
@@ -11,36 +12,16 @@ export interface CanonicalSourceAttribution {
   projectionRef: string | null; targetRef: string | null; graphRef: string | null
 }
 
-export interface CanonicalSearchInput {
-  tenantId: string
-  query: string
-  scope?: string | null
-  limit?: number
-  mode?: MemoryQueryModePreference
-}
-
+export interface CanonicalSearchInput { tenantId: string; query: string; scope?: string | null; limit?: number; mode?: MemoryQueryModePreference }
 export interface CanonicalRecentInput { tenantId: string; scope?: string | null; limit?: number }
 export interface CanonicalDocumentInput { tenantId: string; documentId: string }
-export interface CanonicalMemoryStatusInput {
-  tenantId: string
-  captureId?: string
-  operationId?: string
-}
+export interface CanonicalMemoryStatusInput { tenantId: string; captureId?: string; operationId?: string }
 
 export interface CanonicalMemoryListItem {
-  captureId: string | null
-  documentId: string | null
-  title: string | null
-  scope: string | null
-  sourceSystem: string | null
-  sourceRef: string | null
-  preview: string
-  capturedAt: number | null
-  score?: number | null
-  mode?: MemoryQueryMode
-  recallText?: string | null
-  attribution?: CanonicalSourceAttribution | null
-  provenance?: CanonicalProjectionProvenance | null
+  captureId: string | null; documentId: string | null; title: string | null; scope: string | null
+  sourceSystem: string | null; sourceRef: string | null; preview: string; capturedAt: number | null
+  score?: number | null; mode?: MemoryQueryMode; brainMemory?: BrainMemoryRolloutAttribution | null
+  recallText?: string | null; attribution?: CanonicalSourceAttribution | null; provenance?: CanonicalProjectionProvenance | null
   semanticStatus?: {
     projectionKind: 'hindsight'
     projectionStatus: 'accepted' | 'queued' | 'completed' | 'failed' | 'unknown'
@@ -58,53 +39,20 @@ export interface CanonicalMemoryListItem {
   } | null
 }
 
-export interface CanonicalSearchResult {
-  query: string
-  mode: MemoryQueryMode
-  status: 'ok' | 'partial' | 'unavailable'
-  route?: CanonicalMemoryRouteDecision | null
-  items: CanonicalMemoryListItem[]
-}
-
+export interface CanonicalSearchResult { query: string; mode: MemoryQueryMode; status: 'ok' | 'partial' | 'unavailable'; route?: CanonicalMemoryRouteDecision | null; items: CanonicalMemoryListItem[] }
 export interface CanonicalRecentResult { items: CanonicalMemoryListItem[] }
-export interface CanonicalDocumentArtifact {
-  artifactId: string
-  filename: string | null
-  mediaType: string | null
-  byteLength: number | null
-}
-
+export interface CanonicalDocumentArtifact { artifactId: string; filename: string | null; mediaType: string | null; byteLength: number | null; storageKind?: string | null; storageKey?: string | null }
 export interface CanonicalDocumentResult {
-  captureId: string
-  documentId: string
-  title: string | null
-  scope: string
-  sourceSystem: string
-  sourceRef: string | null
-  body: string
-  chunkCount: number
-  capturedAt: number
-  createdAt: number
+  captureId: string; documentId: string; title: string | null; scope: string; sourceSystem: string; sourceRef: string | null
+  brainMemory?: BrainMemoryRolloutAttribution | null; body: string; chunkCount: number; capturedAt: number; createdAt: number
   artifact: CanonicalDocumentArtifact | null
 }
 
-export interface CanonicalReflectionStatus {
-  mode: 'hindsight'
-  status: 'pending' | 'queued' | 'completed' | 'failed'
-  targetRef?: string | null
-  updatedAt?: number | null
-  errorMessage?: string | null
-}
-
+export interface CanonicalReflectionStatus { mode: 'hindsight'; status: 'pending' | 'queued' | 'completed' | 'failed'; targetRef?: string | null; updatedAt?: number | null; errorMessage?: string | null }
 export interface CanonicalMemoryStatusResult {
-  captureId: string
-  operation: {
-    operationId: string
-    operationType: string
-    status: string
-    createdAt: number
-    updatedAt: number
-  }
+  captureId: string; sourceSystem?: string | null; sourceRef?: string | null; scope?: string | null
+  title?: string | null; capturedAt?: number | null; brainMemory?: BrainMemoryRolloutAttribution | null
+  operation: { operationId: string; operationType: string; status: string; createdAt: number; updatedAt: number }
   projections: Array<{
     jobId: string
     documentId: string
@@ -131,13 +79,7 @@ export interface CanonicalMemoryStatusResult {
 }
 
 export interface CanonicalMemoryStatsResult {
-  captureCount: number
-  documentCount: number
-  chunkCount: number
-  operationCount: number
-  pendingProjectionCount: number
-  completedProjectionCount: number
-  failedProjectionCount: number
-  lastCaptureAt: number | null
-  scopes: Array<{ scope: string; count: number }>
+  captureCount: number; documentCount: number; chunkCount: number; operationCount: number
+  pendingProjectionCount: number; completedProjectionCount: number; failedProjectionCount: number
+  lastCaptureAt: number | null; scopes: Array<{ scope: string; count: number }>
 }

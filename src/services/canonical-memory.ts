@@ -48,6 +48,9 @@ export async function captureCanonicalMemory(
   const payloads = await persistCanonicalPayloads(capture, env)
   const createdAt = Date.now()
   const projectionJobs = capture.projectionKinds.map(kind => ({ id: crypto.randomUUID(), kind }))
+  const artifactStorageKind = capture.artifact
+    ? (capture.artifact.ref.contentEncrypted?.trim() ? 'r2' : 'reference')
+    : null
 
   await env.D1_US.batch([
     env.D1_US.prepare(
@@ -59,7 +62,7 @@ export async function captureCanonicalMemory(
       `INSERT INTO canonical_artifacts
        (id, tenant_id, capture_id, storage_kind, r2_key, media_type, filename, byte_length, sha256, created_at)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-    ).bind(capture.artifact.id, tenantId, capture.captureId, 'r2', payloads.artifactR2Key, capture.artifact.ref.mediaType ?? null, capture.artifact.ref.filename ?? null, capture.artifact.ref.byteLength ?? null, payloads.artifactSha256, createdAt)] : []),
+    ).bind(capture.artifact.id, tenantId, capture.captureId, artifactStorageKind, payloads.artifactR2Key, capture.artifact.ref.mediaType ?? null, capture.artifact.ref.filename ?? null, capture.artifact.ref.byteLength ?? null, payloads.artifactSha256, createdAt)] : []),
     env.D1_US.prepare(
       `INSERT INTO canonical_documents
        (id, tenant_id, capture_id, artifact_id, title, body_r2_key, body_sha256, chunk_count, created_at)

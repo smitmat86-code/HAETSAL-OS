@@ -54,11 +54,12 @@ export async function retainContent(
   const pipeline = await captureThroughCanonicalPipeline({
     tenantId,
     sourceSystem: source,
-    sourceRef: dedupHash,
+    sourceRef: artifact.sourceRef ?? dedupHash,
     scope: domain,
     title: typeof artifact.metadata?.title === 'string' ? artifact.metadata.title : null,
     body: content,
     bodyEncrypted: contentEncrypted,
+    artifactRef: artifact.artifactRef ?? null,
     capturedAt: artifact.occurredAt,
     memoryType,
     compatibilityMode: 'current_hindsight',

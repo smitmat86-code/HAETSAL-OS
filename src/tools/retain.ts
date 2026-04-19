@@ -16,7 +16,12 @@ export async function retainViaService(
   env: Env,
   ctx?: Pick<ExecutionContext, 'waitUntil'>,
 ): Promise<RetainOutput> {
-  console.log('MCP_RETAIN_START', { tenantId, domain: input.domain, memoryType: input.memory_type ?? 'episodic' })
+  console.log('MCP_RETAIN_START', {
+    tenantId,
+    domain: input.domain,
+    memoryType: input.memory_type ?? 'episodic',
+    source: input.source ?? 'mcp_retain',
+  })
   if (!tmk) {
     // No TMK available — return deferred status
     console.warn('MCP_RETAIN_DEFERRED_NO_TMK', { tenantId })
@@ -29,12 +34,17 @@ export async function retainViaService(
 
   const result = await retainContent({
     tenantId,
-    source: 'mcp_retain',
+    source: input.source ?? 'mcp_retain',
+    sourceRef: input.source_ref ?? null,
     content: input.content,
     occurredAt: Date.now(),
     memoryType: input.memory_type,
     domain: input.domain,
     provenance: input.provenance ?? 'mcp_retain',
+    artifactRef: input.artifact_ref ?? null,
+    metadata: input.metadata ?? {
+      ...(input.title ? { title: input.title } : {}),
+    },
   }, tmk, env, ctx, { hindsightAsync: true })
 
   console.log('MCP_RETAIN_DONE', {

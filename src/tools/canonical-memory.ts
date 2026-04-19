@@ -3,13 +3,15 @@ import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import type { Env } from '../types/env'
 import type { EntityTimelineInput, TraceRelationshipInput } from '../types/canonical-graph-query'
 import type { PrepareContextForAgentInput } from '../types/chief-of-staff-context'
+import type { ExternalClientCaptureInput } from '../types/external-client-memory'
 import { writeAuditLog } from '../middleware/audit'
 import { getCanonicalEntityTimeline, traceCanonicalRelationship } from '../services/canonical-graph-query'
 import { prepareContextForAgent } from '../services/chief-of-staff-context'
 import { getCanonicalDocument, listRecentCanonicalMemories, searchCanonicalMemory } from '../services/canonical-memory-query'
 import { getCanonicalMemoryStats } from '../services/canonical-memory-stats'
 import { getCanonicalMemoryStatus } from '../services/canonical-memory-status'
-import { retainViaService } from './retain'
+import { BRAIN_MEMORY_SURFACE_PROFILE } from '../services/external-client-memory'
+import { captureExternalClientMemory } from '../services/external-client-memory-write'
 
 interface CanonicalMemoryToolContext {
   getEnv: () => Env
@@ -23,6 +25,16 @@ const captureSchema = z.object({
   scope: z.string().optional().describe('Canonical scope, such as general or research'),
   memory_type: z.enum(['episodic', 'semantic', 'world']).optional().describe('Capture category'),
   provenance: z.string().optional().describe('Capture provenance label'),
+  capture_mode: z.enum(['explicit', 'session_summary', 'artifact']).optional()
+    .describe('Optional brain-memory rollout capture mode'),
+  client_name: z.string().optional().describe('Calling MCP-native client name'),
+  title: z.string().optional().describe('Optional durable title for the captured memory'),
+  session_id: z.string().optional().describe('Optional client session identifier for session-close captures'),
+  source_ref: z.string().optional().describe('Optional caller-provided source reference for explicit capture'),
+  artifact_ref: z.string().optional().describe('Optional artifact reference or path for artifact-linked capture'),
+  artifact_filename: z.string().optional().describe('Optional artifact display name'),
+  artifact_media_type: z.string().optional().describe('Optional artifact media type'),
+  artifact_byte_length: z.number().optional().describe('Optional artifact size in bytes'),
 })
 const searchSchema = z.object({
   query: z.string().describe('Canonical memory search query'),
@@ -61,13 +73,13 @@ const asText = (value: unknown) => ({ content: [{ type: 'text' as const, text: J
 
 export function registerCanonicalMemoryTools(server: McpServer, ctx: CanonicalMemoryToolContext): void {
   server.tool('capture_memory', 'Capture memory through the canonical memory contract', captureSchema.shape, async (input) => {
-    const typed = input as z.infer<typeof captureSchema>
-    return asText(await retainViaService({
-      content: typed.content,
-      domain: typed.scope ?? 'general',
-      memory_type: typed.memory_type,
-      provenance: typed.provenance,
-    }, ctx.getTenantId(), ctx.getTmk(), ctx.getEnv(), ctx.getExecutionContext()))
+    return asText(await captureExternalClientMemory(
+      input as ExternalClientCaptureInput,
+      ctx.getTenantId(),
+      ctx.getTmk(),
+      ctx.getEnv(),
+      ctx.getExecutionContext(),
+    ))
   })
 
   server.tool('search_memory', 'Search canonical memories', searchSchema.shape, async (input) => {
@@ -126,5 +138,8 @@ export function registerCanonicalMemoryTools(server: McpServer, ctx: CanonicalMe
   })
 
   server.tool('memory_stats', 'Get canonical memory stats', {}, async () =>
-    asText(await getCanonicalMemoryStats(ctx.getEnv(), ctx.getTenantId())))
+    asText({
+      ...(await getCanonicalMemoryStats(ctx.getEnv(), ctx.getTenantId())),
+      brainMemoryProfile: BRAIN_MEMORY_SURFACE_PROFILE,
+    }))
 }

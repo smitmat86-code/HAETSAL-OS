@@ -22,6 +22,8 @@ export interface CanonicalDocumentRow extends CanonicalListRow {
   filename: string | null
   media_type: string | null
   byte_length: number | null
+  storage_kind: string | null
+  r2_key: string | null
 }
 
 export function clampCanonicalLimit(

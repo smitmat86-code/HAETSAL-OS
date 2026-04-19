@@ -5,6 +5,7 @@ import { decideCanonicalMemoryRoute } from './canonical-memory-router'
 import { applyCanonicalRoute } from './canonical-source-attribution'
 import { searchCanonicalComposedMemory, searchCanonicalGraphMemory } from './canonical-composed-graph-context'
 import { searchCanonicalSemanticMemory } from './canonical-semantic-recall'
+import { parseBrainMemoryRolloutAttribution } from './external-client-memory'
 
 async function listCanonicalRows(env: Env, tenantId: string, scope: string | null, limit: number): Promise<CanonicalListRow[]> {
   const rows = await env.D1_US.prepare(
@@ -26,6 +27,10 @@ function toMemoryListItem(row: CanonicalListRow, body: string | null, score?: nu
     preview: buildCanonicalPreview(body ?? row.title ?? row.source_ref ?? row.scope),
     capturedAt: row.captured_at,
     mode: 'raw',
+    brainMemory: parseBrainMemoryRolloutAttribution({
+      sourceSystem: row.source_system,
+      sourceRef: row.source_ref,
+    }),
     ...(score !== undefined ? { score } : {}),
   }
 }
@@ -83,7 +88,8 @@ export async function getCanonicalDocument(input: CanonicalDocumentInput, env: E
   if (!options.tmk) throw new Error('Active session key required for canonical document reads')
   const row = await env.D1_US.prepare(
     `SELECT c.id AS capture_id, d.id AS document_id, d.title, c.scope, c.source_system, c.source_ref, c.captured_at,
-            d.body_r2_key, d.chunk_count, d.created_at AS document_created_at, a.id AS artifact_id, a.filename, a.media_type, a.byte_length
+            d.body_r2_key, d.chunk_count, d.created_at AS document_created_at,
+            a.id AS artifact_id, a.filename, a.media_type, a.byte_length, a.storage_kind, a.r2_key
      FROM canonical_documents d INNER JOIN canonical_captures c ON c.id = d.capture_id
      LEFT JOIN canonical_artifacts a ON a.id = d.artifact_id WHERE d.tenant_id = ? AND d.id = ?`,
   ).bind(tenantId, input.documentId).first<CanonicalDocumentRow>()
@@ -95,10 +101,24 @@ export async function getCanonicalDocument(input: CanonicalDocumentInput, env: E
     scope: row.scope,
     sourceSystem: row.source_system,
     sourceRef: row.source_ref,
+    brainMemory: parseBrainMemoryRolloutAttribution({
+      sourceSystem: row.source_system,
+      sourceRef: row.source_ref,
+      artifactRef: row.r2_key,
+    }),
     body: await readCanonicalDocumentBody(env, row.body_r2_key, options.tmk),
     chunkCount: row.chunk_count,
     capturedAt: row.captured_at,
     createdAt: row.document_created_at,
-    artifact: row.artifact_id ? { artifactId: row.artifact_id, filename: row.filename, mediaType: row.media_type, byteLength: row.byte_length } : null,
+    artifact: row.artifact_id
+      ? {
+        artifactId: row.artifact_id,
+        filename: row.filename,
+        mediaType: row.media_type,
+        byteLength: row.byte_length,
+        storageKind: row.storage_kind,
+        storageKey: row.r2_key,
+      }
+      : null,
   }
 }

@@ -971,3 +971,34 @@
 **Next:** Keep 9.3 as the parallel integration-architecture lane; future follow-up should land `brain-sources-read` selectively without widening into a separate brain or premature action surface
 
 ---
+## Session 9.4 - 2026-04-19
+
+**Spec:** Phase 9.4 - Brain-Memory External Client Rollout
+**Built:**
+- `src/types/external-client-memory.ts` - typed `brain-memory` rollout contract for external MCP-native client capture modes, profile, and read-side attribution
+- `src/services/external-client-memory.ts` - rollout normalization/parsing helpers for explicit, session-summary, and artifact-linked capture
+- `src/services/external-client-memory-write.ts` - write-side adapter that keeps external-client capture on the canonical `capture_memory` path
+- `src/tools/canonical-memory.ts` - `capture_memory` now accepts narrow rollout-safe external-client fields without introducing a new public tool name
+- `src/tools/retain.ts`, `src/services/ingestion/retain.ts`, `src/services/canonical-memory.ts` - retain/canonical pipeline now preserves caller source refs and artifact references through the existing canonical-first flow
+- `src/services/canonical-memory-query.ts`, `src/services/canonical-memory-status.ts`, `src/services/canonical-source-attribution.ts`, `src/services/canonical-memory-read-model.ts`, `src/types/canonical-memory-query.ts` - read/status/document results now expose parsed `brainMemory` attribution and artifact-reference details
+- `src/types/ingestion.ts`, `src/types/tools.ts` - additive input-contract updates for source refs, artifact refs, and rollout metadata
+- `tests/9.4-brain-memory-external-client-rollout.test.ts` - explicit capture, session-close summary capture, artifact-linked capture, readback, and capability-boundary coverage
+- `specs/active/9.4-brain-memory-external-client-rollout.md` - As-Built Record completed
+- `MANIFEST.md` - regenerated
+**Decisions:**
+- Session 9.4 shipped as the smallest safe extension of the canonical MCP contract: `capture_memory` remains the write entrypoint and the existing canonical memory tool family remains the read surface.
+- `brain-memory` now clearly handles both write and read for MCP-native clients while staying memory-only; no source-read, source-write, BYOC, Chief-of-Staff workflow, or outbound action scope was added.
+- The first durable capture patterns are explicit capture, session-close summary capture, and artifact-linked capture. Session-close summary capture is the default recommended compounding pattern.
+- Artifact-linked capture preserves normalized meaning plus reference metadata instead of blind raw duplication, and no new D1/KV/raw-content cache was introduced.
+- The rollout stayed migration-free. Capture-mode/provenance labeling is reconstructed from canonical source attribution plus artifact metadata rather than a new client-only shadow store.
+**Verification:**
+- `npx vitest run tests/9.4-brain-memory-external-client-rollout.test.ts` - passed
+- `npm test` - passed (`342 passed`, `1 skipped`)
+- `npm run postflight` - passed
+- `npm run manifest` - passed
+**Hindsight Pin:** unchanged (`ghcr.io/vectorize-io/hindsight-api:0.5.2`)
+**Fixture Data:** Added 9.4 fixtures for Codex/Claude Code/Cursor-style `brain-memory` captures across explicit, session summary, and artifact-linked flows with provenance-aware readback assertions
+**Blockers:** None
+**Next:** Session 9.5 or later can build selective `brain-sources-read` on top of the now-concrete `brain-memory` rollout without widening into a second brain or transcript-default retention
+
+---

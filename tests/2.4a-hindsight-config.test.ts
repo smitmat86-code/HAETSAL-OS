@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { configureHindsightBank, createMentalModels, ensureHindsightBankConfigured, registerConsolidationWebhook, MENTAL_MODEL_DOMAINS } from '../src/services/bootstrap/hindsight-config'
 import { buildHindsightBankProvisioningSpec, computeHindsightConfigVersion } from '../src/services/bootstrap/hindsight-bank-spec'
 
@@ -89,6 +89,7 @@ describe('2.4a Hindsight Configuration', () => {
   })
 
   it('mental model partial failure does not throw', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {})
     let callCount = 0
     const mockEnv = withHindsight(async (request) => {
       if (request.method === 'GET') return new Response(JSON.stringify({ items: [] }))

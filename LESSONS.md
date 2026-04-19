@@ -8,6 +8,15 @@
 
 ## Recent Additions
 
+- **Natural-Language Routers Need A Focus Term Before Reusing Narrow Graph Reads.**
+  The explicit 8.3 graph/composed helper expects an entity/topic-style lookup
+  term, not a whole natural-language question. When Phase 9 adds routing on top,
+  strip scaffolding such as "How has my relationship with ... changed over
+  time?" or "Prepare context for ... before a meeting" down to the focus term
+  before dispatching into the existing graph-backed retrieval path. That keeps
+  the router small and preserves the already-proven 8.3 implementation.
+  Ref: Session 9.1 - Multi-Mode Memory Router.
+
 - **Use Canonical Graph Identity Mappings For Narrow Graph Readbacks Before Building A Router.**
   For explicit graph and timeline reads, the smallest truthful implementation
   can reconstruct single-hop relationship traces and ordered entity timelines

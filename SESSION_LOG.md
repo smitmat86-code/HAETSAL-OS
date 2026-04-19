@@ -5,6 +5,32 @@
 
 ---
 
+## Session 9.1 - 2026-04-19
+
+**Spec:** Phase 9.1 - Multi-Mode Memory Router
+**Built:**
+- `src/services/canonical-memory-router.ts` - explainable intent router for `raw`, `semantic`, `graph`, and `composed`, including explicit override normalization and focus-term extraction for graph/composed dispatch
+- `src/services/canonical-source-attribution.ts` - shared canonical source-attribution normalizer applied across all search modes
+- `src/services/canonical-memory-query.ts`, `canonical-composed-graph-context.ts`, `src/tools/canonical-memory.ts`, `src/types/canonical-memory-query.ts` - existing canonical `search_memory` surface now routes through the new router, returns route metadata, exposes consistent `attribution`, and accepts `raw|semantic|graph|composed` plus backward-compatible `lexical`
+- `tests/9.1-multi-mode-memory-router.test.ts` - inferred raw/semantic/graph/composed routing, explicit override, and attribution coverage
+- `tests/7.2-semantic-recall-through-canonical-interface.test.ts`, `tests/8.3-graph-timeline-query-surface.test.ts`, `LESSONS.md`, `specs/completed/8.3-graph-timeline-query-surface.md`, `specs/completed/9.1-multi-mode-memory-router.md` - regression labels updated, router lesson captured, and spec lifecycle completed for both the already-built 8.3 spec and the new 9.1 spec
+**Decisions:**
+- **The router is heuristic and explainable, not AI-scored.** Mode inference uses small ordered pattern sets and preserves raw fallback for plain keyword queries so the existing canonical surface stays predictable.
+- **Composed mode reuses the bounded 8.3 helper on purpose.** Session 9.1 routes into the already-shipped graph-backed composed path and stops short of any 9.2 context-bundle expansion.
+- **Canonical source attribution is now a shared shape.** Every search result item gets the same `attribution` contract regardless of whether the answer came from raw, Hindsight-backed semantic recall, graph reads, or graph-backed composed retrieval.
+- **`lexical` is now an input alias, not a public result mode.** The public canonical response now reports `raw`, while older callers can still pass `mode = lexical` and get the same raw path.
+**Verification:**
+- `npx vitest run tests/9.1-multi-mode-memory-router.test.ts` - passed
+- `npm test` - passed
+- `npm run postflight` - passed
+- `npm run manifest` - passed
+**Hindsight Pin:** unchanged (`ghcr.io/vectorize-io/hindsight-api:0.5.2`)
+**Fixture Data:** Reused canonical note/conversation fixtures plus the 7.2/8.3 projection harnesses; added 9.1 routing coverage for raw, semantic, graph, composed, and explicit override behavior
+**Blockers:** None
+**Next:** Session 9.2 only if explicitly requested; 9.1 stops at routing and attribution
+
+---
+
 ## Session 7.3 - 2026-04-18
 
 **Spec:** Phase 7.3 - Reflection / Consolidation Alignment

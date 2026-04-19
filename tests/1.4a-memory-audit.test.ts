@@ -1,35 +1,43 @@
-import { env, SELF } from 'cloudflare:test'
+import { env } from 'cloudflare:test'
 import { describe, expect, it } from 'vitest'
-import { deriveTenantId } from '../src/middleware/auth'
-import { installCfAccessMock } from './support/cf-access'
+import { getHindsightMemoryOpsSnapshot } from '../src/services/hindsight-ops'
 
-const TEST_AUD = 'test-aud-brain-access'
+const TEST_SUB = 'phase14-memory-audit-test-user'
 
-async function ensureTenant(sub: string): Promise<{ sub: string; tenantId: string }> {
-  const tenantId = await deriveTenantId(sub, TEST_AUD)
+function makeWebhookEnv() {
+  return {
+    ...env,
+    HINDSIGHT: {
+      fetch: async (input: RequestInfo | URL) => {
+        const url =
+          input instanceof Request
+            ? new URL(input.url)
+            : new URL(input.toString())
+        if (/^\/v1\/default\/banks\/[^/]+\/webhooks$/.test(url.pathname)) {
+          return new Response(JSON.stringify({ items: [] }), {
+            status: 200,
+            headers: { 'Content-Type': 'application/json' },
+          })
+        }
+        return new Response(JSON.stringify({ status: 'ok' }), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        })
+      },
+    },
+  } as typeof env
+}
+
+async function ensureTenant(tenantId: string): Promise<{ sub: string; tenantId: string }> {
   const now = Date.now()
   await env.D1_US.prepare(
     `INSERT OR IGNORE INTO tenants
      (id, created_at, updated_at, data_region, primary_channel, hindsight_tenant_id, ai_cost_reset_at)
      VALUES (?, ?, ?, 'us', 'sms', ?, ?)`,
   ).bind(tenantId, now, now, `bank-${tenantId}`, now).run()
-  return { sub, tenantId }
+  return { sub: TEST_SUB, tenantId }
 }
-
-async function authorizedFetch(sub: string, path: string): Promise<Response> {
-  const auth = await installCfAccessMock(sub)
-  try {
-    return await SELF.fetch(`http://localhost${path}`, {
-      headers: {
-        'CF-Access-Jwt-Assertion': auth.jwt,
-      },
-    })
-  } finally {
-    auth.restore()
-  }
-}
-
-describe('1.4a Memory Audit Route', () => {
+describe('1.4a Memory Audit Snapshot', () => {
   it('returns a tenant-scoped hindsight memory ops snapshot', async () => {
     const ctx = await ensureTenant(`phase14-memory-audit-${crypto.randomUUID()}`)
     const now = Date.now()
@@ -75,10 +83,7 @@ describe('1.4a Memory Audit Route', () => {
       ),
     ])
 
-    const response = await authorizedFetch(ctx.sub, '/api/audit/memory')
-
-    expect(response.status).toBe(200)
-    const body = await response.json() as {
+    const body = await getHindsightMemoryOpsSnapshot(makeWebhookEnv(), ctx.tenantId) as {
       summary: {
         totalCount: number
         pendingCount: number

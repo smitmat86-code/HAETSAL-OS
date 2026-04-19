@@ -11,13 +11,13 @@ import type {
   CanonicalSearchResult,
 } from '../src/types/canonical-memory-query'
 import { processCanonicalProjectionDispatch } from '../src/workers/ingestion/canonical-projection-consumer'
+import { createHindsightTestEnv, type HindsightCaptureState, type HindsightRecallRow } from './support/hindsight-test-env'
 import conversationFixture from './fixtures/canonical-memory/conversation-capture.json'
 import noteFixture from './fixtures/canonical-memory/note-capture.json'
 
 type ToolResponse = { content: Array<{ text: string }> }
 type ToolHandler = (input: unknown) => Promise<ToolResponse>
 type ToolRegistry = { handlers: Map<string, ToolHandler>; pending: Promise<unknown>[] }
-type RecallRow = Record<string, unknown>
 
 const SUITE_ID = crypto.randomUUID()
 const TENANT_A = `test-tenant-canonical-72-${SUITE_ID}`
@@ -78,62 +78,8 @@ async function encryptFixture(
   }
 }
 
-function createHindsightEnv(state: {
-  recallResults: RecallRow[]
-  failRecall: boolean
-  operationStatus: 'pending' | 'completed' | 'failed'
-  retainCount: number
-}): typeof env {
-  return {
-    ...env,
-    HINDSIGHT_DEDICATED_WORKERS_ENABLED: 'false',
-    WORKER_DOMAIN: 'brain.workers.dev',
-    HINDSIGHT_WEBHOOK_SECRET: 'test-secret',
-    HINDSIGHT: {
-      fetch: async (input: RequestInfo | URL, init?: RequestInit) => {
-        const url = input instanceof Request ? new URL(input.url) : new URL(input.toString())
-        if (/^\/v1\/default\/banks\/[^/]+\/mental-models$/.test(url.pathname) || /^\/v1\/default\/banks\/[^/]+\/webhooks$/.test(url.pathname)) {
-          return Response.json({ items: [] })
-        }
-        if (/^\/v1\/default\/banks\/[^/]+\/operations\/[^/]+$/.test(url.pathname)) {
-          const operationId = url.pathname.split('/').at(-1)
-          return Response.json({
-            operation_id: operationId,
-            status: state.operationStatus,
-            operation_type: 'retain',
-            created_at: new Date().toISOString(),
-            updated_at: new Date().toISOString(),
-            completed_at: state.operationStatus === 'completed' || state.operationStatus === 'failed'
-              ? new Date().toISOString()
-              : null,
-            error_message: state.operationStatus === 'failed' ? 'semantic recall reconciliation failed' : null,
-          })
-        }
-        if (/^\/v1\/default\/banks\/[^/]+\/memories$/.test(url.pathname)) {
-          const request = input instanceof Request ? input : new Request(input.toString(), init)
-          const body = await request.clone().json() as { items: Array<{ document_id: string }> }
-          state.retainCount += 1
-          return Response.json({
-            success: true,
-            bank_id: url.pathname.split('/')[4],
-            items_count: 1,
-            async: true,
-            operation_id: `op-${body.items[0]!.document_id}`,
-          })
-        }
-        if (/^\/v1\/default\/banks\/[^/]+\/memories\/recall$/.test(url.pathname)) {
-          if (state.failRecall) {
-            return Response.json({ detail: 'semantic recall unavailable' }, { status: 503 })
-          }
-          return Response.json({
-            results: state.recallResults,
-            text: `Found ${state.recallResults.length} semantic memories.`,
-          })
-        }
-        return Response.json({ status: 'ok' })
-      },
-    },
-  } as unknown as typeof env
+function replaceRecallResults(target: HindsightRecallRow[], next: HindsightRecallRow[]): void {
+  target.splice(0, target.length, ...next)
 }
 
 function createToolRegistry(testEnv: typeof env, tmk: CryptoKey | null): ToolRegistry {
@@ -216,8 +162,9 @@ beforeEach(() => {
 describe('7.2 semantic recall through canonical interface', () => {
   it('returns a note-style semantic memory through search_memory with canonical provenance', async () => {
     const tmk = await deriveTestTmk()
-    const state = { recallResults: [] as RecallRow[], failRecall: false, operationStatus: 'completed' as const, retainCount: 0 }
-    const testEnv = createHindsightEnv(state)
+    const recallResults: HindsightRecallRow[] = []
+    const capture: HindsightCaptureState = { retainCount: 0, operationIds: [] }
+    const testEnv = createHindsightTestEnv({ capture, operationStatus: 'completed', recallResults })
     const seeded = await captureAndProject({
       fixture: noteFixture as CanonicalPipelineCaptureInput,
       suffix: 'note-semantic',
@@ -226,13 +173,13 @@ describe('7.2 semantic recall through canonical interface', () => {
       tmk,
     })
 
-    state.recallResults = [{
+    replaceRecallResults(recallResults, [{
       id: 'semantic-note-result',
       document_id: seeded.engineDocumentId,
       text: 'The user committed to following up with two open questions tomorrow.',
       score: 0.97,
       metadata: { source: 'mcp_retain', domain: 'general' },
-    }]
+    }])
 
     const result = await callTool<CanonicalSearchResult>(createToolRegistry(testEnv, tmk), 'search_memory', {
       query: 'What follow-up is due tomorrow?',
@@ -251,8 +198,9 @@ describe('7.2 semantic recall through canonical interface', () => {
 
   it('returns a conversation-style semantic memory through the canonical surface', async () => {
     const tmk = await deriveTestTmk()
-    const state = { recallResults: [] as RecallRow[], failRecall: false, operationStatus: 'completed' as const, retainCount: 0 }
-    const testEnv = createHindsightEnv(state)
+    const recallResults: HindsightRecallRow[] = []
+    const capture: HindsightCaptureState = { retainCount: 0, operationIds: [] }
+    const testEnv = createHindsightTestEnv({ capture, operationStatus: 'completed', recallResults })
     const seeded = await captureAndProject({
       fixture: conversationFixture as CanonicalPipelineCaptureInput,
       suffix: 'conversation-semantic',
@@ -261,13 +209,13 @@ describe('7.2 semantic recall through canonical interface', () => {
       tmk,
     })
 
-    state.recallResults = [{
+    replaceRecallResults(recallResults, [{
       id: 'semantic-conversation-result',
       document_id: seeded.engineDocumentId,
       text: 'The rollout notes should keep the checklist owner as an explicit follow-up item.',
       score: 0.91,
       metadata: { source: 'mcp_memory_write', domain: 'general' },
-    }]
+    }])
 
     const result = await callTool<CanonicalSearchResult>(createToolRegistry(testEnv, tmk), 'search_memory', {
       query: 'Who still owns the operations checklist?',
@@ -286,8 +234,9 @@ describe('7.2 semantic recall through canonical interface', () => {
 
   it('marks mixed canonical and local-only semantic results as partial without faking linkback', async () => {
     const tmk = await deriveTestTmk()
-    const state = { recallResults: [] as RecallRow[], failRecall: false, operationStatus: 'completed' as const, retainCount: 0 }
-    const testEnv = createHindsightEnv(state)
+    const recallResults: HindsightRecallRow[] = []
+    const capture: HindsightCaptureState = { retainCount: 0, operationIds: [] }
+    const testEnv = createHindsightTestEnv({ capture, operationStatus: 'completed', recallResults })
     const seeded = await captureAndProject({
       fixture: noteFixture as CanonicalPipelineCaptureInput,
       suffix: 'mixed-linkback',
@@ -296,7 +245,7 @@ describe('7.2 semantic recall through canonical interface', () => {
       tmk,
     })
 
-    state.recallResults = [
+    replaceRecallResults(recallResults, [
       {
         id: 'semantic-linked-result',
         document_id: seeded.engineDocumentId,
@@ -311,7 +260,7 @@ describe('7.2 semantic recall through canonical interface', () => {
         score: 0.42,
         metadata: { source: 'local_notes', domain: 'general' },
       },
-    ]
+    ])
 
     const result = await callTool<CanonicalSearchResult>(createToolRegistry(testEnv, tmk), 'search_memory', {
       query: 'What do I know about tomorrow?',
@@ -329,8 +278,9 @@ describe('7.2 semantic recall through canonical interface', () => {
 
   it('keeps not-yet-projected captures out of semantic mode while raw search still finds them', async () => {
     const tmk = await deriveTestTmk()
-    const state = { recallResults: [] as RecallRow[], failRecall: false, operationStatus: 'completed' as const, retainCount: 0 }
-    const testEnv = createHindsightEnv(state)
+    const recallResults: HindsightRecallRow[] = []
+    const capture: HindsightCaptureState = { retainCount: 0, operationIds: [] }
+    const testEnv = createHindsightTestEnv({ capture, operationStatus: 'completed', recallResults })
     const sendSpy = vi.spyOn(testEnv.QUEUE_BULK, 'send').mockResolvedValue(undefined as never)
     const input = await encryptFixture({
       ...(noteFixture as CanonicalPipelineCaptureInput),
@@ -355,14 +305,15 @@ describe('7.2 semantic recall through canonical interface', () => {
 
     expect(semantic.mode).toBe('semantic')
     expect(semantic.items).toHaveLength(0)
-    expect(raw.mode).toBe('lexical')
+    expect(raw.mode).toBe('raw')
     expect(raw.items[0]?.captureId).toBeTruthy()
   })
 
   it('extends memory_status with truthful semantic readiness and engine linkback fields', async () => {
     const tmk = await deriveTestTmk()
-    const state = { recallResults: [] as RecallRow[], failRecall: false, operationStatus: 'completed' as const, retainCount: 0 }
-    const testEnv = createHindsightEnv(state)
+    const recallResults: HindsightRecallRow[] = []
+    const capture: HindsightCaptureState = { retainCount: 0, operationIds: [] }
+    const testEnv = createHindsightTestEnv({ capture, operationStatus: 'completed', recallResults })
     const seeded = await captureAndProject({
       fixture: noteFixture as CanonicalPipelineCaptureInput,
       suffix: 'status-semantic',
@@ -386,9 +337,16 @@ describe('7.2 semantic recall through canonical interface', () => {
   })
 
   it('returns a truthful unavailable semantic result when the engine recall call fails', async () => {
+    vi.spyOn(console, 'warn').mockImplementation(() => {})
     const tmk = await deriveTestTmk()
-    const state = { recallResults: [] as RecallRow[], failRecall: true, operationStatus: 'completed' as const, retainCount: 0 }
-    const testEnv = createHindsightEnv(state)
+    const recallResults: HindsightRecallRow[] = []
+    const capture: HindsightCaptureState = { retainCount: 0, operationIds: [] }
+    const testEnv = createHindsightTestEnv({
+      capture,
+      failRecall: true,
+      operationStatus: 'completed',
+      recallResults,
+    })
 
     const result = await callTool<CanonicalSearchResult>(createToolRegistry(testEnv, tmk), 'search_memory', {
       query: 'Anything pending?',

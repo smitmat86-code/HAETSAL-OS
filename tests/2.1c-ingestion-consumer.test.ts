@@ -102,6 +102,7 @@ describe('2.1c ingestion consumer', () => {
   })
 
   it('retries non-retain messages when TMK is unavailable', async () => {
+    vi.spyOn(console, 'warn').mockImplementation(() => {})
     const message = makeQueueMessage({
       type: 'sms_inbound',
       tenantId: 'tenant-b',

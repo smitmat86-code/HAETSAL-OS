@@ -1,7 +1,9 @@
 import type { Env } from '../types/env'
 import type { CanonicalDocumentInput, CanonicalDocumentResult, CanonicalMemoryListItem, CanonicalRecentInput, CanonicalRecentResult, CanonicalSearchInput, CanonicalSearchResult } from '../types/canonical-memory-query'
 import { buildCanonicalPreview, clampCanonicalLimit, readCanonicalDocumentBody, type CanonicalDocumentRow, type CanonicalListRow, type CanonicalMemoryReadOptions } from './canonical-memory-read-model'
-import { searchCanonicalGraphMemory } from './canonical-composed-graph-context'
+import { decideCanonicalMemoryRoute } from './canonical-memory-router'
+import { applyCanonicalRoute } from './canonical-source-attribution'
+import { searchCanonicalComposedMemory, searchCanonicalGraphMemory } from './canonical-composed-graph-context'
 import { searchCanonicalSemanticMemory } from './canonical-semantic-recall'
 
 async function listCanonicalRows(env: Env, tenantId: string, scope: string | null, limit: number): Promise<CanonicalListRow[]> {
@@ -23,7 +25,7 @@ function toMemoryListItem(row: CanonicalListRow, body: string | null, score?: nu
     sourceRef: row.source_ref,
     preview: buildCanonicalPreview(body ?? row.title ?? row.source_ref ?? row.scope),
     capturedAt: row.captured_at,
-    mode: 'lexical',
+    mode: 'raw',
     ...(score !== undefined ? { score } : {}),
   }
 }
@@ -38,10 +40,7 @@ function scoreCanonicalRow(query: string, row: CanonicalListRow, body: string | 
   return matchedTerms > 0 ? matchedTerms : 0
 }
 
-export async function searchCanonicalMemory(input: CanonicalSearchInput, env: Env, tenantId: string, options: CanonicalMemoryReadOptions = {}): Promise<CanonicalSearchResult> {
-  const mode = input.mode ?? 'lexical'
-  if (mode === 'semantic') return searchCanonicalSemanticMemory(input, env, tenantId)
-  if (mode === 'graph') return searchCanonicalGraphMemory(input, env, tenantId)
+async function searchCanonicalRawMemory(input: CanonicalSearchInput, env: Env, tenantId: string, options: CanonicalMemoryReadOptions = {}): Promise<CanonicalSearchResult> {
   const limit = clampCanonicalLimit(input.limit, 5, 10)
   const rows = await listCanonicalRows(env, tenantId, input.scope ?? null, Math.max(limit * 4, 20))
   const items = await Promise.all(rows.map(async row => {
@@ -51,10 +50,23 @@ export async function searchCanonicalMemory(input: CanonicalSearchInput, env: En
   }))
   return {
     query: input.query,
-    mode: 'lexical',
+    mode: 'raw',
     status: 'ok',
     items: items.filter(Boolean).sort((left, right) => ((right!.score ?? 0) - (left!.score ?? 0)) || ((right!.capturedAt ?? 0) - (left!.capturedAt ?? 0))).slice(0, limit) as CanonicalMemoryListItem[],
   }
+}
+
+export async function searchCanonicalMemory(input: CanonicalSearchInput, env: Env, tenantId: string, options: CanonicalMemoryReadOptions = {}): Promise<CanonicalSearchResult> {
+  const route = decideCanonicalMemoryRoute(input.query, input.mode)
+  const routedInput = { ...input, mode: route.mode, query: route.dispatchQuery }
+  const result = route.mode === 'semantic'
+    ? await searchCanonicalSemanticMemory(routedInput, env, tenantId)
+    : route.mode === 'graph'
+      ? await searchCanonicalGraphMemory(routedInput, env, tenantId)
+      : route.mode === 'composed'
+        ? await searchCanonicalComposedMemory(routedInput, env, tenantId)
+        : await searchCanonicalRawMemory(routedInput, env, tenantId, options)
+  return applyCanonicalRoute(result, route)
 }
 
 export async function listRecentCanonicalMemories(input: CanonicalRecentInput, env: Env, tenantId: string, options: CanonicalMemoryReadOptions = {}): Promise<CanonicalRecentResult> {

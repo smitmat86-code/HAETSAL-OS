@@ -26,8 +26,8 @@ const searchSchema = z.object({
   query: z.string().describe('Canonical memory search query'),
   scope: z.string().optional().describe('Optional scope filter'),
   limit: z.number().optional().describe('Maximum results to return'),
-  mode: z.enum(['lexical', 'semantic', 'graph']).optional()
-    .describe('Search mode; graph is the explicit graph-backed composed retrieval path'),
+  mode: z.enum(['raw', 'semantic', 'graph', 'composed', 'lexical']).optional()
+    .describe('Optional explicit mode override; lexical is accepted as a backward-compatible alias for raw'),
 })
 const recentSchema = z.object({ scope: z.string().optional().describe('Optional scope filter'), limit: z.number().optional().describe('Maximum results to return') })
 const documentSchema = z.object({ document_id: z.string().describe('Canonical document id') })
@@ -68,7 +68,7 @@ export function registerCanonicalMemoryTools(server: McpServer, ctx: CanonicalMe
       query: typed.query,
       scope: typed.scope ?? null,
       limit: typed.limit,
-      mode: typed.mode ?? 'lexical',
+      mode: typed.mode,
     }, ctx.getEnv(), ctx.getTenantId(), { tmk: ctx.getTmk() })
     ctx.getExecutionContext().waitUntil(writeAuditLog(ctx.getEnv(), 'memory.search.executed', ctx.getTenantId(), { agentIdentity: 'mcpagent/tool' }))
     return asText(result)

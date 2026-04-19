@@ -1,4 +1,4 @@
-import { beforeAll, describe, expect, it } from 'vitest'
+import { beforeAll, describe, expect, it, vi } from 'vitest'
 import { env } from 'cloudflare:test'
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { captureCanonicalMemory } from '../src/services/canonical-memory'
@@ -143,6 +143,7 @@ beforeAll(async () => {
 
 describe('6.2 canonical MCP memory surface', () => {
   it('registers the canonical tool names and keeps capture_memory callable', async () => {
+    vi.spyOn(console, 'warn').mockImplementation(() => {})
     const registry = createToolRegistry(null)
     const result = await callTool<{ status: string }>(registry, 'capture_memory', {
       content: 'Bridge the current capture path',

@@ -50,9 +50,8 @@ export async function recordHindsightProjectionState(args: {
     | 'memory.projection.hindsight_completed'
     | 'memory.projection.hindsight_failed'
 }): Promise<void> {
-  const updatedAt = Date.now()
   const latest = await args.env.D1_US.prepare(
-    `SELECT status, engine_operation_id, error_message
+    `SELECT status, engine_operation_id, error_message, updated_at
      FROM canonical_projection_results
      WHERE tenant_id = ? AND projection_job_id = ?
      ORDER BY updated_at DESC, created_at DESC, id DESC
@@ -61,6 +60,7 @@ export async function recordHindsightProjectionState(args: {
     status: string | null
     engine_operation_id: string | null
     error_message: string | null
+    updated_at: number | null
   }>()
   if (
     latest?.status === args.resultStatus &&
@@ -76,6 +76,7 @@ export async function recordHindsightProjectionState(args: {
     args.job.id,
     args.jobStatus,
   )
+  const updatedAt = Math.max(Date.now(), (latest?.updated_at ?? 0) + 1)
   await args.env.D1_US.batch([
     args.env.D1_US.prepare(
       `UPDATE canonical_memory_operations

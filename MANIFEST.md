@@ -60,22 +60,23 @@ Last updated: 2026-04-18 | Session: 7.1 (Hindsight Projection Adapter)
 | src\services\bootstrap\interview.ts | 76 | createInitialState, currentQuestion, currentDomain... | ✅ |
 | src\services\canonical-capture-compat.ts | 49 | — | ✅ |
 | src\services\canonical-capture-pipeline.ts | 94 | — | ✅ |
-| src\services\canonical-composed-graph-context.ts | 48 | — | ✅ |
+| src\services\canonical-composed-graph-context.ts | 78 | — | ✅ |
 | src\services\canonical-graph-projection-design.ts | 122 | GRAPHITI_DEPLOYMENT_POSTURE, GRAPHITI_RECONCILIATION_RULES, buildCanonicalGraphProjectionPlan... | ✅ |
 | src\services\canonical-graph-query.ts | 134 | — | ✅ |
 | src\services\canonical-graphiti-payload.ts | 95 | GraphitiProjectionJobContext | ✅ |
 | src\services\canonical-graphiti-projection.ts | 148 | — | ✅ |
 | src\services\canonical-graphiti-reconcile.ts | 122 | — | ✅ |
 | src\services\canonical-hindsight-projection-payload.ts | 135 | ProjectionJobContext, HindsightProjectionPayload, resolveProjectionSourceRef... | ✅ |
-| src\services\canonical-hindsight-projection-state.ts | 118 | HindsightProjectionJobRow | ✅ |
+| src\services\canonical-hindsight-projection-state.ts | 119 | HindsightProjectionJobRow | ✅ |
 | src\services\canonical-hindsight-projection.ts | 137 | — | ✅ |
 | src\services\canonical-hindsight-reconcile.ts | 58 | — | ✅ |
 | src\services\canonical-hindsight-reflection-status.ts | 124 | — | ✅ |
 | src\services\canonical-hindsight-reflection.ts | 139 | CanonicalHindsightReflectionAuditAction, CanonicalHindsightReflectionRun | ✅ |
 | src\services\canonical-memory-artifacts.ts | 66 | PersistedCanonicalPayloads | ✅ |
 | src\services\canonical-memory-audit.ts | 132 | buildCanonicalCaptureAcceptedAuditBatch, buildCanonicalProjectionQueuedAuditBatch, buildCanonicalCaptureFailedAuditBatch... | ✅ |
-| src\services\canonical-memory-query.ts | 93 | — | ✅ |
+| src\services\canonical-memory-query.ts | 105 | — | ✅ |
 | src\services\canonical-memory-read-model.ts | 67 | CanonicalMemoryReadOptions, CanonicalListRow, CanonicalDocumentRow... | ✅ |
+| src\services\canonical-memory-router.ts | 120 | normalizeMemoryQueryMode, decideCanonicalMemoryRoute | ✅ |
 | src\services\canonical-memory-schema.ts | 75 | CANONICAL_PROJECTION_KINDS, normalizeCanonicalBody, assertCanonicalIdentity... | ✅ |
 | src\services\canonical-memory-stats.ts | 56 | — | ✅ |
 | src\services\canonical-memory-status.ts | 144 | — | ✅ |
@@ -84,6 +85,7 @@ Last updated: 2026-04-18 | Session: 7.1 (Hindsight Projection Adapter)
 | src\services\canonical-projection-dispatch.ts | 92 | — | ✅ |
 | src\services\canonical-semantic-linkback.ts | 146 | CanonicalSemanticLinkback, extractSemanticLookup | ✅ |
 | src\services\canonical-semantic-recall.ts | 135 | — | ✅ |
+| src\services\canonical-source-attribution.ts | 56 | buildCanonicalSourceAttribution, applyCanonicalRoute | ✅ |
 | src\services\delivery\obsidian-write.ts | 52 | — | ✅ |
 | src\services\delivery\sms.ts | 35 | — | ✅ |
 | src\services\delivery\telegram.ts | 31 | — | ✅ |
@@ -127,7 +129,7 @@ Last updated: 2026-04-18 | Session: 7.1 (Hindsight Projection Adapter)
 | src\types\canonical-capture-pipeline.ts | 91 | CanonicalCompatibilityMode, CanonicalPipelineCaptureInput, CanonicalProjectionDispatchMessage... | ✅ |
 | src\types\canonical-graph-projection.ts | 136 | GraphitiDeploymentPostureId, GraphProjectionEpisodeKind, GraphProjectionEntityKind... | ✅ |
 | src\types\canonical-graph-query.ts | 67 | TraceRelationshipInput, EntityTimelineInput, CanonicalProjectionProvenance... | ✅ |
-| src\types\canonical-memory-query.ts | 132 | CanonicalSearchInput, CanonicalRecentInput, CanonicalDocumentInput... | ✅ |
+| src\types\canonical-memory-query.ts | 144 | MemoryQueryMode, MemoryQueryModePreference, CanonicalMemoryRouteDecision... | ✅ |
 | src\types\canonical-memory.ts | 34 | CanonicalProjectionKind, CanonicalArtifactMode, CanonicalArtifactRef... | ✅ |
 | src\types\env.ts | 64 | Env | ✅ |
 | src\types\google.ts | 53 | GoogleOAuthTokens, GoogleThread, GoogleMessage... | ✅ |

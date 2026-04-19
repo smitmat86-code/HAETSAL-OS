@@ -211,6 +211,7 @@ describe('8.2 graphiti ingestion projection', () => {
   })
 
   it('marks graph projection failures truthfully and allows a later retry to complete', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {})
     let attempt = 0
     const originalFetch = globalThis.fetch
     const testEnv = makeGraphitiEnv()

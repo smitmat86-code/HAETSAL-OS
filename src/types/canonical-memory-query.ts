@@ -1,12 +1,22 @@
 import type { CanonicalGraphProjectionStatus } from './canonical-graph-projection'
 import type { CanonicalProjectionProvenance } from './canonical-graph-query'
 
+export type MemoryQueryMode = 'raw' | 'semantic' | 'graph' | 'composed'
+export type MemoryQueryModePreference = MemoryQueryMode | 'lexical'
+
+export interface CanonicalMemoryRouteDecision { mode: MemoryQueryMode; reason: string; explicit: boolean; dispatchQuery: string }
+export interface CanonicalSourceAttribution {
+  mode: MemoryQueryMode; sourceSystem: string | null; captureId: string | null; documentId: string | null
+  canonicalOperationId: string | null; projectionKind: 'hindsight' | 'graphiti' | null
+  projectionRef: string | null; targetRef: string | null; graphRef: string | null
+}
+
 export interface CanonicalSearchInput {
   tenantId: string
   query: string
   scope?: string | null
   limit?: number
-  mode?: 'lexical' | 'semantic' | 'graph'
+  mode?: MemoryQueryModePreference
 }
 
 export interface CanonicalRecentInput { tenantId: string; scope?: string | null; limit?: number }
@@ -27,8 +37,9 @@ export interface CanonicalMemoryListItem {
   preview: string
   capturedAt: number | null
   score?: number | null
-  mode?: 'lexical' | 'semantic' | 'graph'
+  mode?: MemoryQueryMode
   recallText?: string | null
+  attribution?: CanonicalSourceAttribution | null
   provenance?: CanonicalProjectionProvenance | null
   semanticStatus?: {
     projectionKind: 'hindsight'
@@ -49,8 +60,9 @@ export interface CanonicalMemoryListItem {
 
 export interface CanonicalSearchResult {
   query: string
-  mode: 'lexical' | 'semantic' | 'graph'
+  mode: MemoryQueryMode
   status: 'ok' | 'partial' | 'unavailable'
+  route?: CanonicalMemoryRouteDecision | null
   items: CanonicalMemoryListItem[]
 }
 

@@ -16,7 +16,7 @@ type ToolHandler = (input: unknown) => Promise<ToolResponse>
 type ToolRegistry = { handlers: Map<string, ToolHandler>; pending: Promise<unknown>[] }
 
 const SUITE_ID = crypto.randomUUID()
-const TENANT_A = `test-tenant-graph-query-83-${SUITE_ID}`
+const TENANT_PREFIX = `test-tenant-graph-query-83-${SUITE_ID}`
 
 async function deriveTestTmk(): Promise<CryptoKey> {
   const material = await crypto.subtle.importKey('raw', new TextEncoder().encode(`graph-query-${SUITE_ID}`), { name: 'HKDF' }, false, ['deriveKey'])
@@ -40,10 +40,15 @@ async function ensureTenantWithKek(tenantId: string): Promise<void> {
     .bind(now + (24 * 60 * 60 * 1000), now, tenantId).run()
 }
 
-async function encryptFixture(fixture: CanonicalPipelineCaptureInput, suffix: string, tmk: CryptoKey): Promise<CanonicalPipelineCaptureInput> {
+async function encryptFixture(
+  fixture: CanonicalPipelineCaptureInput,
+  tenantId: string,
+  suffix: string,
+  tmk: CryptoKey,
+): Promise<CanonicalPipelineCaptureInput> {
   return {
     ...fixture,
-    tenantId: TENANT_A,
+    tenantId,
     sourceRef: `${fixture.sourceRef ?? 'fixture'}-${suffix}`,
     bodyEncrypted: await encryptContentForArchive(fixture.body, tmk),
   }
@@ -72,13 +77,17 @@ function buildCompletedResponse(body: Record<string, any>) {
   }
 }
 
-function createToolRegistry(testEnv: typeof env, tmk: CryptoKey | null): ToolRegistry {
+function createToolRegistry(
+  testEnv: typeof env,
+  tenantId: string,
+  tmk: CryptoKey | null,
+): ToolRegistry {
   const handlers = new Map<string, ToolHandler>()
   const pending: Promise<unknown>[] = []
   const server = { tool(name: string, _description: string, _shape: object, handler: ToolHandler) { handlers.set(name, handler) } } as unknown as McpServer
   registerCanonicalMemoryTools(server, {
     getEnv: () => testEnv,
-    getTenantId: () => TENANT_A,
+    getTenantId: () => tenantId,
     getTmk: () => tmk,
     getExecutionContext: () => ({ waitUntil: (promise: Promise<unknown>) => { pending.push(promise) } }),
   })
@@ -92,6 +101,7 @@ async function callTool<T>(registry: ToolRegistry, name: string, input: unknown)
 }
 
 async function captureAndProject(args: {
+  tenantId: string
   fixture: CanonicalPipelineCaptureInput
   suffix: string
   memoryType: 'episodic' | 'semantic' | 'world'
@@ -106,23 +116,24 @@ async function captureAndProject(args: {
     const body = JSON.parse(String(init?.body ?? (input instanceof Request ? await input.clone().text() : '{}'))) as Record<string, any>
     return new Response(JSON.stringify(buildCompletedResponse(body)), { status: 200, headers: { 'Content-Type': 'application/json' } })
   })
-  const input = await encryptFixture(args.fixture, args.suffix, args.tmk)
-  await captureThroughCanonicalPipeline({ ...input, compatibilityMode: 'off', memoryType: args.memoryType }, args.testEnv, TENANT_A)
+  const input = await encryptFixture(args.fixture, args.tenantId, args.suffix, args.tmk)
+  await captureThroughCanonicalPipeline({ ...input, compatibilityMode: 'off', memoryType: args.memoryType }, args.testEnv, args.tenantId)
   const message = sendSpy.mock.calls[0]?.[0] as { tenantId: string; payload: Record<string, unknown> }
   await processCanonicalProjectionDispatch(message.tenantId, { ...message.payload, projectionKinds: ['graphiti'] }, args.testEnv)
   sendSpy.mockRestore()
 }
 
-beforeAll(async () => { await ensureTenantWithKek(TENANT_A) })
 beforeEach(() => { vi.restoreAllMocks() })
 
 describe('8.3 graph and timeline query surface', () => {
   it('traces a direct relationship through the canonical graph surface with provenance linkback', async () => {
+    const tenantId = `${TENANT_PREFIX}-relationship`
     const tmk = await deriveTestTmk()
     const testEnv = makeGraphitiEnv()
-    await captureAndProject({ fixture: conversationFixture as CanonicalPipelineCaptureInput, suffix: 'relationship', memoryType: 'semantic', testEnv, tmk })
+    await ensureTenantWithKek(tenantId)
+    await captureAndProject({ tenantId, fixture: conversationFixture as CanonicalPipelineCaptureInput, suffix: 'relationship', memoryType: 'semantic', testEnv, tmk })
 
-    const result = await callTool<TraceRelationshipResult>(createToolRegistry(testEnv, tmk), 'trace_relationship', {
+    const result = await callTool<TraceRelationshipResult>(createToolRegistry(testEnv, tenantId, tmk), 'trace_relationship', {
       from: 'User', to: 'Assistant', relation: 'conversed_with', limit: 5,
     })
 
@@ -135,12 +146,14 @@ describe('8.3 graph and timeline query surface', () => {
   })
 
   it('returns a chronologically ordered timeline for a shared graph entity', async () => {
+    const tenantId = `${TENANT_PREFIX}-timeline`
     const tmk = await deriveTestTmk()
     const testEnv = makeGraphitiEnv()
-    await captureAndProject({ fixture: noteFixture as CanonicalPipelineCaptureInput, suffix: 'timeline-note', memoryType: 'episodic', testEnv, tmk })
-    await captureAndProject({ fixture: conversationFixture as CanonicalPipelineCaptureInput, suffix: 'timeline-conversation', memoryType: 'semantic', testEnv, tmk })
+    await ensureTenantWithKek(tenantId)
+    await captureAndProject({ tenantId, fixture: noteFixture as CanonicalPipelineCaptureInput, suffix: 'timeline-note', memoryType: 'episodic', testEnv, tmk })
+    await captureAndProject({ tenantId, fixture: conversationFixture as CanonicalPipelineCaptureInput, suffix: 'timeline-conversation', memoryType: 'semantic', testEnv, tmk })
 
-    const result = await callTool<EntityTimelineResult>(createToolRegistry(testEnv, tmk), 'get_entity_timeline', {
+    const result = await callTool<EntityTimelineResult>(createToolRegistry(testEnv, tenantId, tmk), 'get_entity_timeline', {
       entity: 'general', limit: 5,
     })
 
@@ -150,11 +163,13 @@ describe('8.3 graph and timeline query surface', () => {
   })
 
   it('reuses search_memory as an explicit graph-backed composed retrieval path', async () => {
+    const tenantId = `${TENANT_PREFIX}-graph-search`
     const tmk = await deriveTestTmk()
     const testEnv = makeGraphitiEnv()
-    await captureAndProject({ fixture: conversationFixture as CanonicalPipelineCaptureInput, suffix: 'graph-search', memoryType: 'semantic', testEnv, tmk })
+    await ensureTenantWithKek(tenantId)
+    await captureAndProject({ tenantId, fixture: conversationFixture as CanonicalPipelineCaptureInput, suffix: 'graph-search', memoryType: 'semantic', testEnv, tmk })
 
-    const result = await callTool<CanonicalSearchResult>(createToolRegistry(testEnv, tmk), 'search_memory', {
+    const result = await callTool<CanonicalSearchResult>(createToolRegistry(testEnv, tenantId, tmk), 'search_memory', {
       query: 'User', mode: 'graph', limit: 5,
     })
 
@@ -167,15 +182,17 @@ describe('8.3 graph and timeline query surface', () => {
   })
 
   it('keeps default canonical search behavior stable unless graph mode is requested explicitly', async () => {
+    const tenantId = `${TENANT_PREFIX}-default-search`
     const tmk = await deriveTestTmk()
     const testEnv = makeGraphitiEnv()
-    await captureAndProject({ fixture: conversationFixture as CanonicalPipelineCaptureInput, suffix: 'default-search', memoryType: 'semantic', testEnv, tmk })
+    await ensureTenantWithKek(tenantId)
+    await captureAndProject({ tenantId, fixture: conversationFixture as CanonicalPipelineCaptureInput, suffix: 'default-search', memoryType: 'semantic', testEnv, tmk })
 
-    const result = await callTool<CanonicalSearchResult>(createToolRegistry(testEnv, tmk), 'search_memory', {
+    const result = await callTool<CanonicalSearchResult>(createToolRegistry(testEnv, tenantId, tmk), 'search_memory', {
       query: 'User', limit: 5,
     })
 
-    expect(result.mode).toBe('lexical')
+    expect(result.mode).toBe('raw')
     expect(result.items[0]?.title).toBe('Conversation recap')
   })
 })

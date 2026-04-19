@@ -5,6 +5,34 @@
 
 ---
 
+## Session 6.3 - 2026-04-18
+
+**Spec:** Phase 6.3 - Canonical Capture Pipeline
+**Built:**
+- `src/types/canonical-capture-pipeline.ts` - canonical-first capture, queue-dispatch, and compatibility-bridge contracts
+- `src/services/canonical-capture-pipeline.ts`, `canonical-projection-dispatch.ts`, `canonical-capture-compat.ts`, `canonical-capture-compat-state.ts` - canonical-first orchestration, truthful queue bookkeeping, and current-Hindsight compatibility retention
+- `src/services/ingestion/retain.ts` - accepted writes now enter the canonical pipeline before the compatibility bridge
+- `src/services/canonical-memory.ts`, `canonical-memory-audit.ts`, `canonical-memory-status.ts`, `canonical-memory-stats.ts`, `src/workers/ingestion/consumer.ts` - accepted/queued/failed + compatibility state made truthful through the existing HAETSAL shell
+- `src/tools/retain.ts`, `src/tools/memory.ts` - stable write surfaces now return canonical ids/status metadata alongside the current Hindsight-visible result
+- `tests/6.3-canonical-capture-pipeline.test.ts` - canonical-first note/conversation/artifact coverage, metadata-only queue payload assertions, compatibility bridging, and procedural-write rejection
+- `LESSONS.md` - added the projection-queue audit timing lesson discovered during the 6.3 rewire
+- `specs/completed/6.3-canonical-capture-pipeline.md` - As-Built completed and spec moved out of `specs/active/`
+**Decisions:**
+- **Canonical acceptance is now the first write boundary.** Projection jobs are created as `accepted`, become `queued` only after queue send succeeds, and flip to `failed` on dispatch failure.
+- **Compatibility state reuses the existing canonical projection-results lane.** `compatibility_*` result rows made the bridge queryable without introducing a new table or changing schema.
+- **The queue contract stays inside the current HAETSAL shell.** The dispatch message uses the existing `{ type, tenantId, payload, enqueuedAt }` envelope rather than introducing a second queue format.
+**Verification:**
+- `npx vitest run tests/6.3-canonical-capture-pipeline.test.ts` - passed
+- `npm test` - passed (`296 passed`, `1 skipped`)
+- `npm run postflight` - passed
+- `npm run manifest` - passed
+**Hindsight Pin:** unchanged (`ghcr.io/vectorize-io/hindsight-api:0.5.2`)
+**Fixture Data:** Reused canonical note/conversation/artifact fixtures; new 6.3 assertions cover queue payload creation and compatibility state transitions
+**Blockers:** None
+**Next:** Session 7.1 - replace the compatibility lane with the real Hindsight projection adapter without changing the canonical public contract
+
+---
+
 ## Session OPS.5 - 2026-04-18
 
 **Spec:** Operational - Session 6.2 checkout completion
@@ -152,7 +180,7 @@
 **Built:**
 - ARCHITECTURE.md — constitutional law (three laws, state tiers, compute continuum, action authorization)
 - CONVENTIONS.md — file limits, naming, Hono patterns, service layer, encryption, action layer, async, DB, anti-patterns
-- .agent/rules/governance.md — AI agent check-in/check-out protocol with Brain-specific guardrails
+- .agents/rules/governance.md — AI agent check-in/check-out protocol with Brain-specific guardrails
 - LESSONS.md — pre-populated with known gotchas from architecture design sessions
 - MANIFEST.md — module registry template + binding status tracker
 - SESSION_LOG.md — this file

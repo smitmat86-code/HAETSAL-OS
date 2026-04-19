@@ -40,7 +40,8 @@ Last updated: 2026-04-17 | Session: OPS.3 (Checkout protocol closeout)
 | src\cron\passes\pass4-gaps.ts | 55 | — | ✅ |
 | src\cron\weekly-synthesis.ts | 73 | WEEKLY_SYNTHESIS_REFLECT_QUERY, WEEKLY_SYNTHESIS_REFLECT_TAGS_MATCH, WEEKLY_SYNTHESIS_REFLECT_BUDGET | ✅ |
 | src\middleware\audit.ts | 45 | auditMiddleware | ✅ |
-| src\middleware\auth.ts | 146 | authMiddleware | ✅ |
+| src\middleware\auth.ts | 104 | authMiddleware | ✅ |
+| src\middleware\cf-access.ts | 58 | CfAccessJwtPayload, deriveAccessPrincipalId | ✅ |
 | src\middleware\dlp.ts | 17 | dlpMiddleware | ✅ |
 | src\services\action\approval-api.ts | 132 | clampPositiveInt | ✅ |
 | src\services\action\authorization.ts | 131 | AuthGateResult | ✅ |
@@ -57,15 +58,19 @@ Last updated: 2026-04-17 | Session: OPS.3 (Checkout protocol closeout)
 | src\services\bootstrap\hindsight-config.ts | 106 | — | ✅ |
 | src\services\bootstrap\historical-import.ts | 140 | historicalSalienceMultiplier | ✅ |
 | src\services\bootstrap\interview.ts | 76 | createInitialState, currentQuestion, currentDomain... | ✅ |
+| src\services\canonical-capture-compat-state.ts | 85 | toCompatibilityResult | ✅ |
+| src\services\canonical-capture-compat.ts | 115 | — | ✅ |
+| src\services\canonical-capture-pipeline.ts | 71 | — | ✅ |
 | src\services\canonical-memory-artifacts.ts | 66 | PersistedCanonicalPayloads | ✅ |
-| src\services\canonical-memory-audit.ts | 41 | buildCanonicalAuditBatch | ✅ |
+| src\services\canonical-memory-audit.ts | 91 | buildCanonicalCaptureAcceptedAuditBatch, buildCanonicalProjectionQueuedAuditBatch, buildCanonicalCaptureFailedAuditBatch... | ✅ |
 | src\services\canonical-memory-query.ts | 142 | — | ✅ |
 | src\services\canonical-memory-read-model.ts | 67 | CanonicalMemoryReadOptions, CanonicalListRow, CanonicalDocumentRow... | ✅ |
 | src\services\canonical-memory-schema.ts | 75 | CANONICAL_PROJECTION_KINDS, normalizeCanonicalBody, assertCanonicalIdentity... | ✅ |
 | src\services\canonical-memory-stats.ts | 56 | — | ✅ |
-| src\services\canonical-memory-status.ts | 78 | — | ✅ |
+| src\services\canonical-memory-status.ts | 99 | — | ✅ |
 | src\services\canonical-memory-types.ts | 52 | CanonicalChunkPlan, CanonicalArtifactPlan, NormalizedCanonicalCapture... | ✅ |
-| src\services\canonical-memory.ts | 116 | — | ✅ |
+| src\services\canonical-memory.ts | 114 | — | ✅ |
+| src\services\canonical-projection-dispatch.ts | 92 | — | ✅ |
 | src\services\delivery\obsidian-write.ts | 52 | — | ✅ |
 | src\services\delivery\sms.ts | 35 | — | ✅ |
 | src\services\delivery\telegram.ts | 31 | — | ✅ |
@@ -86,7 +91,7 @@ Last updated: 2026-04-17 | Session: OPS.3 (Checkout protocol closeout)
 | src\services\ingestion\enqueue.ts | 55 | EnqueuedRetainResult | ✅ |
 | src\services\ingestion\retain-persistence.ts | 139 | — | ✅ |
 | src\services\ingestion\retain-request.ts | 55 | normalizeHindsightMetadata, buildHindsightRetainRequest | ✅ |
-| src\services\ingestion\retain.ts | 145 | — | ✅ |
+| src\services\ingestion\retain.ts | 95 | — | ✅ |
 | src\services\ingestion\salience.ts | 80 | scoreSalience | ✅ |
 | src\services\ingestion\write-policy.ts | 74 | WritePolicyResult | ✅ |
 | src\services\telnyx.ts | 35 | — | ✅ |
@@ -101,29 +106,31 @@ Last updated: 2026-04-17 | Session: OPS.3 (Checkout protocol closeout)
 | src\tools\act\send-message.ts | 33 | sendMessageSchema | ✅ |
 | src\tools\bootstrap.ts | 104 | registerBootstrapTools | ✅ |
 | src\tools\canonical-memory.ts | 107 | registerCanonicalMemoryTools | ✅ |
-| src\tools\memory.ts | 79 | registerMemoryTools | ✅ |
+| src\tools\memory.ts | 87 | registerMemoryTools | ✅ |
 | src\tools\recall.ts | 73 | — | ✅ |
-| src\tools\retain.ts | 52 | — | ✅ |
+| src\tools\retain.ts | 57 | — | ✅ |
 | src\types\action.ts | 105 | CapabilityClass, AuthorizationLevel, AUTH_LEVEL_ORDINAL... | ✅ |
 | src\types\bootstrap.ts | 76 | BootstrapStatus, BootstrapParams, InterviewDomain... | ✅ |
-| src\types\canonical-memory-query.ts | 98 | CanonicalSearchInput, CanonicalRecentInput, CanonicalDocumentInput... | ✅ |
+| src\types\canonical-capture-pipeline.ts | 67 | CanonicalCompatibilityMode, CanonicalPipelineCaptureInput, CanonicalProjectionDispatchMessage... | ✅ |
+| src\types\canonical-memory-query.ts | 105 | CanonicalSearchInput, CanonicalRecentInput, CanonicalDocumentInput... | ✅ |
 | src\types\canonical-memory.ts | 34 | CanonicalProjectionKind, CanonicalArtifactMode, CanonicalArtifactRef... | ✅ |
 | src\types\env.ts | 62 | Env | ✅ |
 | src\types\google.ts | 53 | GoogleOAuthTokens, GoogleThread, GoogleMessage... | ✅ |
 | src\types\hindsight.ts | 38 | HindsightRetainRequest, HindsightRetainResponse, HindsightRecallRequest... | ✅ |
-| src\types\ingestion.ts | 64 | IngestionSource, IngestionArtifact, SalienceResult... | ✅ |
+| src\types\ingestion.ts | 70 | IngestionSource, IngestionArtifact, SalienceResult... | ✅ |
 | src\types\tenant.ts | 30 | TenantContext, TenantRow | ✅ |
-| src\types\tools.ts | 53 | RetainInput, RetainOutput, RecallInput... | ✅ |
+| src\types\tools.ts | 58 | RetainInput, RetainOutput, RecallInput... | ✅ |
 | src\workers\action\index.ts | 105 | — | ✅ |
 | src\workers\ingestion\bootstrap-handlers.ts | 91 | — | ✅ |
-| src\workers\ingestion\consumer.ts | 108 | — | ✅ |
+| src\workers\ingestion\canonical-projection-consumer.ts | 22 | — | ✅ |
+| src\workers\ingestion\consumer.ts | 115 | — | ✅ |
 | src\workers\ingestion\handlers.ts | 104 | — | ✅ |
 | src\workers\ingestion\retain-consumer.ts | 21 | — | ✅ |
 | src\workers\mcpagent\do\HindsightContainer.ts | 147 | HINDSIGHT_PING_ENDPOINT, HINDSIGHT_WORKER_PING_ENDPOINT, useDedicatedHindsightWorkers... | ✅ |
 | src\workers\mcpagent\do\identity.ts | 13 | MCP_STREAMABLE_HTTP_PREFIX, getMcpAgentObjectName, getMcpAgentObjectId | ✅ |
 | src\workers\mcpagent\do\inbound-message.ts | 37 | — | ✅ |
 | src\workers\mcpagent\do\McpAgent.ts | 149 | McpAgentDO | ✅ |
-| src\workers\mcpagent\do\register-tools.ts | 86 | registerLegacyMemoryTools, registerActTools | ✅ |
+| src\workers\mcpagent\do\register-tools.ts | 87 | registerLegacyMemoryTools, registerActTools | ✅ |
 | src\workers\mcpagent\do\session-store.ts | 55 | PersistedSessionRow, ensureSessionTable, readPersistedSession... | ✅ |
 | src\workers\mcpagent\index.ts | 106 | — | ✅ |
 | src\workers\mcpagent\public-webhooks.ts | 72 | registerPublicWebhooks | ✅ |
@@ -220,7 +227,7 @@ Reason: Production HAETSAL topology now uses the API-only Hindsight image,
 - **Patterns:** CONVENTIONS.md (evolving case law)
 - **Bug prevention:** LESSONS.md
 - **History:** SESSION_LOG.md
-- **Agent rules:** .agent/rules/governance.md
+- **Agent rules:** .agents/rules/governance.md
 
 ## Platform Binding Status
 

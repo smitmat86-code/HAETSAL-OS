@@ -136,6 +136,14 @@
   Hindsight's migration files — add shadow tables with FK if you need extra
   columns on a Hindsight table.
 
+- **Projection Queue Audit Must Follow The Actual Queue Handoff.**
+  Creating a canonical capture and creating projection-job rows does NOT mean
+  queue handoff has happened yet. `memory.projection.queued` is only truthful
+  after the queue send succeeds and the queued-state update is written. The
+  base canonical capture write should record `memory.capture.accepted` only.
+  Ref: Session 6.3 — canonical-first writes needed accepted/queued/failed to
+  remain distinguishable without inventing projection completion.
+
 - **D1 Batch for Every (Operation + Audit) Pair.**
   Audit writes must be atomic with their operations. If the audit write fails,
   the operation must fail too. Use `env.D1_US.batch([...])` for every pair.

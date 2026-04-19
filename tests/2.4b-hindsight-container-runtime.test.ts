@@ -17,6 +17,7 @@ describe('2.4b Hindsight Container Runtime', () => {
     } as any)
 
     expect(env.HINDSIGHT_API_DATABASE_URL).toBe('postgresql://neon.example/brain')
+    expect(env.HINDSIGHT_API_MIGRATION_DATABASE_URL).toBe('postgresql://neon.example/brain')
     expect(env.HINDSIGHT_API_LLM_PROVIDER).toBe('openai')
     expect(env.HINDSIGHT_API_LLM_API_KEY).toBe('cf-aig-token')
     expect(env.HINDSIGHT_API_LLM_BASE_URL).toBe(
@@ -51,6 +52,7 @@ describe('2.4b Hindsight Container Runtime', () => {
     expect(env.HINDSIGHT_API_RERANKER_PROVIDER).toBe('local')
     expect(env.HINDSIGHT_API_LLM_API_KEY).toBeUndefined()
     expect(env.HINDSIGHT_API_DATABASE_URL).toBe('postgresql://neon.example/brain')
+    expect(env.HINDSIGHT_API_MIGRATION_DATABASE_URL).toBe('postgresql://neon.example/brain')
   })
 
   it('requires a direct Neon connection string', () => {
@@ -76,6 +78,7 @@ describe('2.4b Hindsight Container Runtime', () => {
     } as any, 'haetsal-worker-1')
 
     expect(env.HINDSIGHT_API_DATABASE_URL).toBe('postgresql://neon.example/brain')
+    expect(env.HINDSIGHT_API_MIGRATION_DATABASE_URL).toBe('postgresql://neon.example/brain')
     expect(env.HINDSIGHT_ENABLE_API).toBe('false')
     expect(env.HINDSIGHT_ENABLE_CP).toBe('false')
     expect(env.HINDSIGHT_API_RUN_MIGRATIONS_ON_STARTUP).toBe('false')

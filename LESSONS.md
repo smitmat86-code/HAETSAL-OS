@@ -522,3 +522,18 @@
   `await Promise.allSettled(...)` after the handler returns.
   Ref: Session 6.2 - canonical MCP memory surface tests only became stable once
   the harness drained metadata-only audit `waitUntil()` promises explicitly.
+
+- **Cloudflare Hindsight Container Env Needs a Migration DB URL Too.**
+  The clean-room Cloudflare baseline only matched Docker once both the API and
+  dedicated worker received `HINDSIGHT_API_MIGRATION_DATABASE_URL` alongside
+  `HINDSIGHT_API_DATABASE_URL`. Treat that migration URL as part of the stable
+  Hindsight container contract, not an optional extra, when running under
+  Cloudflare Containers.
+  Ref: Session OPS.3 — HAETSAL parity patch against `hindsight-baseline`.
+
+- **Hindsight Recall Can Normalize Exact Numeric Tokens While Still Being Correct.**
+  A live retain containing a unique token like `23.4M-...` can come back through
+  recall/search as semantically normalized content such as `23.4 million` rather
+  than an exact textual echo. Judge smoke tests on factual correctness and
+  operation completion, not strict byte-for-byte recall of the original token.
+  Ref: Session OPS.3 — service-token `/mcp` parity proof.

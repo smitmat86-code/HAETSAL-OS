@@ -617,3 +617,37 @@
 **Next:** Separate release-doc / repo-health cleanup, not more Hindsight surgery
 
 ---
+
+## Session OPS.3 — 2026-04-18
+
+**Spec:** Operational — Hindsight parity proof against the clean-room baseline
+**Built:**
+- wrangler.toml — restored repo truth to dedicated-worker mode for the parity deploy
+- src/workers/mcpagent/do/HindsightContainer.ts — added `HINDSIGHT_API_MIGRATION_DATABASE_URL` to match the clean-room harness
+- tests/2.4b-hindsight-container-runtime.test.ts — covered the migration DB URL in the runtime env contract
+**Decisions:**
+- The clean-room `hindsight-baseline` repo is the source of truth for Hindsight runtime behavior; HAETSAL should match it on container/runtime settings instead of relying on older folklore.
+- `HINDSIGHT_API_MIGRATION_DATABASE_URL` is part of the stable container env contract for both the API and worker processes.
+- Service-token `/mcp` smoke remains the fastest truthful production proof because it exercises the actual auth, capture, Hindsight async, and recall path end to end.
+- Passing recall should be judged semantically, not as exact-text retrieval; Hindsight may normalize numeric facts (`23.4M-*` became `23.4 million`) while still returning the right memory.
+**Verification:**
+- `npx vitest run tests/2.4b-hindsight-container-runtime.test.ts tests/2.1-retain.test.ts tests/3.3-hindsight-operations.test.ts` — passed
+- `npm run postflight` — passed
+- live deploy: `6f96700f-ab07-4212-9e90-ac2535b00fe9`
+- fresh service-token `/mcp` write:
+  - `memory_id` / operation id: `325e0d35-0d0f-47af-b10d-4a35ea32949e`
+  - requested at: `1776573277289`
+  - completed at: `1776573540001`
+  - available at: `1776573578875`
+- remote D1 recorded:
+  - `retain_queued`
+  - `memory.retain_delayed`
+  - `memory.retain_available`
+  - `memory.retain_completed`
+- live `memory_search` returned semantically correct recall for the fresh revenue-guidance fact after completion
+**Hindsight Pin:** `ghcr.io/vectorize-io/hindsight-api:0.5.2`
+**Fixture Data:** Service-token smoke tenant derived from `haetsal-brain-shell-smoke`
+**Blockers:** None for the full live proof on the parity deploy
+**Next:** Compare this passing parity state against Fold, or do a dedicated-worker v0.5.3 follow-up if we want to re-open the upstream worker-fix lane
+
+---

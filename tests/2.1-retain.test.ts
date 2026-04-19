@@ -4,6 +4,7 @@
 
 import { describe, it, expect, beforeAll } from 'vitest'
 import { env } from 'cloudflare:test'
+import { processCanonicalProjectionDispatch } from '../src/workers/ingestion/canonical-projection-consumer'
 import { retainContent } from '../src/services/ingestion/retain'
 import { computeDedupHash, checkDedup } from '../src/services/ingestion/dedup'
 import { inferDomain, inferMemoryType } from '../src/services/ingestion/domain'
@@ -18,6 +19,17 @@ beforeAll(async () => {
      (id, created_at, updated_at, data_region, primary_channel, hindsight_tenant_id, ai_cost_reset_at)
      VALUES (?, ?, ?, 'us', 'sms', ?, ?)`,
   ).bind('test-tenant-retain', now, now, 'hindsight-test-tenant-retain', now).run()
+  const kekBytes = crypto.getRandomValues(new Uint8Array(32))
+  await env.KV_SESSION.put(
+    'cron_kek:test-tenant-retain',
+    btoa(String.fromCharCode(...kekBytes)),
+    { expirationTtl: 60 * 60 * 24 },
+  )
+  await env.D1_US.prepare(
+    `UPDATE tenants
+     SET cron_kek_expires_at = ?, updated_at = ?
+     WHERE id = ?`,
+  ).bind(now + (24 * 60 * 60 * 1000), now, 'test-tenant-retain').run()
 })
 
 // Helper: derive a test TMK for encryption
@@ -53,8 +65,11 @@ function makeArtifact(overrides: Partial<IngestionArtifact> = {}): IngestionArti
   }
 }
 
-function makeEnvWithHindsightStub(capture?: { bankIds: string[]; retainBodies?: unknown[] }) {
-  return {
+function makeEnvWithHindsightStub(
+  capture?: { bankIds: string[]; retainBodies?: unknown[] },
+  options?: { immediateProjectionDispatch?: boolean },
+) {
+  const testEnv = {
     ...env,
     HINDSIGHT_DEDICATED_WORKERS_ENABLED: 'false',
     WORKER_DOMAIN: 'brain.workers.dev',
@@ -100,6 +115,19 @@ function makeEnvWithHindsightStub(capture?: { bankIds: string[]; retainBodies?: 
       },
     },
   } as unknown as typeof env
+  if (options?.immediateProjectionDispatch) {
+    testEnv.QUEUE_BULK.send = (async (message: {
+      tenantId: string
+      payload: Record<string, unknown>
+    }) => {
+      const pending: Promise<unknown>[] = []
+      await processCanonicalProjectionDispatch(message.tenantId, message.payload, testEnv, {
+        waitUntil: (promise: Promise<unknown>) => { pending.push(promise) },
+      })
+      await Promise.allSettled(pending)
+    }) as typeof env.QUEUE_BULK.send
+  }
+  return testEnv
 }
 
 describe('dedup', () => {
@@ -154,7 +182,7 @@ describe('retainContent pipeline', () => {
   it('retains content and creates D1 records', async () => {
     const tmk = await deriveTestTmk()
     const artifact = makeArtifact()
-    const testEnv = makeEnvWithHindsightStub()
+    const testEnv = makeEnvWithHindsightStub(undefined, { immediateProjectionDispatch: true })
 
     const result = await retainContent(artifact, tmk, testEnv)
 
@@ -184,7 +212,7 @@ describe('retainContent pipeline', () => {
     const tmk = await deriveTestTmk()
     const content = `dedup-test-${crypto.randomUUID()}`
     const artifact = makeArtifact({ content })
-    const testEnv = makeEnvWithHindsightStub()
+    const testEnv = makeEnvWithHindsightStub(undefined, { immediateProjectionDispatch: true })
 
     // First retain — should succeed
     const first = await retainContent(artifact, tmk, testEnv)
@@ -198,7 +226,7 @@ describe('retainContent pipeline', () => {
   it('writes encrypted content to R2 STONE archive', async () => {
     const tmk = await deriveTestTmk()
     const artifact = makeArtifact({ content: `stone-test-${crypto.randomUUID()}` })
-    const testEnv = makeEnvWithHindsightStub()
+    const testEnv = makeEnvWithHindsightStub(undefined, { immediateProjectionDispatch: true })
 
     const result = await retainContent(artifact, tmk, testEnv)
     expect(result).not.toBeNull()
@@ -216,7 +244,7 @@ describe('retainContent pipeline', () => {
     const tmk = await deriveTestTmk()
     const artifact = makeArtifact({ content: `pre-encrypted-test-${crypto.randomUUID()}` })
     const contentEncrypted = await encryptContentForArchive(artifact.content, tmk)
-    const testEnv = makeEnvWithHindsightStub()
+    const testEnv = makeEnvWithHindsightStub(undefined, { immediateProjectionDispatch: true })
 
     const result = await retainContent(artifact, null, testEnv, undefined, {
       contentEncrypted,
@@ -231,7 +259,7 @@ describe('retainContent pipeline', () => {
   it('uses a stable document-based memory reference for Hindsight retains', async () => {
     const tmk = await deriveTestTmk()
     const artifact = makeArtifact({ content: `law2-test-${crypto.randomUUID()}` })
-    const testEnv = makeEnvWithHindsightStub()
+    const testEnv = makeEnvWithHindsightStub(undefined, { immediateProjectionDispatch: true })
 
     const result = await retainContent(artifact, tmk, testEnv)
     expect(result).not.toBeNull()
@@ -243,7 +271,7 @@ describe('retainContent pipeline', () => {
     const tmk = await deriveTestTmk()
     const artifact = makeArtifact({ content: `bank-id-test-${crypto.randomUUID()}` })
     const capture = { bankIds: [] as string[] }
-    const testEnv = makeEnvWithHindsightStub(capture)
+    const testEnv = makeEnvWithHindsightStub(capture, { immediateProjectionDispatch: true })
 
     const result = await retainContent(artifact, tmk, testEnv)
 
@@ -259,7 +287,7 @@ describe('retainContent pipeline', () => {
       content: `metadata-test-${crypto.randomUUID()}`,
       metadata: { priority: 3, nested: { source: 'test' }, enabled: true },
     })
-    const testEnv = makeEnvWithHindsightStub(capture)
+    const testEnv = makeEnvWithHindsightStub(capture, { immediateProjectionDispatch: true })
 
     const result = await retainContent(artifact, tmk, testEnv)
 
@@ -277,7 +305,7 @@ describe('retainContent pipeline', () => {
   it('scores salience correctly for mcp_retain source (Tier 3)', async () => {
     const tmk = await deriveTestTmk()
     const artifact = makeArtifact({ source: 'mcp_retain' })
-    const testEnv = makeEnvWithHindsightStub()
+    const testEnv = makeEnvWithHindsightStub(undefined, { immediateProjectionDispatch: true })
 
     const result = await retainContent(artifact, tmk, testEnv)
     expect(result).not.toBeNull()
@@ -290,7 +318,7 @@ describe('retainContent pipeline', () => {
     const testEnv = makeEnvWithHindsightStub({
       bankIds: [],
       retainBodies: [],
-    })
+    }, { immediateProjectionDispatch: true })
     testEnv.HINDSIGHT = {
       fetch: async (input: RequestInfo | URL, init?: RequestInit) => {
         const url =
@@ -313,6 +341,20 @@ describe('retainContent pipeline', () => {
             headers: { 'Content-Type': 'application/json' },
           })
         }
+        if (/^\/v1\/default\/banks\/[^/]+\/operations\/[^/]+$/.test(url.pathname)) {
+          return new Response(JSON.stringify({
+            operation_id: 'op-async-retain-test',
+            status: 'pending',
+            operation_type: 'retain',
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+            completed_at: null,
+            error_message: null,
+          }), {
+            status: 200,
+            headers: { 'Content-Type': 'application/json' },
+          })
+        }
         return new Response(JSON.stringify({ status: 'ok' }), {
           status: 200,
           headers: { 'Content-Type': 'application/json' },
@@ -325,7 +367,7 @@ describe('retainContent pipeline', () => {
     })
 
     expect(result).not.toBeNull()
-    expect(result!.operationId).toBe('op-async-retain-test')
+    expect(result!.operationId).toBe(result!.canonicalOperationId)
 
     const row = await testEnv.D1_US.prepare(
       `SELECT operation_id, tenant_id, bank_id, source_document_id, status, dedup_hash

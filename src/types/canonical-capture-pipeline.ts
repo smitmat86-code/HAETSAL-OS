@@ -38,6 +38,30 @@ export interface CanonicalProjectionDispatchMessage {
   enqueuedAt: number
 }
 
+export interface HindsightProjectionDispatchInput {
+  tenantId: string
+  captureId: string
+  operationId: string
+  projectionJobId: string
+  projectionKind: 'hindsight'
+}
+
+export interface HindsightProjectionSubmissionResult {
+  targetRef: string
+  bankId: string | null
+  documentId: string | null
+  operationId: string | null
+  status: 'queued' | 'completed'
+}
+
+export interface HindsightProjectionReconcileResult {
+  projectionJobId: string
+  projectionStatus: 'queued' | 'completed' | 'failed'
+  resultStatus: 'queued' | 'completed' | 'failed'
+  targetRef: string | null
+  errorMessage?: string | null
+}
+
 export interface CompatibilityRetainResult {
   mode: CanonicalCompatibilityMode
   status: 'skipped' | 'queued' | 'retained' | 'failed'

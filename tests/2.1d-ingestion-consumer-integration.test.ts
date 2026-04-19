@@ -3,6 +3,7 @@ import { env } from 'cloudflare:test'
 import { computeDedupHash } from '../src/services/ingestion/dedup'
 import { encryptContentForArchive } from '../src/services/ingestion/encryption'
 import { handleIngestionBatch } from '../src/workers/ingestion/consumer'
+import { processCanonicalProjectionDispatch } from '../src/workers/ingestion/canonical-projection-consumer'
 import type { IngestionQueueMessage } from '../src/types/ingestion'
 
 beforeAll(async () => {
@@ -12,6 +13,17 @@ beforeAll(async () => {
      (id, created_at, updated_at, data_region, primary_channel, hindsight_tenant_id, ai_cost_reset_at)
      VALUES (?, ?, ?, 'us', 'sms', ?, ?)`,
   ).bind('test-tenant-queue', now, now, 'hindsight-test-tenant-queue', now).run()
+  const kekBytes = crypto.getRandomValues(new Uint8Array(32))
+  await env.KV_SESSION.put(
+    'cron_kek:test-tenant-queue',
+    btoa(String.fromCharCode(...kekBytes)),
+    { expirationTtl: 60 * 60 * 24 },
+  )
+  await env.D1_US.prepare(
+    `UPDATE tenants
+     SET cron_kek_expires_at = ?, updated_at = ?
+     WHERE id = ?`,
+  ).bind(now + (24 * 60 * 60 * 1000), now, 'test-tenant-queue').run()
 })
 
 async function deriveTestTmk(): Promise<CryptoKey> {
@@ -48,7 +60,7 @@ function makeMessage(body: IngestionQueueMessage) {
 }
 
 function makeEnvWithHindsightStub() {
-  return {
+  const testEnv = {
     ...env,
     WORKER_DOMAIN: 'brain.workers.dev',
     HINDSIGHT_WEBHOOK_SECRET: 'test-secret',
@@ -92,6 +104,17 @@ function makeEnvWithHindsightStub() {
       },
     },
   } as unknown as typeof env
+  testEnv.QUEUE_BULK.send = (async (message: {
+    tenantId: string
+    payload: Record<string, unknown>
+  }) => {
+    const pending: Promise<unknown>[] = []
+    await processCanonicalProjectionDispatch(message.tenantId, message.payload, testEnv, {
+      waitUntil: (promise: Promise<unknown>) => { pending.push(promise) },
+    })
+    await Promise.allSettled(pending)
+  }) as typeof env.QUEUE_BULK.send
+  return testEnv
 }
 
 describe('2.1d ingestion consumer integration', () => {

@@ -144,6 +144,14 @@
   Ref: Session 6.3 — canonical-first writes needed accepted/queued/failed to
   remain distinguishable without inventing projection completion.
 
+- **Projection Adapters Should Stage Raw Bodies In Encrypted R2, Not Queue Or D1.**
+  If an async engine adapter needs the canonical body later, keep the queue
+  payload metadata-only and materialize an engine-specific payload in R2 at a
+  deterministic key encrypted with the existing tenant KEK. That preserves
+  zero-knowledge guarantees without forcing an extra D1 pointer schema just to
+  ferry raw content across the queue boundary.
+  Ref: Session 7.1 - Hindsight projection adapter.
+
 - **D1 Batch for Every (Operation + Audit) Pair.**
   Audit writes must be atomic with their operations. If the audit write fails,
   the operation must fail too. Use `env.D1_US.batch([...])` for every pair.

@@ -1,4 +1,5 @@
 import type { Env } from '../types/env'
+import { reconcileCanonicalHindsightProjection } from '../services/canonical-hindsight-reconcile'
 import { getOperationStatus } from '../services/hindsight'
 import type { PendingOperationRow } from './hindsight-operation-types'
 import { markOperationAvailable, markPendingPressure, toUnixMs } from './hindsight-operation-side-effects'
@@ -68,6 +69,7 @@ export async function pollOperation(
           row.salience_tier,
         ),
       ])
+      await reconcileCanonicalHindsightProjection(env, row.tenant_id, row.operation_id)
       return
     }
 
@@ -98,6 +100,7 @@ export async function pollOperation(
         row.salience_tier,
       ),
     ])
+    await reconcileCanonicalHindsightProjection(env, row.tenant_id, row.operation_id)
   } catch (error) {
     await env.D1_US.prepare(
       `UPDATE hindsight_operations

@@ -164,6 +164,14 @@ const encrypted = await encrypt(content, sessionContext.domainDEK)
 // Store: { ciphertext, iv, tag } — never plaintext
 ```
 
+### Projection payload staging
+
+Queue messages and D1 projection rows carry identifiers and engine references
+only. If a projection adapter needs the canonical body after acceptance,
+materialize an engine-specific payload in R2 under a deterministic key and
+encrypt it with the tenant KEK before queue dispatch. Do not copy raw body
+content into queue payloads, D1, KV, or audit rows.
+
 ### Audit records
 
 Audit records store metadata only — never plaintext content.

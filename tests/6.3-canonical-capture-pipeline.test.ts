@@ -177,10 +177,10 @@ describe('6.3 canonical capture pipeline', () => {
     expect(messageJson).not.toContain('artifact-artifact')
   })
 
-  it('preserves the current Hindsight-visible retain behavior through the compatibility lane', async () => {
+  it('replaces the inline compatibility bridge with queued Hindsight projection work', async () => {
     const tmk = await deriveTestTmk()
     const testEnv = makeEnvWithHindsightStub()
-    vi.spyOn(testEnv.QUEUE_BULK, 'send').mockResolvedValue(undefined as never)
+    const sendSpy = vi.spyOn(testEnv.QUEUE_BULK, 'send').mockResolvedValue(undefined as never)
     const artifact: IngestionArtifact = {
       tenantId: TENANT_A,
       source: 'mcp_retain',
@@ -204,8 +204,10 @@ describe('6.3 canonical capture pipeline', () => {
     expect(result?.canonicalCaptureId).toBeTruthy()
     expect(result?.canonicalDispatchStatus).toBe('queued')
     expect(result?.compatibilityStatus).toBe('queued')
-    expect(hindsightOp?.status).toBe('pending')
-    expect(status.compatibility?.targetRef).toContain(result!.operationId!)
+    expect(sendSpy).toHaveBeenCalledTimes(1)
+    expect(hindsightOp).toBeNull()
+    expect(status.compatibility?.status).toBe('queued')
+    expect(status.compatibility?.targetRef).toBeNull()
   })
 
   it('still blocks procedural writes before canonical capture is created', async () => {

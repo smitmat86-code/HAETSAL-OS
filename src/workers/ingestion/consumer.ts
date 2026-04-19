@@ -51,7 +51,7 @@ async function processIngestionMessage(
   const { type, tenantId, payload } = msg.body
 
   if (type === 'canonical_projection_dispatch') {
-    await processCanonicalProjectionDispatch(tenantId, payload, env)
+    await processCanonicalProjectionDispatch(tenantId, payload, env, ctx)
     msg.ack()
     return
   }

@@ -3,6 +3,7 @@ import type {
   CanonicalCapturePipelineResult,
   CanonicalPipelineCaptureInput,
 } from '../types/canonical-capture-pipeline'
+import { materializeHindsightProjectionPayload } from './canonical-hindsight-projection'
 import { captureCanonicalMemory } from './canonical-memory'
 import { CANONICAL_PROJECTION_KINDS } from './canonical-memory-schema'
 import {
@@ -41,6 +42,19 @@ export async function captureThroughCanonicalPipeline(
     enqueuedAt: Date.now(),
   }
 
+  await materializeHindsightProjectionPayload({
+    ...input,
+    canonicalCaptureId: capture.captureId,
+    canonicalDocumentId: capture.documentId,
+    canonicalOperationId: capture.operationId,
+  }, capture.captureId, env).catch((error) => {
+    console.error('HINDSIGHT_PROJECTION_PAYLOAD_MATERIALIZE_FAILED', {
+      tenantId,
+      captureId: capture.captureId,
+      error: error instanceof Error ? error.message : String(error),
+    })
+  })
+
   try {
     await enqueueCanonicalProjectionDispatch(message, env)
   } catch (error) {
@@ -53,7 +67,7 @@ export async function captureThroughCanonicalPipeline(
     canonicalCaptureId: capture.captureId,
     canonicalDocumentId: capture.documentId,
     canonicalOperationId: capture.operationId,
-  }, env, tenantId, ctx)
+  }, env, tenantId)
 
   return {
     capture: {

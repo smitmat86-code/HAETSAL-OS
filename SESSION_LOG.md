@@ -5,6 +5,35 @@
 
 ---
 
+## Session 7.1 - 2026-04-18
+
+**Spec:** Phase 7.1 - Hindsight Projection Adapter
+**Built:**
+- `src/services/canonical-hindsight-projection.ts`, `canonical-hindsight-reconcile.ts`, `canonical-hindsight-projection-payload.ts`, `canonical-hindsight-projection-state.ts` - real Hindsight projection submission, reconciliation, payload staging, and canonical projection state writes
+- `src/workers/ingestion/canonical-projection-consumer.ts`, `src/workers/ingestion/consumer.ts`, `src/cron/hindsight-operation-poll.ts` - queue and poll paths now reconcile truthful Hindsight `queued/completed/failed` state onto canonical projection rows
+- `src/services/canonical-capture-pipeline.ts`, `canonical-capture-compat.ts`, `canonical-memory-audit.ts`, `canonical-memory-status.ts`, `src/types/canonical-capture-pipeline.ts` - canonical capture now stages encrypted Hindsight projection payloads, retires the direct compatibility writer, and maps the stable compatibility alias onto the real Hindsight projection lane
+- `migrations/1014_hindsight_projection_adapter.sql` - additive engine reference columns plus operation-id lookup index on `canonical_projection_results`
+- `tests/7.1-hindsight-projection-adapter.test.ts` plus updated `tests/6.3-canonical-capture-pipeline.test.ts`, `tests/2.1-retain.test.ts`, `tests/2.1d-ingestion-consumer-integration.test.ts` - submission, reconciliation, compatibility regression, and failure-path coverage
+- `LESSONS.md`, `CONVENTIONS.md`, `MANIFEST.md`, `specs/completed/7.1-hindsight-projection-adapter.md` - checkout truth files refreshed and spec lifecycle completed
+**Decisions:**
+- **Canonical capture remains the only write front door.** Hindsight retain work is now driven exclusively by canonical `hindsight` projection jobs rather than an inline compatibility retain bridge.
+- **Async adapters recover raw content from encrypted R2 staging, not from queue payloads or D1.** A deterministic KEK-encrypted Hindsight payload key kept the queue metadata-only while still letting the trusted worker submit later.
+- **Compatibility status is now an alias over the real Hindsight projection lane.** The public 6.3 contract stays stable without keeping a second temporary compatibility state machine alive.
+**Verification:**
+- `npx vitest run tests/7.1-hindsight-projection-adapter.test.ts` - passed
+- `npm test` - passed (`302 passed`, `1 skipped`)
+- `npm run postflight` - passed
+- `npm run manifest` - passed
+- `npx tsx scripts/postflight-check.ts` - passed
+- `npx vitest run` - passed (`302 passed`, `1 skipped`)
+- `npx tsx scripts/generate-manifest.ts` - passed
+**Hindsight Pin:** unchanged (`ghcr.io/vectorize-io/hindsight-api:0.5.2`)
+**Fixture Data:** Reused canonical note/conversation fixtures; added 7.1 coverage for async Hindsight submission, reconciliation, and failed-adapter truthfulness
+**Blockers:** None
+**Next:** Session 7.2 if and when the canonical recall surface is ready to consume the stored Hindsight engine references
+
+---
+
 ## Session 6.3 - 2026-04-18
 
 **Spec:** Phase 6.3 - Canonical Capture Pipeline

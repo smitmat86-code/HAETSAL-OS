@@ -4,7 +4,7 @@
 > Then read SESSION_LOG.md (last 3 entries), then LESSONS.md (relevant section),
 > then your active spec.
 
-Last updated: 2026-04-17 | Session: OPS.3 (Checkout protocol closeout)
+Last updated: 2026-04-18 | Session: 7.1 (Hindsight Projection Adapter)
 
 ## Module Registry
 
@@ -12,7 +12,7 @@ Last updated: 2026-04-17 | Session: OPS.3 (Checkout protocol closeout)
 
 <!-- AUTO-GENERATED MODULE REGISTRY - DO NOT EDIT -->
 
-*Auto-generated: 2026-04-18*
+*Auto-generated: 2026-04-19*
 
 ### src/
 
@@ -26,7 +26,7 @@ Last updated: 2026-04-17 | Session: OPS.3 (Checkout protocol closeout)
 | src\cron\brief-sections.ts | 92 | — | ✅ |
 | src\cron\consolidation.ts | 80 | — | ✅ |
 | src\cron\heartbeat.ts | 62 | — | ✅ |
-| src\cron\hindsight-operation-poll.ts | 114 | — | ✅ |
+| src\cron\hindsight-operation-poll.ts | 117 | — | ✅ |
 | src\cron\hindsight-operation-reconcile.ts | 54 | — | ✅ |
 | src\cron\hindsight-operation-side-effects.ts | 149 | toUnixMs | ✅ |
 | src\cron\hindsight-operation-types.ts | 25 | PendingOperationRow, OperationStateRow, MAX_POLLS_PER_TICK... | ✅ |
@@ -58,16 +58,19 @@ Last updated: 2026-04-17 | Session: OPS.3 (Checkout protocol closeout)
 | src\services\bootstrap\hindsight-config.ts | 106 | — | ✅ |
 | src\services\bootstrap\historical-import.ts | 140 | historicalSalienceMultiplier | ✅ |
 | src\services\bootstrap\interview.ts | 76 | createInitialState, currentQuestion, currentDomain... | ✅ |
-| src\services\canonical-capture-compat-state.ts | 85 | toCompatibilityResult | ✅ |
-| src\services\canonical-capture-compat.ts | 115 | — | ✅ |
-| src\services\canonical-capture-pipeline.ts | 71 | — | ✅ |
+| src\services\canonical-capture-compat.ts | 49 | — | ✅ |
+| src\services\canonical-capture-pipeline.ts | 85 | — | ✅ |
+| src\services\canonical-hindsight-projection-payload.ts | 135 | ProjectionJobContext, HindsightProjectionPayload, resolveProjectionSourceRef... | ✅ |
+| src\services\canonical-hindsight-projection-state.ts | 118 | HindsightProjectionJobRow | ✅ |
+| src\services\canonical-hindsight-projection.ts | 137 | — | ✅ |
+| src\services\canonical-hindsight-reconcile.ts | 58 | — | ✅ |
 | src\services\canonical-memory-artifacts.ts | 66 | PersistedCanonicalPayloads | ✅ |
-| src\services\canonical-memory-audit.ts | 91 | buildCanonicalCaptureAcceptedAuditBatch, buildCanonicalProjectionQueuedAuditBatch, buildCanonicalCaptureFailedAuditBatch... | ✅ |
+| src\services\canonical-memory-audit.ts | 118 | buildCanonicalCaptureAcceptedAuditBatch, buildCanonicalProjectionQueuedAuditBatch, buildCanonicalCaptureFailedAuditBatch... | ✅ |
 | src\services\canonical-memory-query.ts | 142 | — | ✅ |
 | src\services\canonical-memory-read-model.ts | 67 | CanonicalMemoryReadOptions, CanonicalListRow, CanonicalDocumentRow... | ✅ |
 | src\services\canonical-memory-schema.ts | 75 | CANONICAL_PROJECTION_KINDS, normalizeCanonicalBody, assertCanonicalIdentity... | ✅ |
 | src\services\canonical-memory-stats.ts | 56 | — | ✅ |
-| src\services\canonical-memory-status.ts | 99 | — | ✅ |
+| src\services\canonical-memory-status.ts | 106 | — | ✅ |
 | src\services\canonical-memory-types.ts | 52 | CanonicalChunkPlan, CanonicalArtifactPlan, NormalizedCanonicalCapture... | ✅ |
 | src\services\canonical-memory.ts | 114 | — | ✅ |
 | src\services\canonical-projection-dispatch.ts | 92 | — | ✅ |
@@ -111,7 +114,7 @@ Last updated: 2026-04-17 | Session: OPS.3 (Checkout protocol closeout)
 | src\tools\retain.ts | 57 | — | ✅ |
 | src\types\action.ts | 105 | CapabilityClass, AuthorizationLevel, AUTH_LEVEL_ORDINAL... | ✅ |
 | src\types\bootstrap.ts | 76 | BootstrapStatus, BootstrapParams, InterviewDomain... | ✅ |
-| src\types\canonical-capture-pipeline.ts | 67 | CanonicalCompatibilityMode, CanonicalPipelineCaptureInput, CanonicalProjectionDispatchMessage... | ✅ |
+| src\types\canonical-capture-pipeline.ts | 91 | CanonicalCompatibilityMode, CanonicalPipelineCaptureInput, CanonicalProjectionDispatchMessage... | ✅ |
 | src\types\canonical-memory-query.ts | 105 | CanonicalSearchInput, CanonicalRecentInput, CanonicalDocumentInput... | ✅ |
 | src\types\canonical-memory.ts | 34 | CanonicalProjectionKind, CanonicalArtifactMode, CanonicalArtifactRef... | ✅ |
 | src\types\env.ts | 62 | Env | ✅ |
@@ -122,11 +125,11 @@ Last updated: 2026-04-17 | Session: OPS.3 (Checkout protocol closeout)
 | src\types\tools.ts | 58 | RetainInput, RetainOutput, RecallInput... | ✅ |
 | src\workers\action\index.ts | 105 | — | ✅ |
 | src\workers\ingestion\bootstrap-handlers.ts | 91 | — | ✅ |
-| src\workers\ingestion\canonical-projection-consumer.ts | 22 | — | ✅ |
+| src\workers\ingestion\canonical-projection-consumer.ts | 40 | — | ✅ |
 | src\workers\ingestion\consumer.ts | 115 | — | ✅ |
 | src\workers\ingestion\handlers.ts | 104 | — | ✅ |
 | src\workers\ingestion\retain-consumer.ts | 21 | — | ✅ |
-| src\workers\mcpagent\do\HindsightContainer.ts | 147 | HINDSIGHT_PING_ENDPOINT, HINDSIGHT_WORKER_PING_ENDPOINT, useDedicatedHindsightWorkers... | ✅ |
+| src\workers\mcpagent\do\HindsightContainer.ts | 149 | HINDSIGHT_PING_ENDPOINT, HINDSIGHT_WORKER_PING_ENDPOINT, useDedicatedHindsightWorkers... | ✅ |
 | src\workers\mcpagent\do\identity.ts | 13 | MCP_STREAMABLE_HTTP_PREFIX, getMcpAgentObjectName, getMcpAgentObjectId | ✅ |
 | src\workers\mcpagent\do\inbound-message.ts | 37 | — | ✅ |
 | src\workers\mcpagent\do\McpAgent.ts | 149 | McpAgentDO | ✅ |

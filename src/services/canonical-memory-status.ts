@@ -24,6 +24,16 @@ interface ProjectionRow {
   result_updated_at: number | null
 }
 
+function normalizeCompatibilityStatus(
+  status: string | null,
+): 'queued' | 'retained' | 'failed' | null {
+  if (!status) return null
+  if (status === 'completed' || status === 'compatibility_completed') return 'retained'
+  if (status === 'failed' || status === 'compatibility_failed') return 'failed'
+  if (status === 'queued' || status === 'compatibility_queued') return 'queued'
+  return null
+}
+
 export async function getCanonicalMemoryStatus(
   input: CanonicalMemoryStatusInput,
   env: Env,
@@ -61,9 +71,8 @@ export async function getCanonicalMemoryStatus(
      WHERE j.tenant_id = ? AND j.operation_id = ?
      ORDER BY j.projection_kind ASC`,
   ).bind(tenantId, operation.id).all<ProjectionRow>()
-  const compatibility = (projections.results ?? []).find(row =>
-    row.projection_kind === 'hindsight' && row.result_status?.startsWith('compatibility_'),
-  )
+  const compatibility = (projections.results ?? []).find(row => row.projection_kind === 'hindsight')
+  const compatibilityStatus = normalizeCompatibilityStatus(compatibility?.result_status ?? null)
 
   return {
     captureId: operation.capture_id,
@@ -83,12 +92,10 @@ export async function getCanonicalMemoryStatus(
       errorMessage: row.error_message,
       updatedAt: row.result_updated_at,
     })),
-    compatibility: compatibility
+    compatibility: compatibility && compatibilityStatus
       ? {
         mode: 'current_hindsight',
-        status: compatibility.result_status === 'compatibility_completed'
-          ? 'retained'
-          : compatibility.result_status.replace('compatibility_', '') as 'queued' | 'failed',
+        status: compatibilityStatus,
         targetRef: compatibility.target_ref,
         errorMessage: compatibility.error_message,
         updatedAt: compatibility.result_updated_at,

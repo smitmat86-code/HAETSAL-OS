@@ -406,3 +406,21 @@ Graphiti namespace:
 
 This is the default narrow pattern until Phase 9-style retrieval routing is
 explicitly in scope.
+
+---
+
+## Canonical Semantic Recall Pattern
+
+When Hindsight remains the semantic authority but canonical metadata is the
+truth source for linkback, keep retrieval broad enough to recover valid
+tenant-scoped candidates and then resolve the authoritative item through
+canonical capture/document/operation metadata:
+
+- do not depend on strict exact-set engine tag matching for correctness
+- allow engine-side source tags to vary without hiding valid completed memories
+- apply canonical scope filtering locally after linkback resolution
+- preserve stable rollout provenance separately from engine document identity
+
+Use this pattern especially for repeated `brain-memory` writes from the same
+client, where provenance may stay stable but Hindsight document identity must
+remain per-capture.

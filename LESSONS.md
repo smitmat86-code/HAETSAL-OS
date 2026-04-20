@@ -598,3 +598,23 @@
   reopens first principles and risks leaking engine-specific assumptions into
   queue payloads or public status semantics.
   Ref: Session 8.1 â€” Graphiti Projection Design.
+
+- **Repeated Brain-Memory Captures Need Per-Capture Hindsight Document Identity.**
+  `brain-memory` writes can share a stable rollout `source_ref` for provenance,
+  but Hindsight projection must not reuse that stable ref as the engine
+  document identity. If repeated captures from the same client collapse onto a
+  shared Hindsight document, later writes can overwrite the semantic target and
+  make fresh recall misleading or empty even when operations complete. Preserve
+  the stable `source_ref` for attribution, but derive Hindsight document
+  identity from the canonical capture id for `mcp:memory_write`
+  `brain-memory:*` captures.
+  Ref: Session 9.x - brain-memory Hindsight semantic repair.
+
+- **Canonical Semantic Recall Should Filter Locally, Not Over-Trust Engine Tags.**
+  Hindsight may store extra tags such as `source:*` alongside tenant/domain
+  tags, and strict exact-set tag matching can hide valid completed memories even
+  when canonical capture/document/operation metadata is present and correct. For
+  canonical semantic recall, query broadly enough to recover tenant-scoped
+  candidates, then resolve the authoritative match through canonical metadata
+  and apply scope filtering locally.
+  Ref: Session 9.x - brain-memory Hindsight semantic repair.

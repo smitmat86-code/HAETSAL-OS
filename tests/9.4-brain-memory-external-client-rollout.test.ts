@@ -11,6 +11,7 @@ import { BRAIN_MEMORY_SURFACE_PROFILE, EXTERNAL_CLIENT_CAPTURE_PATTERNS } from '
 import { BRAIN_MEMORY_TOOL_NAMES } from '../src/tools/brain-memory-surface'
 import { registerCanonicalMemoryTools } from '../src/tools/canonical-memory'
 import { processCanonicalProjectionDispatch } from '../src/workers/ingestion/canonical-projection-consumer'
+import { createGraphitiContainerTestEnv } from './support/graphiti-test-env'
 import { createHindsightTestEnv, type HindsightCaptureState, type HindsightRecallRow } from './support/hindsight-test-env'
 import { getCanonicalMemoryStatus } from '../src/services/canonical-memory-status'
 
@@ -44,8 +45,11 @@ async function ensureTenantWithKek(): Promise<void> {
 }
 
 function makeEnvWithHindsightStub() {
+  const { testEnv } = createGraphitiContainerTestEnv()
   return {
     ...env,
+    GRAPHITI_RUNTIME_MODE: testEnv.GRAPHITI_RUNTIME_MODE,
+    GRAPHITI: testEnv.GRAPHITI,
     HINDSIGHT_DEDICATED_WORKERS_ENABLED: 'false',
     WORKER_DOMAIN: 'brain.workers.dev',
     HINDSIGHT_WEBHOOK_SECRET: 'test-secret',
@@ -199,7 +203,12 @@ describe('9.4 brain-memory external client rollout', () => {
   it('uses per-capture hindsight documents for repeated brain-memory captures', async () => {
     const tmk = await deriveTestTmk()
     const capture: HindsightCaptureState = { retainCount: 0, operationIds: [] }
-    const testEnv = createHindsightTestEnv({ capture, operationStatus: 'completed' })
+    const { testEnv: graphEnv } = createGraphitiContainerTestEnv()
+    const testEnv = {
+      ...createHindsightTestEnv({ capture, operationStatus: 'completed' }),
+      GRAPHITI_RUNTIME_MODE: graphEnv.GRAPHITI_RUNTIME_MODE,
+      GRAPHITI: graphEnv.GRAPHITI,
+    } as typeof env
     const sendSpy = vi.spyOn(testEnv.QUEUE_BULK, 'send').mockResolvedValue(undefined as never)
     const registry = createToolRegistry(testEnv, tmk)
 
@@ -262,7 +271,12 @@ describe('9.4 brain-memory external client rollout', () => {
     const tmk = await deriveTestTmk()
     const capture: HindsightCaptureState = { retainCount: 0, operationIds: [] }
     const recallResults: HindsightRecallRow[] = []
-    const testEnv = createHindsightTestEnv({ capture, operationStatus: 'completed', recallResults })
+    const { testEnv: graphEnv } = createGraphitiContainerTestEnv()
+    const testEnv = {
+      ...createHindsightTestEnv({ capture, operationStatus: 'completed', recallResults }),
+      GRAPHITI_RUNTIME_MODE: graphEnv.GRAPHITI_RUNTIME_MODE,
+      GRAPHITI: graphEnv.GRAPHITI,
+    } as typeof env
     const sendSpy = vi.spyOn(testEnv.QUEUE_BULK, 'send').mockResolvedValue(undefined as never)
     const registry = createToolRegistry(testEnv, tmk)
 
@@ -328,7 +342,12 @@ describe('9.4 brain-memory external client rollout', () => {
   it('eagerly dispatches async hindsight retain for brain-memory captures and becomes semantically ready after reconciliation completes', async () => {
     const tmk = await deriveTestTmk()
     const capture: HindsightCaptureState = { retainCount: 0, operationIds: [] }
-    const testEnv = createHindsightTestEnv({ capture, operationStatus: 'completed' })
+    const { testEnv: graphEnv } = createGraphitiContainerTestEnv()
+    const testEnv = {
+      ...createHindsightTestEnv({ capture, operationStatus: 'completed' }),
+      GRAPHITI_RUNTIME_MODE: graphEnv.GRAPHITI_RUNTIME_MODE,
+      GRAPHITI: graphEnv.GRAPHITI,
+    } as typeof env
     const sendSpy = vi.spyOn(testEnv.QUEUE_BULK, 'send').mockResolvedValue(undefined as never)
     const registry = createToolRegistry(testEnv, tmk)
 
@@ -350,7 +369,7 @@ describe('9.4 brain-memory external client rollout', () => {
     const hindsight = status.projections.find((item) => item.kind === 'hindsight')
 
     expect(capture.retainCount).toBe(1)
-    expect(status.operation.status).toBe('queued')
+    expect(status.operation.status).toBe('completed')
     expect(hindsight?.status).toBe('completed')
     expect(hindsight?.resultStatus).toBe('completed')
     expect(hindsight?.engineDocumentId).toContain(String(explicit.canonical_capture_id))

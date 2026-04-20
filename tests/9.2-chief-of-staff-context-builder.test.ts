@@ -7,6 +7,7 @@ import { registerCanonicalMemoryTools } from '../src/tools/canonical-memory'
 import type { AgentContextBundle } from '../src/types/chief-of-staff-context'
 import type { CanonicalPipelineCaptureInput } from '../src/types/canonical-capture-pipeline'
 import { processCanonicalProjectionDispatch } from '../src/workers/ingestion/canonical-projection-consumer'
+import { createGraphitiContainerTestEnv } from './support/graphiti-test-env'
 import { createHindsightTestEnv, type HindsightCaptureState, type HindsightRecallRow } from './support/hindsight-test-env'
 import conversationFixture from './fixtures/canonical-memory/conversation-capture.json'
 
@@ -38,7 +39,14 @@ async function encryptFixture(fixture: CanonicalPipelineCaptureInput, suffix: st
 }
 
 function createRuntimeEnv(state: { recallResults: HindsightRecallRow[]; capture: HindsightCaptureState; graph?: boolean }): typeof env {
-  return { ...createHindsightTestEnv({ capture: state.capture, operationStatus: 'completed', recallResults: state.recallResults }), ...(state.graph === false ? {} : { GRAPHITI_API_URL: 'https://graphiti.internal', GRAPHITI_API_TOKEN: 'graphiti-test-token' }) } as typeof env
+  const { testEnv } = createGraphitiContainerTestEnv(
+    state.graph === false ? { startFails: 'graphiti container unavailable' } : undefined,
+  )
+  return {
+    ...createHindsightTestEnv({ capture: state.capture, operationStatus: 'completed', recallResults: state.recallResults }),
+    GRAPHITI_RUNTIME_MODE: testEnv.GRAPHITI_RUNTIME_MODE,
+    GRAPHITI: testEnv.GRAPHITI,
+  } as typeof env
 }
 
 function createToolRegistry(testEnv: typeof env, tmk: CryptoKey): ToolRegistry {
@@ -55,30 +63,8 @@ async function callTool<T>(registry: ToolRegistry, name: string, input: unknown)
   return JSON.parse(response?.content[0]?.text ?? 'null') as T
 }
 
-function buildCompletedGraphResponse(body: Record<string, any>) {
-  return {
-    status: 'completed',
-    targetRef: `graphiti://episodes/${body.captureId}`,
-    episodeRefs: [`graphiti://episodes/${body.captureId}`],
-    entityRefs: (body.plan.entities as Array<Record<string, unknown>>).map((_: unknown, index: number) => `graphiti://entities/${body.captureId}-${index}`),
-    edgeRefs: (body.plan.edges as Array<Record<string, unknown>>).map((_: unknown, index: number) => `graphiti://edges/${body.captureId}-${index}`),
-    mappings: [
-      { canonicalKey: body.plan.episode.canonicalKey, graphRef: `graphiti://episodes/${body.captureId}`, graphKind: 'episode' },
-      ...(body.plan.entities as Array<Record<string, unknown>>).map((entity, index: number) => ({ canonicalKey: entity.canonicalKey, graphRef: `graphiti://entities/${body.captureId}-${index}`, graphKind: 'entity' })),
-      ...(body.plan.edges as Array<Record<string, unknown>>).map((edge, index: number) => ({ canonicalKey: edge.canonicalKey, graphRef: `graphiti://edges/${body.captureId}-${index}`, graphKind: 'edge' })),
-    ],
-  }
-}
-
 async function captureAndProject(args: { fixture: CanonicalPipelineCaptureInput; suffix: string; memoryType: 'episodic' | 'semantic' | 'world'; testEnv: typeof env; tmk: CryptoKey }): Promise<SeededCapture> {
-  const originalFetch = globalThis.fetch
   const sendSpy = vi.spyOn(args.testEnv.QUEUE_BULK, 'send').mockResolvedValue(undefined as never)
-  vi.spyOn(globalThis, 'fetch').mockImplementation(async (input, init) => {
-    const url = input instanceof Request ? input.url : input instanceof URL ? input.toString() : String(input)
-    if (!url.includes('graphiti.internal')) return originalFetch(input, init)
-    const body = JSON.parse(String(init?.body ?? (input instanceof Request ? await input.clone().text() : '{}'))) as Record<string, any>
-    return new Response(JSON.stringify(buildCompletedGraphResponse(body)), { status: 200, headers: { 'Content-Type': 'application/json' } })
-  })
   const input = await encryptFixture(args.fixture, args.suffix, args.tmk)
   const result = await captureThroughCanonicalPipeline({ ...input, memoryType: args.memoryType, compatibilityMode: 'current_hindsight' }, args.testEnv, TENANT_ID)
   const pending: Promise<unknown>[] = []

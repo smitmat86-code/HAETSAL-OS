@@ -4,11 +4,11 @@ const USER_LINE = /^User:/mi
 const ASSISTANT_LINE = /^Assistant:/mi
 
 export const GRAPHITI_DEPLOYMENT_POSTURE: GraphitiDeploymentPosture = {
-  id: 'staged_external_first',
-  initialRuntime: 'external_graphiti_service',
+  id: 'haetsal_internal_container',
+  initialRuntime: 'internal_graphiti_container',
   orchestrationShell: 'cloudflare_worker_queue_shell',
   futureRuntime: 'cloudflare_containers',
-  rationale: 'Start with an external Graphiti runtime behind the canonical queue shell, then move in-container once the projection contract and operational profile are proven.',
+  rationale: 'Run Graphiti inside a HAETSAL-managed Cloudflare Container, preserve the canonical queue shell, and keep external mode only as a narrow migration fallback.',
 }
 
 export const GRAPHITI_RECONCILIATION_RULES = {

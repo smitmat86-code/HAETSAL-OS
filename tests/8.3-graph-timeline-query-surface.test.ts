@@ -8,6 +8,7 @@ import type { CanonicalPipelineCaptureInput } from '../src/types/canonical-captu
 import type { EntityTimelineResult, TraceRelationshipResult } from '../src/types/canonical-graph-query'
 import type { CanonicalSearchResult } from '../src/types/canonical-memory-query'
 import { processCanonicalProjectionDispatch } from '../src/workers/ingestion/canonical-projection-consumer'
+import { createGraphitiContainerTestEnv } from './support/graphiti-test-env'
 import conversationFixture from './fixtures/canonical-memory/conversation-capture.json'
 import noteFixture from './fixtures/canonical-memory/note-capture.json'
 
@@ -54,29 +55,6 @@ async function encryptFixture(
   }
 }
 
-function makeGraphitiEnv() {
-  return { ...env, GRAPHITI_API_URL: 'https://graphiti.internal', GRAPHITI_API_TOKEN: 'graphiti-test-token' } as typeof env
-}
-
-function buildCompletedResponse(body: Record<string, any>) {
-  return {
-    status: 'completed',
-    targetRef: `graphiti://episodes/${body.captureId}`,
-    episodeRefs: [`graphiti://episodes/${body.captureId}`],
-    entityRefs: (body.plan.entities as Array<Record<string, unknown>>).map((_: unknown, index: number) => `graphiti://entities/${body.captureId}-${index}`),
-    edgeRefs: (body.plan.edges as Array<Record<string, unknown>>).map((_: unknown, index: number) => `graphiti://edges/${body.captureId}-${index}`),
-    mappings: [
-      { canonicalKey: body.plan.episode.canonicalKey, graphRef: `graphiti://episodes/${body.captureId}`, graphKind: 'episode' },
-      ...(body.plan.entities as Array<Record<string, unknown>>).map((entity, index: number) => ({
-        canonicalKey: entity.canonicalKey, graphRef: `graphiti://entities/${body.captureId}-${index}`, graphKind: 'entity',
-      })),
-      ...(body.plan.edges as Array<Record<string, unknown>>).map((edge, index: number) => ({
-        canonicalKey: edge.canonicalKey, graphRef: `graphiti://edges/${body.captureId}-${index}`, graphKind: 'edge',
-      })),
-    ],
-  }
-}
-
 function createToolRegistry(
   testEnv: typeof env,
   tenantId: string,
@@ -108,14 +86,7 @@ async function captureAndProject(args: {
   testEnv: typeof env
   tmk: CryptoKey
 }): Promise<void> {
-  const originalFetch = globalThis.fetch
   const sendSpy = vi.spyOn(args.testEnv.QUEUE_BULK, 'send').mockResolvedValue(undefined as never)
-  vi.spyOn(globalThis, 'fetch').mockImplementation(async (input, init) => {
-    const url = input instanceof Request ? input.url : input instanceof URL ? input.toString() : String(input)
-    if (!url.includes('graphiti.internal')) return originalFetch(input, init)
-    const body = JSON.parse(String(init?.body ?? (input instanceof Request ? await input.clone().text() : '{}'))) as Record<string, any>
-    return new Response(JSON.stringify(buildCompletedResponse(body)), { status: 200, headers: { 'Content-Type': 'application/json' } })
-  })
   const input = await encryptFixture(args.fixture, args.tenantId, args.suffix, args.tmk)
   await captureThroughCanonicalPipeline({ ...input, compatibilityMode: 'off', memoryType: args.memoryType }, args.testEnv, args.tenantId)
   const message = sendSpy.mock.calls[0]?.[0] as { tenantId: string; payload: Record<string, unknown> }
@@ -129,7 +100,7 @@ describe('8.3 graph and timeline query surface', () => {
   it('traces a direct relationship through the canonical graph surface with provenance linkback', async () => {
     const tenantId = `${TENANT_PREFIX}-relationship`
     const tmk = await deriveTestTmk()
-    const testEnv = makeGraphitiEnv()
+    const { testEnv } = createGraphitiContainerTestEnv()
     await ensureTenantWithKek(tenantId)
     await captureAndProject({ tenantId, fixture: conversationFixture as CanonicalPipelineCaptureInput, suffix: 'relationship', memoryType: 'semantic', testEnv, tmk })
 
@@ -148,7 +119,7 @@ describe('8.3 graph and timeline query surface', () => {
   it('returns a chronologically ordered timeline for a shared graph entity', async () => {
     const tenantId = `${TENANT_PREFIX}-timeline`
     const tmk = await deriveTestTmk()
-    const testEnv = makeGraphitiEnv()
+    const { testEnv } = createGraphitiContainerTestEnv()
     await ensureTenantWithKek(tenantId)
     await captureAndProject({ tenantId, fixture: noteFixture as CanonicalPipelineCaptureInput, suffix: 'timeline-note', memoryType: 'episodic', testEnv, tmk })
     await captureAndProject({ tenantId, fixture: conversationFixture as CanonicalPipelineCaptureInput, suffix: 'timeline-conversation', memoryType: 'semantic', testEnv, tmk })
@@ -165,7 +136,7 @@ describe('8.3 graph and timeline query surface', () => {
   it('reuses search_memory as an explicit graph-backed composed retrieval path', async () => {
     const tenantId = `${TENANT_PREFIX}-graph-search`
     const tmk = await deriveTestTmk()
-    const testEnv = makeGraphitiEnv()
+    const { testEnv } = createGraphitiContainerTestEnv()
     await ensureTenantWithKek(tenantId)
     await captureAndProject({ tenantId, fixture: conversationFixture as CanonicalPipelineCaptureInput, suffix: 'graph-search', memoryType: 'semantic', testEnv, tmk })
 
@@ -184,7 +155,7 @@ describe('8.3 graph and timeline query surface', () => {
   it('keeps default canonical search behavior stable unless graph mode is requested explicitly', async () => {
     const tenantId = `${TENANT_PREFIX}-default-search`
     const tmk = await deriveTestTmk()
-    const testEnv = makeGraphitiEnv()
+    const { testEnv } = createGraphitiContainerTestEnv()
     await ensureTenantWithKek(tenantId)
     await captureAndProject({ tenantId, fixture: conversationFixture as CanonicalPipelineCaptureInput, suffix: 'default-search', memoryType: 'semantic', testEnv, tmk })
 

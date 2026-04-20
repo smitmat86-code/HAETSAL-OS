@@ -6,6 +6,7 @@ export interface Env {
   // Container (Cloudflare Container — DO-backed, not Fetcher)
   HINDSIGHT: DurableObjectNamespace
   HINDSIGHT_WORKER: DurableObjectNamespace
+  GRAPHITI: DurableObjectNamespace
 
   // D1
   D1_US: D1Database
@@ -57,6 +58,8 @@ export interface Env {
   AI_GATEWAY_TOKEN: string         // Cloudflare AI Gateway token (auth to gateway, BYOK stored upstream)
   HINDSIGHT_DEDICATED_WORKERS_ENABLED: string // 'true' to disable API internal worker and use dedicated Hindsight workers
   HINDSIGHT_DEDICATED_WORKER_COUNT: string    // Number of dedicated Hindsight worker container instances to keep available
+  GRAPHITI_RUNTIME_MODE?: string              // 'container' is the intended runtime; 'external' is a narrow migration fallback
+  GRAPHITI_KUZU_PATH?: string                 // Optional override for the internal Graphiti container's local Kuzu path
   CANONICAL_MEMORY_SHADOW_WRITES?: string     // 'true' enables best-effort canonical shadow writes
   GRAPHITI_API_URL?: string                  // Trusted external Graphiti runtime base URL
   GRAPHITI_API_TOKEN?: string                // Optional bearer token for the Graphiti runtime

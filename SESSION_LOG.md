@@ -1092,6 +1092,35 @@
 **Next:** Deploy this Hindsight projection identity fix, then re-run the live Claude Code semantic smoke for fresh explicit `brain-memory` captures.
 
 ---
+## Session 9.6 - 2026-04-20
+
+**Spec:** Phase 9.6 - Graphiti Internal Container Parity
+**Built:**
+- `src/services/graphiti-client.ts` - narrow Graphiti runtime seam with `container` as the intended default path and explicit `external` fallback only when requested
+- `src/workers/mcpagent/do/GraphitiContainer.ts`, `src/workers/mcpagent/index.ts`, `wrangler.toml` - HAETSAL-owned internal Graphiti container binding plus deployment/runtime wiring
+- `graphiti/Dockerfile`, `graphiti/requirements.txt`, `graphiti/app.py` - smallest viable internal Python Graphiti/Kuzu runtime exposing internal health/readiness and canonical projection handoff only
+- `src/services/canonical-graphiti-projection.ts`, `src/services/canonical-graph-projection-design.ts`, `src/types/canonical-graph-projection.ts`, `src/types/env.ts` - canonical graph posture moved to `haetsal_internal_container`, submission now flows through the internal runtime seam, and env typing/runtime mode support landed
+- `tests/9.6-graphiti-internal-container-parity.test.ts`, `tests/support/graphiti-test-env.ts`, `tests/support/miniflare-service-bindings.ts` - new parity coverage and shared internal Graphiti test bindings
+- `tests/7.3-reflection-consolidation-alignment.test.ts`, `tests/8.1-graphiti-projection-design.test.ts`, `tests/8.2-graphiti-ingestion-projection.test.ts`, `tests/8.3-graph-timeline-query-surface.test.ts`, `tests/9.1-multi-mode-memory-router.test.ts`, `tests/9.2-chief-of-staff-context-builder.test.ts`, `tests/9.4-brain-memory-external-client-rollout.test.ts`, `vitest.config.ts` - broader suite aligned to the internal Graphiti container posture
+- `specs/active/9.6-graphiti-internal-container-parity.md` - As-Built completed
+- `MANIFEST.md` - regenerated
+**Decisions:**
+- Session 9.6 stayed on the smallest architecture-consistent path: a single internal Graphiti container first, no public Graphiti route, no Rust rewrite, and no attempt to expose Graphiti's full upstream API surface through HAETSAL.
+- Hindsight parity was treated as an operational requirement, not style. Graphiti now matches the same internal ownership, Worker/runtime boundary, readiness pattern, and truthful failure semantics where it matters.
+- `GRAPHITI_API_URL` / `GRAPHITI_API_TOKEN` are no longer the intended production path. External mode remains only as an explicit migration/testing fallback when `GRAPHITI_RUNTIME_MODE=external`.
+- Graph jobs now fail truthfully when container mode is required and unavailable, rather than drifting silently in `queued`.
+- Durable Kuzu persistence across container recreation remains a follow-up; 9.6 ships the internal runtime step, not the final persistence story.
+**Verification:**
+- `npx vitest run tests/9.6-graphiti-internal-container-parity.test.ts` - passed
+- `npx vitest run tests/8.2-graphiti-ingestion-projection.test.ts tests/8.3-graph-timeline-query-surface.test.ts tests/9.2-chief-of-staff-context-builder.test.ts` - passed
+- `npm test` - passed (`356 passed`, `1 skipped`)
+- `npm run postflight` - passed
+- `npm run manifest` - passed
+- `npx wrangler deploy` - deployed Worker version `9d65e7ba-3422-40fc-bf94-31291f89c1a3`; Graphiti container application created and reported `ready`
+**Blockers:** Fresh graph-backed live proof is not fully confirmed yet because the deployed production capture/query surface is behind Cloudflare Access and signed webhook flows, so I could not safely drive a non-interactive fresh protected capture end-to-end from this workspace.
+**Next:** Move the 9.6 spec to `specs/completed/`, commit the internal Graphiti container cutover, and later add a safe live smoke path plus durable Kuzu persistence across container recreation.
+
+---
 ## Session 9.5 - 2026-04-19
 
 **Spec:** Phase 9.5 - Google Source-Read Ingestion Rollout

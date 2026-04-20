@@ -24,6 +24,12 @@ image = "./hindsight/Dockerfile"
 max_instances = 2
 instance_type = "standard-2"
 
+[[containers]]
+class_name = "GraphitiContainer"
+image = "./graphiti/Dockerfile"
+max_instances = 1
+instance_type = "standard-2"
+
 # ── Durable Objects ───────────────────────────────────────────────────────────
 [[durable_objects.bindings]]
 name = "MCPAGENT"
@@ -37,6 +43,10 @@ class_name = "HindsightContainer"
 name = "HINDSIGHT_WORKER"
 class_name = "HindsightWorkerContainer"
 
+[[durable_objects.bindings]]
+name = "GRAPHITI"
+class_name = "GraphitiContainer"
+
 [[migrations]]
 tag = "v1"
 new_sqlite_classes = ["McpAgentDO"]
@@ -48,6 +58,10 @@ new_sqlite_classes = ["HindsightContainer"]
 [[migrations]]
 tag = "v3"
 new_sqlite_classes = ["HindsightWorkerContainer"]
+
+[[migrations]]
+tag = "v4"
+new_sqlite_classes = ["GraphitiContainer"]
 
 # ── D1 Databases (regional naming for DLS stub) ───────────────────────────────
 [[d1_databases]]
@@ -176,4 +190,5 @@ AI_GATEWAY_ID = "haetsal-brain-gateway"
 AI_GATEWAY_ACCOUNT_ID = "d3f0a1c579945862edc9c6f6e36e448a"
 HINDSIGHT_DEDICATED_WORKERS_ENABLED = "true"
 HINDSIGHT_DEDICATED_WORKER_COUNT = "2"
+GRAPHITI_RUNTIME_MODE = "container"
 

@@ -14,6 +14,7 @@ type CreateHindsightTestEnvOptions = {
   capture?: HindsightCaptureState
   failRecall?: boolean
   failRetain?: boolean
+  memoryUnitCount?: number
   operationStatus?: HindsightOperationStatus
   operationStatuses?: HindsightOperationStatusSequence
   recallResults?: HindsightRecallRow[]
@@ -31,6 +32,7 @@ export function createHindsightTestEnv(options: CreateHindsightTestEnvOptions = 
     capture,
     failRecall = false,
     failRetain = false,
+    memoryUnitCount = 2,
     operationStatus = 'completed',
     operationStatuses,
     recallResults = [],
@@ -77,7 +79,7 @@ export function createHindsightTestEnv(options: CreateHindsightTestEnvOptions = 
           return json({
             id: url.pathname.split('/').at(-1),
             bank_id: bankId,
-            memory_unit_count: 2,
+            memory_unit_count: memoryUnitCount,
             created_at: new Date().toISOString(),
             updated_at: new Date().toISOString(),
           })

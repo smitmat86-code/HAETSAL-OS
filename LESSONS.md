@@ -8,6 +8,23 @@
 
 ## Recent Additions
 
+- **Semantic Acceptance Needs Meaningful Facts, Not Opaque Smoke Tokens.**
+  Hindsight can complete a retain operation and still produce zero useful memory
+  units for terse token-heavy probe strings. Treat semantic acceptance as a
+  natural-language fact extraction check: capture a meaningful declarative fact,
+  then query it with a natural-language paraphrase. Token-only probes are fine
+  for plumbing, but they are not a trustworthy semantic-quality verdict.
+  Ref: Session OPS.9 - Hindsight semantic acceptance hardening.
+
+- **`semanticReady` Should Mean Document-Available, Not Merely Operation-Completed.**
+  Hindsight already records `availability_source = 'document'` when the engine
+  observes a materialized document with memory units. If the projection only
+  reaches `operation_completed`, treat that as not truly semantically ready for
+  read-side status/search purposes. Synchronous retains have no availability
+  marker, so keep them ready unless the runtime explicitly reports
+  `operation_completed`.
+  Ref: Session OPS.9 - Hindsight semantic acceptance hardening.
+
 - **Natural-Language Routers Need A Focus Term Before Reusing Narrow Graph Reads.**
   The explicit 8.3 graph/composed helper expects an entity/topic-style lookup
   term, not a whole natural-language question. When Phase 9 adds routing on top,

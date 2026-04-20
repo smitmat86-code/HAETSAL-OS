@@ -301,6 +301,65 @@ describe('7.2 semantic recall through canonical interface', () => {
     expect(settledResult.items[0]?.semanticStatus?.ready).toBe(true)
   })
 
+  it('treats completed hindsight operations without materialized memory units as not semantically ready', async () => {
+    const tmk = await deriveTestTmk()
+    const recallResults: HindsightRecallRow[] = []
+    const capture: HindsightCaptureState = { retainCount: 0, operationIds: [] }
+    const testEnv = createHindsightTestEnv({
+      capture,
+      operationStatuses: ['completed'],
+      recallResults,
+      memoryUnitCount: 0,
+    })
+    const sendSpy = vi.spyOn(testEnv.QUEUE_BULK, 'send').mockResolvedValue(undefined as never)
+    const input = await encryptFixture(noteFixture as CanonicalPipelineCaptureInput, TENANT_A, 'completed-without-units', tmk)
+    const seededCapture = await captureThroughCanonicalPipeline({
+      ...input,
+      memoryType: 'episodic',
+      compatibilityMode: 'current_hindsight',
+      hindsightAsync: true,
+    }, testEnv, TENANT_A)
+    const message = sendSpy.mock.calls[0]?.[0] as { tenantId: string; payload: Record<string, unknown> }
+    await processDispatchWithoutWaitUntil(message, testEnv)
+    const seeded = await testEnv.D1_US.prepare(
+      `SELECT r.engine_document_id, r.engine_operation_id
+       FROM canonical_projection_results r
+       INNER JOIN canonical_projection_jobs j ON j.id = r.projection_job_id
+       WHERE j.tenant_id = ? AND j.operation_id = ? AND j.projection_kind = 'hindsight'
+       ORDER BY r.updated_at DESC, r.created_at DESC, r.id DESC
+       LIMIT 1`,
+    ).bind(TENANT_A, seededCapture.capture.operationId).first<{ engine_document_id: string; engine_operation_id: string | null }>()
+    const settledState = await reconcileHindsightOperation(seeded!.engine_operation_id!, testEnv)
+
+    replaceRecallResults(recallResults, [{
+      id: 'semantic-zero-unit-result',
+      document_id: seeded!.engine_document_id,
+      text: 'The user committed to following up with two open questions tomorrow.',
+      score: 0.91,
+      metadata: { source: 'mcp_retain', domain: 'general' },
+    }])
+
+    const search = await callTool<CanonicalSearchResult>(createToolRegistry(testEnv, tmk), 'search_memory', {
+      query: 'What follow-up is due tomorrow?',
+      mode: 'semantic',
+      limit: 3,
+    })
+    const status = await getCanonicalMemoryStatus(
+      { tenantId: TENANT_A, operationId: seededCapture.capture.operationId },
+      testEnv,
+      TENANT_A,
+    )
+    const hindsight = status.projections.find((item) => item.kind === 'hindsight')
+
+    expect(settledState).toBe('settled')
+    expect(hindsight?.status).toBe('completed')
+    expect(hindsight?.resultStatus).toBe('completed')
+    expect(hindsight?.semanticReady).toBe(false)
+    expect(search.status).toBe('partial')
+    expect(search.items[0]?.captureId).toBe(seededCapture.capture.captureId)
+    expect(search.items[0]?.semanticStatus?.ready).toBe(false)
+  })
+
   it('returns a conversation-style semantic memory through the canonical surface', async () => {
     const tmk = await deriveTestTmk()
     const recallResults: HindsightRecallRow[] = []

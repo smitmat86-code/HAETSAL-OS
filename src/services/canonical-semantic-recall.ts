@@ -71,7 +71,8 @@ function toSemanticItem(args: {
   const ready = Boolean(
     args.linkback &&
     args.linkback.projectionStatus === 'completed' &&
-    args.linkback.resultStatus === 'completed',
+    args.linkback.resultStatus === 'completed' &&
+    args.linkback.availabilitySource !== 'operation_completed',
   )
   return {
     captureId: args.linkback?.captureId ?? null,

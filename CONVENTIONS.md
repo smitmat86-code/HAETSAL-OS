@@ -198,6 +198,17 @@ reflection/consolidation when:
 - no raw memory body is required in D1
 - the public canonical status surface only needs a small derived subsection
 
+For Hindsight semantic readiness specifically, prefer existing lifecycle signals
+from `hindsight_operations` before inventing new projection fields. The current
+truthful signal is:
+
+- `availability_source = 'document'` means the engine observed a materialized
+  document with memory units and the item is semantically ready
+- `availability_source = 'operation_completed'` means the async op finished, but
+  read-side surfaces should not overstate semantic readiness
+- `NULL` availability source is acceptable for synchronous retains that never
+  entered the async availability lifecycle
+
 When deriving status from those audit rows, readers must define explicit
 precedence for same-timestamp events instead of trusting timestamp order alone.
 

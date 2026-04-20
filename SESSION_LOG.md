@@ -5,6 +5,40 @@
 
 ---
 
+## Session OPS.9 - 2026-04-20
+
+**Spec:** Operational - Hindsight semantic acceptance hardening
+**Built:**
+- `src/services/canonical-memory-status.ts`, `src/services/canonical-semantic-linkback.ts`, `src/services/canonical-semantic-recall.ts` - read-side Hindsight `semanticReady` now treats `availability_source = 'document'` as the async-ready signal and stops overstating readiness for `operation_completed` async completions; synchronous retains with no availability marker remain ready
+- `tests/support/hindsight-test-env.ts` - Hindsight test stub now supports configurable `memory_unit_count` so completed-without-units cases can be simulated explicitly
+- `tests/7.2-semantic-recall-through-canonical-interface.test.ts`, `tests/9.4-brain-memory-external-client-rollout.test.ts` - semantic acceptance now uses meaningful natural-language facts, and regression coverage explicitly checks that completed async operations without materialized memory units stay `partial` / not-ready
+- `LESSONS.md`, `CONVENTIONS.md` - recorded the acceptance-method lesson and the availability-source semantic-readiness rule
+**Decisions:**
+- **Opaque token probes are plumbing checks, not semantic-quality checks.** We now treat semantic acceptance as a natural-language fact extraction and recall problem, because Hindsight can complete token-heavy retains without yielding useful memory units.
+- **Async Hindsight readiness is gated by document availability, not just operation completion.** `availability_source = 'operation_completed'` no longer counts as semantically ready on the canonical read side.
+- **Synchronous retains keep their old behavior.** If there is no availability marker at all, completed sync retains still count as ready rather than being downgraded by the new async-specific hardening.
+**Verification:**
+- `npx vitest run tests/7.2-semantic-recall-through-canonical-interface.test.ts` - passed
+- `npx vitest run tests/9.4-brain-memory-external-client-rollout.test.ts` - passed
+- `npm test` - passed (`363 passed`, `1 skipped`)
+- `npm run postflight` - passed
+- `npm run manifest` - passed
+- Live protected Claude/MCP acceptance on deploy `eef19ac2-d411-4b59-b8da-e902b9e609dd` - passed for meaningful facts:
+  - Hindsight fact `Alder Port depends on Nimbus Rail for freight movement.` completed with `memory_unit_count = 1`, `semanticReady = true`, and semantic recall returned the fresh capture
+  - Graphiti facts `Marin Vale leads Alder Port.` and `Alder Port partnered with Solace Yard on April 20, 2026.` produced live relationship/timeline results
+  - `prepare_context_for_agent` surfaced graph + semantic context together for Alder Port / Marin Vale / Nimbus Rail / Solace Yard
+**Current Health:**
+- **Hindsight:** green for meaningful natural-language captures and paraphrase-style semantic queries
+- **Graphiti:** green for live relationship traces and timelines
+- **Combined open-brain context:** green; `prepare_context_for_agent` is now benefiting from both semantic and graph-backed facts in the same fresh acceptance run
+- **Known caveat:** opaque token-only semantic smokes remain a weak probe and should not be used as the primary acceptance gate
+**Hindsight Pin:** `ghcr.io/vectorize-io/hindsight-api:0.5.3`
+**Fixture Data:** Meaningful semantic acceptance fact: `Alder Port depends on Nimbus Rail for freight movement.`
+**Blockers:** Opaque token-style semantic smoke strings remain weak probes by design; use meaningful facts for semantic acceptance
+**Next:** If desired, add a dedicated acceptance script/checklist that codifies the meaningful-fact live sweep used here
+
+---
+
 ## Session OPS.8 - 2026-04-19
 
 **Spec:** Operational - Cloudflare Local Explorer implementation/deploy playbook

@@ -20,6 +20,7 @@ export interface CanonicalSemanticLinkback {
   targetRef: string | null
   engineDocumentId: string | null
   engineOperationId: string | null
+  availabilitySource: string | null
 }
 
 function asString(value: unknown): string | null {
@@ -80,12 +81,14 @@ export async function resolveCanonicalSemanticLinkback(
             j.id AS projection_job_id, r.id AS projection_result_id,
             c.scope, c.source_system, c.source_ref, d.title, c.captured_at,
             j.status AS projection_status, r.status AS result_status,
-            r.target_ref, r.engine_document_id, r.engine_operation_id
+            r.target_ref, r.engine_document_id, r.engine_operation_id,
+            h.availability_source
      FROM canonical_projection_results r
      INNER JOIN canonical_projection_jobs j ON j.id = r.projection_job_id
      INNER JOIN canonical_captures c ON c.id = j.capture_id
      INNER JOIN canonical_documents d ON d.id = j.document_id
      INNER JOIN canonical_memory_operations o ON o.id = j.operation_id
+     LEFT JOIN hindsight_operations h ON h.operation_id = r.engine_operation_id
      WHERE j.tenant_id = ?
        AND j.projection_kind = 'hindsight'
        AND (
@@ -122,6 +125,7 @@ export async function resolveCanonicalSemanticLinkback(
     target_ref: string | null
     engine_document_id: string | null
     engine_operation_id: string | null
+    availability_source: string | null
   }>()
   if (!row) return null
   return {
@@ -140,5 +144,6 @@ export async function resolveCanonicalSemanticLinkback(
     targetRef: row.target_ref,
     engineDocumentId: row.engine_document_id,
     engineOperationId: row.engine_operation_id,
+    availabilitySource: row.availability_source,
   }
 }

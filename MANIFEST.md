@@ -82,12 +82,12 @@ Last updated: 2026-04-18 | Session: 7.1 (Hindsight Projection Adapter)
 | src\services\canonical-memory-router.ts | 120 | normalizeMemoryQueryMode, decideCanonicalMemoryRoute | ✅ |
 | src\services\canonical-memory-schema.ts | 75 | CANONICAL_PROJECTION_KINDS, normalizeCanonicalBody, assertCanonicalIdentity... | ✅ |
 | src\services\canonical-memory-stats.ts | 56 | — | ✅ |
-| src\services\canonical-memory-status.ts | 128 | — | ✅ |
+| src\services\canonical-memory-status.ts | 134 | — | ✅ |
 | src\services\canonical-memory-types.ts | 52 | CanonicalChunkPlan, CanonicalArtifactPlan, NormalizedCanonicalCapture... | ✅ |
 | src\services\canonical-memory.ts | 117 | — | ✅ |
 | src\services\canonical-projection-dispatch.ts | 92 | — | ✅ |
-| src\services\canonical-semantic-linkback.ts | 145 | CanonicalSemanticLinkback, extractSemanticLookup | ✅ |
-| src\services\canonical-semantic-recall.ts | 147 | — | ✅ |
+| src\services\canonical-semantic-linkback.ts | 150 | CanonicalSemanticLinkback, extractSemanticLookup | ✅ |
+| src\services\canonical-semantic-recall.ts | 148 | — | ✅ |
 | src\services\canonical-source-attribution.ts | 66 | buildCanonicalSourceAttribution, applyCanonicalRoute | ✅ |
 | src\services\chief-of-staff-context.ts | 107 | — | ✅ |
 | src\services\delivery\obsidian-write.ts | 52 | — | ✅ |

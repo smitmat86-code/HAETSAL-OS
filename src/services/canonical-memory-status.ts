@@ -14,6 +14,7 @@ interface ProjectionRow {
   projection_result_id: string | null; job_id: string; document_id: string; projection_kind: string
   status: string; result_status: string | null; target_ref: string | null; error_message: string | null
   engine_document_id: string | null; engine_operation_id: string | null; result_updated_at: number | null
+  availability_source: string | null
 }
 
 const normalizeCompatibilityStatus = (status: string | null): 'queued' | 'retained' | 'failed' | null =>
@@ -24,7 +25,10 @@ const normalizeCompatibilityStatus = (status: string | null): 'queued' | 'retain
           : null
 
 const isSemanticReady = (row: ProjectionRow): boolean =>
-  row.projection_kind === 'hindsight' && row.status === 'completed' && row.result_status === 'completed'
+  row.projection_kind === 'hindsight'
+  && row.status === 'completed'
+  && row.result_status === 'completed'
+  && row.availability_source !== 'operation_completed'
 
 async function readOperationRow(input: CanonicalMemoryStatusInput, env: Env, tenantId: string): Promise<OperationRow | null> {
   return input.operationId
@@ -53,13 +57,15 @@ export async function getCanonicalMemoryStatus(input: CanonicalMemoryStatusInput
   const projections = await env.D1_US.prepare(
     `SELECT j.id AS job_id, j.document_id, j.projection_kind, j.status,
             r.id AS projection_result_id, r.status AS result_status, r.target_ref, r.error_message,
-            r.engine_document_id, r.engine_operation_id, r.updated_at AS result_updated_at
+            r.engine_document_id, r.engine_operation_id, r.updated_at AS result_updated_at,
+            h.availability_source
      FROM canonical_projection_jobs j
      LEFT JOIN canonical_projection_results r ON r.id = (
        SELECT r2.id FROM canonical_projection_results r2
        WHERE r2.projection_job_id = j.id
        ORDER BY r2.updated_at DESC, r2.created_at DESC, r2.id DESC LIMIT 1
      )
+     LEFT JOIN hindsight_operations h ON h.operation_id = r.engine_operation_id
      WHERE j.tenant_id = ? AND j.operation_id = ?
      ORDER BY j.projection_kind ASC`,
   ).bind(tenantId, operation.id).all<ProjectionRow>()

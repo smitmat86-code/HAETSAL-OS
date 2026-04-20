@@ -339,7 +339,7 @@ describe('9.4 brain-memory external client rollout', () => {
     expect(semantic.items[0]?.captureId).not.toBe(first.canonical_capture_id)
   })
 
-  it('eagerly dispatches async hindsight retain for brain-memory captures and becomes semantically ready after reconciliation completes', async () => {
+  it('eagerly dispatches async hindsight retain for brain-memory captures and becomes semantically ready for meaningful natural-language facts', async () => {
     const tmk = await deriveTestTmk()
     const capture: HindsightCaptureState = { retainCount: 0, operationIds: [] }
     const recallResults: HindsightRecallRow[] = []
@@ -352,9 +352,9 @@ describe('9.4 brain-memory external client rollout', () => {
     const sendSpy = vi.spyOn(testEnv.QUEUE_BULK, 'send').mockResolvedValue(undefined as never)
     const registry = createToolRegistry(testEnv, tmk)
 
-    const freshnessToken = 'HINDSIGHT_FRESHNESS_TEST_20260420_Z9Q1'
+    const semanticFact = 'Decision: Alder Port depends on Nimbus Rail for freight movement.'
     const explicit = await callTool<Record<string, string | object>>(registry, 'capture_memory', {
-      content: `Decision: ${freshnessToken} should complete semantic handoff without async engine lag.`,
+      content: semanticFact,
       scope: 'general',
       capture_mode: 'explicit',
       client_name: 'Claude Code',
@@ -372,7 +372,7 @@ describe('9.4 brain-memory external client rollout', () => {
     recallResults.splice(0, recallResults.length, {
       id: 'brain-memory-freshness-result',
       document_id: hindsight?.engineDocumentId,
-      text: `Decision: ${freshnessToken} should complete semantic handoff without async engine lag.`,
+      text: 'Alder Port depends on Nimbus Rail as per a fresh brain-memory decision.',
       score: 0.99,
       metadata: {
         canonical_capture_id: String(explicit.canonical_capture_id),
@@ -383,7 +383,7 @@ describe('9.4 brain-memory external client rollout', () => {
       },
     })
     const semantic = await callTool<CanonicalSearchResult>(registry, 'search_memory', {
-      query: freshnessToken,
+      query: 'what does Alder Port depend on',
       mode: 'semantic',
       limit: 3,
     })

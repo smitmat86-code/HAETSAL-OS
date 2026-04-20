@@ -10,7 +10,6 @@ import type { CanonicalSearchResult } from '../src/types/canonical-memory-query'
 import { processCanonicalProjectionDispatch } from '../src/workers/ingestion/canonical-projection-consumer'
 import { createGraphitiContainerTestEnv } from './support/graphiti-test-env'
 import conversationFixture from './fixtures/canonical-memory/conversation-capture.json'
-import noteFixture from './fixtures/canonical-memory/note-capture.json'
 
 type ToolResponse = { content: Array<{ text: string }> }
 type ToolHandler = (input: unknown) => Promise<ToolResponse>
@@ -18,6 +17,33 @@ type ToolRegistry = { handlers: Map<string, ToolHandler>; pending: Promise<unkno
 
 const SUITE_ID = crypto.randomUUID()
 const TENANT_PREFIX = `test-tenant-graph-query-83-${SUITE_ID}`
+const partnershipFixture: CanonicalPipelineCaptureInput = {
+  tenantId: 'test-tenant-canonical',
+  sourceSystem: 'mcp_retain',
+  sourceRef: 'partnership-001',
+  scope: 'general',
+  title: 'Partner update',
+  body: 'Northwind Labs partnered with Blue River Studio on 2026-04-16.',
+  capturedAt: Date.UTC(2026, 3, 20),
+}
+const meetingFixture: CanonicalPipelineCaptureInput = {
+  tenantId: 'test-tenant-canonical',
+  sourceSystem: 'mcp_retain',
+  sourceRef: 'meeting-001',
+  scope: 'general',
+  title: 'Meeting update',
+  body: 'Ava Stone met with Ben Ortiz on 2026-04-15.',
+  capturedAt: Date.UTC(2026, 3, 20),
+}
+const dependencyFixture: CanonicalPipelineCaptureInput = {
+  tenantId: 'test-tenant-canonical',
+  sourceSystem: 'mcp_retain',
+  sourceRef: 'dependency-001',
+  scope: 'general',
+  title: 'Dependency update',
+  body: 'Project Atlas depends on Beacon API.',
+  capturedAt: Date.UTC(2026, 3, 21),
+}
 
 async function deriveTestTmk(): Promise<CryptoKey> {
   const material = await crypto.subtle.importKey('raw', new TextEncoder().encode(`graph-query-${SUITE_ID}`), { name: 'HKDF' }, false, ['deriveKey'])
@@ -102,35 +128,35 @@ describe('8.3 graph and timeline query surface', () => {
     const tmk = await deriveTestTmk()
     const { testEnv } = createGraphitiContainerTestEnv()
     await ensureTenantWithKek(tenantId)
-    await captureAndProject({ tenantId, fixture: conversationFixture as CanonicalPipelineCaptureInput, suffix: 'relationship', memoryType: 'semantic', testEnv, tmk })
+    await captureAndProject({ tenantId, fixture: partnershipFixture, suffix: 'relationship', memoryType: 'episodic', testEnv, tmk })
 
     const result = await callTool<TraceRelationshipResult>(createToolRegistry(testEnv, tenantId, tmk), 'trace_relationship', {
-      from: 'User', to: 'Assistant', relation: 'conversed_with', limit: 5,
+      from: 'Northwind Labs', to: 'Blue River Studio', relation: 'partnered_with', limit: 5,
     })
 
     expect(result.items).toHaveLength(1)
-    expect(result.items[0]?.from.key).toBe('canonical://participants/user')
-    expect(result.items[0]?.to.key).toBe('canonical://participants/assistant')
+    expect(result.items[0]?.from.key).toBe('canonical://organizations/northwind-labs')
+    expect(result.items[0]?.to.key).toBe('canonical://organizations/blue-river-studio')
     expect(result.items[0]?.provenance.projectionKind).toBe('graphiti')
     expect(result.items[0]?.provenance.captureId).toBeTruthy()
     expect(result.items[0]?.provenance.graphRef).toContain('graphiti://edges/')
   })
 
-  it('returns a chronologically ordered timeline for a shared graph entity', async () => {
+  it('returns a chronologically ordered timeline for a dated body-derived entity relation', async () => {
     const tenantId = `${TENANT_PREFIX}-timeline`
     const tmk = await deriveTestTmk()
     const { testEnv } = createGraphitiContainerTestEnv()
     await ensureTenantWithKek(tenantId)
-    await captureAndProject({ tenantId, fixture: noteFixture as CanonicalPipelineCaptureInput, suffix: 'timeline-note', memoryType: 'episodic', testEnv, tmk })
-    await captureAndProject({ tenantId, fixture: conversationFixture as CanonicalPipelineCaptureInput, suffix: 'timeline-conversation', memoryType: 'semantic', testEnv, tmk })
+    await captureAndProject({ tenantId, fixture: meetingFixture, suffix: 'timeline-meeting', memoryType: 'episodic', testEnv, tmk })
 
     const result = await callTool<EntityTimelineResult>(createToolRegistry(testEnv, tenantId, tmk), 'get_entity_timeline', {
-      entity: 'general', limit: 5,
+      entity: 'Ava Stone', limit: 5,
     })
 
-    expect(result.entityKey).toBe('canonical://scopes/general')
-    expect(result.items.map(item => item.title)).toEqual(['Daily note', 'Conversation recap'])
-    expect(result.items.every(item => item.relation === 'within_scope')).toBe(true)
+    expect(result.entityKey).toBe('canonical://people/ava-stone')
+    expect(result.items[0]?.title).toBe('Meeting update')
+    expect(result.items[0]?.relation).toBe('met_with')
+    expect(result.items[0]?.capturedAt).toBe(Date.UTC(2026, 3, 15))
   })
 
   it('reuses search_memory as an explicit graph-backed composed retrieval path', async () => {
@@ -138,18 +164,18 @@ describe('8.3 graph and timeline query surface', () => {
     const tmk = await deriveTestTmk()
     const { testEnv } = createGraphitiContainerTestEnv()
     await ensureTenantWithKek(tenantId)
-    await captureAndProject({ tenantId, fixture: conversationFixture as CanonicalPipelineCaptureInput, suffix: 'graph-search', memoryType: 'semantic', testEnv, tmk })
+    await captureAndProject({ tenantId, fixture: dependencyFixture, suffix: 'graph-search', memoryType: 'episodic', testEnv, tmk })
 
     const result = await callTool<CanonicalSearchResult>(createToolRegistry(testEnv, tenantId, tmk), 'search_memory', {
-      query: 'User', mode: 'graph', limit: 5,
+      query: 'Project Atlas', mode: 'graph', limit: 5,
     })
 
     expect(result.mode).toBe('graph')
     expect(result.status).toBe('ok')
     expect(result.items[0]?.mode).toBe('graph')
-    expect(result.items[0]?.graphContext?.entityLabel).toBe('User')
+    expect(result.items[0]?.graphContext?.entityLabel).toBe('Project Atlas')
     expect(result.items[0]?.provenance?.projectionKind).toBe('graphiti')
-    expect(result.items.some(item => item.preview.includes('Assistant') || item.preview.includes('Conversation recap'))).toBe(true)
+    expect(result.items.some(item => item.preview.includes('Beacon Api'))).toBe(true)
   })
 
   it('keeps default canonical search behavior stable unless graph mode is requested explicitly', async () => {

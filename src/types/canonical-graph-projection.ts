@@ -7,6 +7,9 @@ export type GraphProjectionEntityKind =
   | 'source'
   | 'speaker'
   | 'topic'
+  | 'person'
+  | 'organization'
+  | 'project'
   | 'document'
   | 'artifact'
 export type GraphProjectionIdentityStrategy =

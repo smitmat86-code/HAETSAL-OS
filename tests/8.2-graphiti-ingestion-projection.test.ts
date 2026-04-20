@@ -11,6 +11,15 @@ import conversationFixture from './fixtures/canonical-memory/conversation-captur
 
 const SUITE_ID = crypto.randomUUID()
 const TENANT_A = `test-tenant-graphiti-82-${SUITE_ID}`
+const leadershipFixture: CanonicalPipelineCaptureInput = {
+  tenantId: TENANT_A,
+  sourceSystem: 'mcp_retain',
+  sourceRef: 'leadership-fixture',
+  scope: 'general',
+  title: 'Leadership fixture',
+  body: 'Ava Stone leads Project Atlas.',
+  capturedAt: Date.UTC(2026, 3, 20),
+}
 
 async function deriveTestTmk(): Promise<CryptoKey> {
   const material = await crypto.subtle.importKey(
@@ -118,6 +127,37 @@ describe('8.2 graphiti ingestion projection', () => {
     expect(status.graph?.status).toBe('projected')
     expect(status.graph?.ready).toBe(true)
     expect(status.graph?.targetRef).toContain('graphiti://episodes/')
+  })
+
+  it('includes body-derived leadership entities and relations in the graph projection plan', async () => {
+    const { requests, testEnv } = createGraphitiContainerTestEnv()
+    const sendSpy = vi.spyOn(testEnv.QUEUE_BULK, 'send').mockResolvedValue(undefined as never)
+    const input = await encryptFixture(leadershipFixture, 'leadership')
+
+    await captureThroughCanonicalPipeline({
+      ...input,
+      compatibilityMode: 'off',
+      memoryType: 'episodic',
+    }, testEnv, TENANT_A)
+    const message = sendSpy.mock.calls[0]?.[0] as { tenantId: string; payload: Record<string, unknown> }
+    await processGraphitiDispatch(message, testEnv)
+
+    const graphProjection = requests[0]?.plan as {
+      entities: Array<{ canonicalKey: string; kind: string }>
+      edges: Array<{ relation: string; fromCanonicalKey: string; toCanonicalKey: string }>
+    }
+
+    expect(graphProjection.entities).toEqual(expect.arrayContaining([
+      expect.objectContaining({ canonicalKey: 'canonical://people/ava-stone', kind: 'person' }),
+      expect.objectContaining({ canonicalKey: 'canonical://projects/project-atlas', kind: 'project' }),
+    ]))
+    expect(graphProjection.edges).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        relation: 'leads',
+        fromCanonicalKey: 'canonical://people/ava-stone',
+        toCanonicalKey: 'canonical://projects/project-atlas',
+      }),
+    ]))
   })
 
   it('projects conversation captures into conversation episodes, speaker entities, and temporal edges', async () => {

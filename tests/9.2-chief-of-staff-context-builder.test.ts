@@ -20,6 +20,7 @@ const SUITE_ID = crypto.randomUUID()
 const TENANT_ID = `test-tenant-context-92-${SUITE_ID}`
 const projectNote: CanonicalPipelineCaptureInput = { tenantId: TENANT_ID, sourceSystem: 'mcp_retain', sourceRef: 'launch-note', scope: 'general', title: 'Launch plan', body: 'Launch plan now runs through three milestones. Risk: the operations checklist still needs an owner before launch.', capturedAt: 1760280000000 }
 const projectConversation: CanonicalPipelineCaptureInput = { tenantId: TENANT_ID, sourceSystem: 'mcp_memory_write', sourceRef: 'launch-conversation', scope: 'general', title: 'Launch plan', body: 'User: We removed the optional work from the critical path.\nAssistant: Captured. Recent change: only the three launch milestones remain, and the checklist owner is still unresolved.', capturedAt: 1760366400000 }
+const projectGraphNote: CanonicalPipelineCaptureInput = { tenantId: TENANT_ID, sourceSystem: 'mcp_retain', sourceRef: 'launch-graph', scope: 'general', title: 'Launch plan', body: 'Launch Plan depends on Operations Checklist.', capturedAt: 1760323200000 }
 const sparseProject: CanonicalPipelineCaptureInput = { tenantId: TENANT_ID, sourceSystem: 'mcp_retain', sourceRef: 'quiet-project', scope: 'general', title: 'Quiet scope', body: 'Quiet scope has one clear next step and one unresolved follow-up.', capturedAt: 1760452800000 }
 
 async function deriveTestTmk(): Promise<CryptoKey> {
@@ -111,6 +112,7 @@ describe('9.2 chief-of-staff context builder', () => {
     const recallResults: HindsightRecallRow[] = []
     const testEnv = createRuntimeEnv({ recallResults, capture: { retainCount: 0, operationIds: [] } })
     await captureAndProject({ fixture: projectNote, suffix: 'project-note', memoryType: 'episodic', testEnv, tmk })
+    await captureAndProject({ fixture: projectGraphNote, suffix: 'project-graph', memoryType: 'episodic', testEnv, tmk })
     const seeded = await captureAndProject({ fixture: projectConversation, suffix: 'project-conversation', memoryType: 'semantic', testEnv, tmk })
     recallResults.splice(0, recallResults.length, { document_id: seeded.engineDocumentId, text: 'Launch plan is down to three milestones, optional work left the critical path, and the checklist owner is still unresolved.', score: 0.95, metadata: { source: 'mcp_memory_write', domain: 'general' } })
 
@@ -123,6 +125,7 @@ describe('9.2 chief-of-staff context builder', () => {
     expect(bundle.recentChanges.some((item) => item.includes('three milestones'))).toBe(true)
     expect(bundle.risks.some((item) => item.includes('owner'))).toBe(true)
     expect(bundle.timeline.length).toBeGreaterThan(0)
+    expect(bundle.evidence.some((block) => block.mode === 'graph' && block.items.length > 0)).toBe(true)
     expect(bundle.sources.some((source) => source.projectionRef || source.graphRef)).toBe(true)
     expectPublicBundleShape(bundle)
   })

@@ -15,6 +15,7 @@ export async function retainViaService(
   tmk: CryptoKey | null,
   env: Env,
   ctx?: Pick<ExecutionContext, 'waitUntil'>,
+  options?: { hindsightAsync?: boolean; eagerProjectionDispatch?: boolean },
 ): Promise<RetainOutput> {
   console.log('MCP_RETAIN_START', {
     tenantId,
@@ -45,7 +46,12 @@ export async function retainViaService(
     metadata: input.metadata ?? {
       ...(input.title ? { title: input.title } : {}),
     },
-  }, tmk, env, ctx, { hindsightAsync: true })
+  }, tmk, env, ctx, {
+    hindsightAsync: options?.hindsightAsync ?? true,
+    // Interactive MCP writes should preserve the old "write and hand off now"
+    // behavior even though canonical projections are also queued for durability.
+    eagerProjectionDispatch: options?.eagerProjectionDispatch ?? true,
+  })
 
   console.log('MCP_RETAIN_DONE', {
     tenantId,

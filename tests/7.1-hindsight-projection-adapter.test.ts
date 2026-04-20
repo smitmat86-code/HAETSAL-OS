@@ -154,6 +154,7 @@ describe('7.1 hindsight projection adapter', () => {
       ...input,
       memoryType: 'semantic',
       compatibilityMode: 'current_hindsight',
+      hindsightAsync: true,
     }, testEnv, tenantId)
     const message = sendSpy.mock.calls[0]?.[0] as { tenantId: string; payload: Record<string, unknown> }
     await processDispatch(message, testEnv)
@@ -206,12 +207,14 @@ describe('7.1 hindsight projection adapter', () => {
       ...input,
       memoryType: 'episodic',
       compatibilityMode: 'current_hindsight',
+      hindsightAsync: true,
     }, testEnv, tenantId)
     const message = sendSpy.mock.calls[0]?.[0] as { tenantId: string; payload: Record<string, unknown> }
     await processDispatchWithoutWaitUntil(message, testEnv)
 
-    const firstPass = await reconcileHindsightOperation(`op-${result.compatibility.documentId}`, testEnv)
-    const secondPass = await reconcileHindsightOperation(`op-${result.compatibility.documentId}`, testEnv)
+    const firstOperationId = capture.operationIds[0]!
+    const firstPass = await reconcileHindsightOperation(firstOperationId, testEnv)
+    const secondPass = await reconcileHindsightOperation(firstOperationId, testEnv)
     const status = await getCanonicalMemoryStatus(
       { tenantId, operationId: result.capture.operationId },
       testEnv,

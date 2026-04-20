@@ -65,6 +65,7 @@ export function registerMemoryTools(server: McpServer, ctx: MemoryToolContext): 
       }
       const result = await retainContent(artifact, tmk, ctx.getEnv(), ctx.getExecutionContext(), {
         hindsightAsync: true,
+        eagerProjectionDispatch: true,
       })
       console.log('MEMORY_WRITE_DONE', {
         tenantId: ctx.getTenantId(),

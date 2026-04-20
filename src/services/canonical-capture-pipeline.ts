@@ -12,6 +12,7 @@ import {
   markCanonicalProjectionDispatchFailed,
 } from './canonical-projection-dispatch'
 import { runCompatibilityRetainBridge } from './canonical-capture-compat'
+import { processCanonicalProjectionDispatch } from '../workers/ingestion/canonical-projection-consumer'
 
 export async function captureThroughCanonicalPipeline(
   input: CanonicalPipelineCaptureInput,
@@ -66,6 +67,9 @@ export async function captureThroughCanonicalPipeline(
 
   try {
     await enqueueCanonicalProjectionDispatch(message, env)
+    if (input.eagerProjectionDispatch) {
+      await processCanonicalProjectionDispatch(message.tenantId, message.payload, env, ctx)
+    }
   } catch (error) {
     await markCanonicalProjectionDispatchFailed(message, env, error)
     throw error

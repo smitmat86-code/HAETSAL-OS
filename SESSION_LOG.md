@@ -5,6 +5,27 @@
 
 ---
 
+## Session OPS.8 - 2026-04-19
+
+**Spec:** Operational - Cloudflare Local Explorer implementation/deploy playbook
+**Built:**
+- `scripts/cloudflare-local-explorer.ts` - helper CLI to classify repo bindings by Local Explorer support and fetch the local Explorer OpenAPI spec from a running dev Worker
+- `package.json` - added `cf:explorer:plan` and `cf:explorer:spec` npm scripts for the new helper
+- `docs/cloudflare-local-explorer.md`, `README.md` - documented the HAETSAL-specific Local Explorer workflow, pre-deploy checklist, and the split between Explorer-covered resources and Cloudflare surfaces that still require Wrangler or remote checks
+- `.gitignore` - ignored the generated `tmp/local-explorer-openapi.json` artifact so the OpenAPI snapshot can be captured locally without polluting git status
+**Decisions:**
+- **Local Explorer is a pre-deploy confidence layer, not the deployment mechanism.** We keep Wrangler and remote smoke checks as the source of truth for queues, Vectorize, AI, Browser Rendering, and container-runtime behavior.
+- **The first helper stays config-driven and small.** Parsing `wrangler.toml` gives us immediate value without depending on unstable preview CLI behavior or hard-coding Local Explorer endpoint shapes beyond the published OpenAPI root.
+- **Agent access should default to local Cloudflare state, not production.** Capturing `/cdn-cgi/explorer/api` gives future coding agents a safer discovery surface during implementation.
+**Verification:**
+- `npm run cf:explorer:plan` - passed
+**Hindsight Pin:** unchanged (`ghcr.io/vectorize-io/hindsight-api:0.5.2`)
+**Fixture Data:** N/A - docs and local tooling only
+**Blockers:** None
+**Next:** Use `npm run cf:explorer:spec` during a live `wrangler dev` session to snapshot the Local Explorer OpenAPI surface whenever agent-side local binding automation is needed
+
+---
+
 ## Session OPS.7 - 2026-04-19
 
 **Spec:** Operational - live `memory_status` D1 migration repair
@@ -1104,5 +1125,30 @@
 **Fixture Data:** Added 9.5 fixtures for Gmail selective capture, Calendar selective capture, Drive/Docs explicit-inclusion capture, provenance-rich source refs, and source-read boundary enforcement
 **Blockers:** None
 **Next:** Checkout can now move 9.5 to `specs/completed/`; any future Google write/actions remain a separate `brain-actions` lane
+
+---
+## Session 9.x - 2026-04-19
+
+**Spec:** Live semantic recall follow-up - `brain-memory` async handoff, linkback, and semantic retrieval hardening
+**Built:**
+- `src/services/canonical-capture-pipeline.ts`, `src/services/external-client-memory-write.ts`, `src/tools/memory.ts`, `src/tools/retain.ts`, `src/services/ingestion/retain.ts`, `src/types/canonical-capture-pipeline.ts` - interactive MCP writes now eagerly dispatch canonical projections again while preserving async Hindsight behavior for the live `brain-memory` path
+- `src/services/canonical-hindsight-projection-payload.ts`, `src/services/canonical-hindsight-projection.ts`, `src/services/ingestion/retain-persistence.ts` - Hindsight projection payloads now preserve canonical ids plus async mode truthfully, and queued async retain dedup is unique per operation instead of collapsing repeated writes
+- `src/services/canonical-semantic-linkback.ts`, `src/services/canonical-semantic-recall.ts` - semantic linkback now resolves by canonical capture metadata first, and semantic recall no longer over-constrains Hindsight lookup with strict exact tag matching
+- `tests/1.2-tools.test.ts`, `tests/7.1-hindsight-projection-adapter.test.ts`, `tests/7.2-semantic-recall-through-canonical-interface.test.ts`, `tests/9.4-brain-memory-external-client-rollout.test.ts`, `tests/support/hindsight-test-env.ts` - regression coverage for eager interactive dispatch, async Hindsight operations, source-tag tolerant semantic recall, canonical metadata linkback, and repeated `brain-memory` captures
+- `MANIFEST.md` - regenerated
+**Decisions:**
+- The repair stays inside the canonical/Hindsight path rather than introducing a second semantic write lane or synthetic "semantic ready" behavior.
+- `brain-memory` continues to write asynchronously to Hindsight, but interactive MCP writes now trigger local canonical projection dispatch immediately so live sessions do not depend solely on the bulk queue to begin handoff.
+- Hindsight remains the semantic authority; the fix corrects projection identity, async operation truth, linkback, and recall filtering instead of hiding failures with raw fallback.
+- Canonical capture/document/operation ids are now preserved in Hindsight-side metadata so semantic results can link back to the correct canonical item even when multiple captures share nearby content.
+**Verification:**
+- `npx vitest run tests/1.2-tools.test.ts` - passed
+- `npx vitest run tests/7.1-hindsight-projection-adapter.test.ts tests/7.2-semantic-recall-through-canonical-interface.test.ts` - passed
+- `npx vitest run tests/9.4-brain-memory-external-client-rollout.test.ts` - passed
+- `npm run postflight` - passed
+**Hindsight Pin:** unchanged (`ghcr.io/vectorize-io/hindsight-api:0.5.2`)
+**Fixture Data:** Extended Hindsight test fixtures to model async retain truth, operation-specific dedup, source-tagged recall, and canonical-metadata semantic linkback for repeated `brain-memory` captures
+**Blockers:** None on the Hindsight path; Graphiti/container follow-up remains separate work
+**Next:** Checkpoint this Hindsight repair tranche before continuing broader Graphiti/container migration work
 
 ---

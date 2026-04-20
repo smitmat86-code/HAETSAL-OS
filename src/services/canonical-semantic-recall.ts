@@ -53,6 +53,13 @@ function readCapturedAt(raw: Record<string, unknown>): number | null {
   return typeof occurredAt === 'string' && /^\d+$/.test(occurredAt) ? Number(occurredAt) : null
 }
 
+function matchesRequestedScope(
+  item: CanonicalMemoryListItem,
+  requestedScope: string | null,
+): boolean {
+  return !requestedScope || item.scope === requestedScope
+}
+
 function toSemanticItem(args: {
   raw: Record<string, unknown>
   query: string
@@ -103,24 +110,29 @@ export async function searchCanonicalSemanticMemory(
   tenantId: string,
 ): Promise<CanonicalSearchResult> {
   const limit = clampCanonicalLimit(input.limit, 5, 10)
+  const requestedScope = input.scope ?? null
   try {
     const response = await recallMemory(tenantId, {
       query: input.query,
       budget: 'mid',
       max_tokens: Math.max(limit * 512, 1024),
       query_timestamp: new Date().toISOString(),
-      tags: buildHindsightTags(tenantId, input.scope ?? undefined),
-      tags_match: 'all_strict',
+      // Recall by tenant only, then apply canonical scope filtering locally.
+      // Fresh memories carry extra tags such as source:, and strict exact-set
+      // matching can hide valid completed items before linkback resolves.
+      tags: buildHindsightTags(tenantId),
+      tags_match: 'any',
     } as HindsightRecallRequest, env)
-    const items = await Promise.all(normalizeRecallResults(response).slice(0, limit).map(async raw => {
+    const resolved = await Promise.all(normalizeRecallResults(response).map(async raw => {
       const linkback = await resolveCanonicalSemanticLinkback(raw, env, tenantId)
       return toSemanticItem({
         raw,
         query: input.query,
-        scope: input.scope ?? null,
+        scope: requestedScope,
         linkback,
       })
     }))
+    const items = resolved.filter(item => matchesRequestedScope(item, requestedScope)).slice(0, limit)
     const status = items.some(item => !item.semanticStatus?.ready) ? 'partial' : 'ok'
     return { query: input.query, mode: 'semantic', status, items }
   } catch (error) {

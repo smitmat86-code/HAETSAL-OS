@@ -21,7 +21,7 @@ export async function captureExternalClientMemory(
         domain: input.scope ?? 'general',
         memory_type: input.memory_type,
         provenance: input.provenance ?? undefined,
-      }, tenantId, tmk, env, ctx)),
+      }, tenantId, tmk, env, ctx, { hindsightAsync: true })),
       surface: BRAIN_MEMORY_SURFACE_PROFILE.surface,
       profile: BRAIN_MEMORY_SURFACE_PROFILE,
     }
@@ -38,7 +38,10 @@ export async function captureExternalClientMemory(
       title: normalized.title,
       artifact_ref: normalized.artifactRef,
       metadata: normalized.metadata,
-    }, tenantId, tmk, env, ctx)),
+    }, tenantId, tmk, env, ctx, {
+      hindsightAsync: true,
+      eagerProjectionDispatch: true,
+    })),
     surface: BRAIN_MEMORY_SURFACE_PROFILE.surface,
     capture_mode: normalized.captureMode,
     source_system: normalized.sourceSystem,

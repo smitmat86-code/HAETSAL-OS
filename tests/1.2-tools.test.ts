@@ -7,6 +7,7 @@ import { beforeEach, describe, it, expect, vi } from 'vitest'
 import { env } from 'cloudflare:test'
 import { retainViaService } from '../src/tools/retain'
 import { recallStub } from '../src/tools/recall'
+import { createHindsightTestEnv } from './support/hindsight-test-env'
 
 function makeToolEnv() {
   return {
@@ -104,6 +105,55 @@ describe('1.2 Tools - brain_v1_retain', () => {
     expect(result.status).toBe('queued')
     expect(result.memory_id).toBeTruthy()
     expect(result.salience_tier).toBeGreaterThan(0)
+  })
+
+  it('eagerly hands off direct interactive writes to hindsight without waiting on the bulk queue', async () => {
+    const tenantId = `test-tenant-eager-${crypto.randomUUID()}`
+    await ensureTenantWithKek(tenantId)
+    const tmk = await crypto.subtle.generateKey(
+      { name: 'AES-GCM', length: 256 },
+      true,
+      ['encrypt', 'decrypt'],
+    ) as CryptoKey
+    const testEnv = createHindsightTestEnv()
+    const sendSpy = vi.spyOn(testEnv.QUEUE_BULK, 'send').mockResolvedValue(undefined as never)
+
+    const result = await retainViaService(
+      {
+        content: 'Interactive memory_write should reach hindsight handoff immediately.',
+        domain: 'general',
+        memory_type: 'episodic',
+        source: 'mcp:memory_write',
+      },
+      tenantId,
+      tmk,
+      testEnv,
+    )
+
+    const row = await testEnv.D1_US.prepare(
+      `SELECT r.engine_document_id, r.engine_operation_id, r.status
+       FROM canonical_projection_jobs j
+       INNER JOIN canonical_projection_results r ON r.id = (
+         SELECT r2.id
+         FROM canonical_projection_results r2
+         WHERE r2.projection_job_id = j.id
+         ORDER BY r2.updated_at DESC, r2.created_at DESC, r2.id DESC
+         LIMIT 1
+       )
+       WHERE j.tenant_id = ? AND j.operation_id = ? AND j.projection_kind = 'hindsight'
+       LIMIT 1`,
+    ).bind(tenantId, result.canonical_operation_id).first<{
+      engine_document_id: string | null
+      engine_operation_id: string | null
+      status: string
+    }>()
+
+    expect(sendSpy).toHaveBeenCalled()
+    expect(result.status).toBe('queued')
+    expect(result.canonical_operation_id).toBeTruthy()
+    expect(['queued', 'completed']).toContain(row?.status)
+    expect(row?.engine_document_id).toBeTruthy()
+    expect(row?.engine_operation_id).toContain('op-')
   })
 })
 

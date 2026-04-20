@@ -36,6 +36,7 @@ export function createHindsightTestEnv(options: CreateHindsightTestEnvOptions = 
     recallResults = [],
   } = options
   const operationStatusById = new Map<string, { index: number }>()
+  const documentTags = new Map<string, string[]>()
 
   function readOperationStatus(operationId: string): HindsightOperationStatus {
     if (!operationStatuses?.length) return operationStatus
@@ -101,26 +102,53 @@ export function createHindsightTestEnv(options: CreateHindsightTestEnvOptions = 
         if (/^\/v1\/default\/banks\/[^/]+\/memories$/.test(url.pathname)) {
           if (failRetain) return json({ detail: 'retain failed' }, { status: 500 })
           const request = input instanceof Request ? input : new Request(input.toString(), init)
-          const body = await request.clone().json() as { items: Array<{ document_id: string }> }
-          const operationId = `op-${body.items[0]!.document_id}`
+          const body = await request.clone().json() as {
+            async?: boolean
+            items: Array<{ document_id: string; tags?: string[] }>
+          }
+          const operationId = `op-${crypto.randomUUID()}`
           if (capture) {
             capture.retainCount += 1
-            capture.operationIds.push(operationId)
+            if (body.async) capture.operationIds.push(operationId)
+          }
+          for (const item of body.items ?? []) {
+            if (item.document_id) documentTags.set(item.document_id, item.tags ?? [])
           }
           return json({
             success: true,
             bank_id: bankId,
             items_count: 1,
-            async: true,
-            operation_id: operationId,
+            async: body.async ?? false,
+            operation_id: body.async ? operationId : undefined,
           })
         }
 
         if (/^\/v1\/default\/banks\/[^/]+\/memories\/recall$/.test(url.pathname)) {
           if (failRecall) return json({ detail: 'semantic recall unavailable' }, { status: 503 })
+          const request = input instanceof Request ? input : new Request(input.toString(), init)
+          const body = await request.clone().json() as {
+            tags?: string[]
+            tags_match?: 'all_strict' | 'any' | string
+          }
+          const requestedTags = body.tags ?? []
+          const filteredResults = recallResults.filter(raw => {
+            if (!requestedTags.length) return true
+            const rowTags = Array.isArray(raw.tags)
+              ? raw.tags.filter((tag): tag is string => typeof tag === 'string')
+              : documentTags.get(String(raw.document_id ?? raw.source_document_id ?? '')) ?? []
+            if (!rowTags.length) return false
+            if (body.tags_match === 'all_strict') {
+              return rowTags.length === requestedTags.length
+                && requestedTags.every(tag => rowTags.includes(tag))
+            }
+            if (body.tags_match === 'any') {
+              return requestedTags.some(tag => rowTags.includes(tag))
+            }
+            return requestedTags.every(tag => rowTags.includes(tag))
+          })
           return json({
-            results: recallResults,
-            text: `Found ${recallResults.length} semantic memories.`,
+            results: filteredResults,
+            text: `Found ${filteredResults.length} semantic memories.`,
           })
         }
 

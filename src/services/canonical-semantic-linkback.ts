@@ -1,5 +1,9 @@
 import type { Env } from '../types/env'
 
+const CAPTURE_KEYS = ['canonical_capture_id', 'canonicalCaptureId', 'capture_id', 'captureId']
+const DOCUMENT_KEYS = ['document_id', 'documentId', 'source_document_id', 'sourceDocumentId', 'memory_id', 'memoryId', 'id']
+const OPERATION_KEYS = ['canonical_operation_id', 'canonicalOperationId', 'operation_id', 'operationId']
+
 export interface CanonicalSemanticLinkback {
   captureId: string
   documentId: string
@@ -23,9 +27,7 @@ function asString(value: unknown): string | null {
 }
 
 function metadataOf(raw: Record<string, unknown>): Record<string, unknown> {
-  return raw.metadata && typeof raw.metadata === 'object'
-    ? raw.metadata as Record<string, unknown>
-    : {}
+  return raw.metadata && typeof raw.metadata === 'object' ? raw.metadata as Record<string, unknown> : {}
 }
 
 function parseDocumentIdFromTargetRef(targetRef: string | null): string | null {
@@ -49,6 +51,7 @@ function readLookupValue(
 }
 
 export function extractSemanticLookup(raw: Record<string, unknown>): {
+  captureId: string | null
   documentId: string | null
   operationId: string | null
   targetRef: string | null
@@ -57,16 +60,9 @@ export function extractSemanticLookup(raw: Record<string, unknown>): {
   const metadata = metadataOf(raw)
   const targetRef = readLookupValue(raw, metadata, ['target_ref', 'targetRef'])
   return {
-    documentId: readLookupValue(raw, metadata, [
-      'document_id',
-      'documentId',
-      'source_document_id',
-      'sourceDocumentId',
-      'memory_id',
-      'memoryId',
-      'id',
-    ]) ?? parseDocumentIdFromTargetRef(targetRef),
-    operationId: readLookupValue(raw, metadata, ['operation_id', 'operationId']),
+    captureId: readLookupValue(raw, metadata, CAPTURE_KEYS),
+    documentId: readLookupValue(raw, metadata, DOCUMENT_KEYS) ?? parseDocumentIdFromTargetRef(targetRef),
+    operationId: readLookupValue(raw, metadata, OPERATION_KEYS),
     targetRef,
     sourceSystem: readLookupValue(raw, metadata, ['source', 'source_system', 'sourceSystem']),
   }
@@ -78,7 +74,7 @@ export async function resolveCanonicalSemanticLinkback(
   tenantId: string,
 ): Promise<CanonicalSemanticLinkback | null> {
   const lookup = extractSemanticLookup(raw)
-  if (!lookup.documentId && !lookup.operationId && !lookup.targetRef) return null
+  if (!lookup.captureId && !lookup.documentId && !lookup.operationId && !lookup.targetRef) return null
   const row = await env.D1_US.prepare(
     `SELECT c.id AS capture_id, d.id AS document_id, o.id AS operation_id,
             j.id AS projection_job_id, r.id AS projection_result_id,
@@ -93,7 +89,8 @@ export async function resolveCanonicalSemanticLinkback(
      WHERE j.tenant_id = ?
        AND j.projection_kind = 'hindsight'
        AND (
-         (? IS NOT NULL AND r.engine_document_id = ?)
+         (? IS NOT NULL AND c.id = ?)
+         OR (? IS NOT NULL AND r.engine_document_id = ?)
          OR (? IS NOT NULL AND r.engine_operation_id = ?)
          OR (? IS NOT NULL AND r.target_ref = ?)
        )
@@ -101,6 +98,8 @@ export async function resolveCanonicalSemanticLinkback(
      LIMIT 1`,
   ).bind(
     tenantId,
+    lookup.captureId,
+    lookup.captureId,
     lookup.documentId,
     lookup.documentId,
     lookup.operationId,

@@ -12,7 +12,7 @@ export async function retainContent(
   tmk: CryptoKey | null,
   env: Env,
   ctx?: Pick<ExecutionContext, 'waitUntil'>,
-  options?: { contentEncrypted?: string; hindsightAsync?: boolean },
+  options?: { contentEncrypted?: string; hindsightAsync?: boolean; eagerProjectionDispatch?: boolean },
 ): Promise<RetainResult | null> {
   const { tenantId, content, source } = artifact
   console.log('RETAIN_CONTENT_START', {
@@ -69,6 +69,7 @@ export async function retainContent(
     salienceTier: salience.tier,
     salienceSurpriseScore: salience.surpriseScore,
     hindsightAsync: options?.hindsightAsync ?? false,
+    eagerProjectionDispatch: options?.eagerProjectionDispatch ?? false,
   }, env, tenantId, ctx)
 
   console.log('RETAIN_CONTENT_CANONICAL_PIPELINE_DONE', {

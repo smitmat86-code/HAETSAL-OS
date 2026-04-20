@@ -26,6 +26,7 @@ export interface HindsightProjectionPayload {
   metadata?: Record<string, unknown>
   salienceTier: 1 | 2 | 3
   salienceSurpriseScore: number
+  hindsightAsync?: boolean
 }
 
 function projectionPayloadKey(tenantId: string, captureId: string): string {
@@ -36,8 +37,8 @@ export function resolveProjectionSourceRef(
   row: Pick<ProjectionJobContext, 'source_system' | 'source_ref' | 'capture_id'>,
 ): string {
   if (
-    row.source_system === 'mcp:memory_write'
-    && row.source_ref?.startsWith('brain-memory:')
+    row.source_system === 'mcp:memory_write' &&
+    row.source_ref?.startsWith('brain-memory:')
   ) {
     return row.capture_id
   }
@@ -66,7 +67,12 @@ export function toHindsightArtifact(
     memoryType: payload.memoryType,
     domain: row.scope,
     provenance: payload.provenance,
-    metadata: payload.metadata,
+    metadata: {
+      ...(payload.metadata ?? {}),
+      canonical_capture_id: row.capture_id,
+      canonical_document_id: row.document_id,
+      canonical_operation_id: row.operation_id,
+    },
   }
 }
 
@@ -132,9 +138,10 @@ export async function materializeHindsightProjectionPayload(
     body: input.body,
     memoryType: input.memoryType ?? 'episodic',
     provenance: input.provenance ?? input.sourceSystem,
-    metadata: input.metadata,
-    salienceTier: input.salienceTier ?? 1,
-    salienceSurpriseScore: input.salienceSurpriseScore ?? 0.5,
+      metadata: input.metadata,
+      salienceTier: input.salienceTier ?? 1,
+      salienceSurpriseScore: input.salienceSurpriseScore ?? 0.5,
+      hindsightAsync: input.hindsightAsync ?? false,
   } satisfies HindsightProjectionPayload), kek)
   await env.R2_ARTIFACTS.put(projectionPayloadKey(input.tenantId, captureId), ciphertext)
 }

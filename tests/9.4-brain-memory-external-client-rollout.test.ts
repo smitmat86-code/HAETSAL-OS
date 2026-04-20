@@ -11,7 +11,8 @@ import { BRAIN_MEMORY_SURFACE_PROFILE, EXTERNAL_CLIENT_CAPTURE_PATTERNS } from '
 import { BRAIN_MEMORY_TOOL_NAMES } from '../src/tools/brain-memory-surface'
 import { registerCanonicalMemoryTools } from '../src/tools/canonical-memory'
 import { processCanonicalProjectionDispatch } from '../src/workers/ingestion/canonical-projection-consumer'
-import { createHindsightTestEnv, type HindsightCaptureState } from './support/hindsight-test-env'
+import { createHindsightTestEnv, type HindsightCaptureState, type HindsightRecallRow } from './support/hindsight-test-env'
+import { getCanonicalMemoryStatus } from '../src/services/canonical-memory-status'
 
 type ToolResponse = { content: Array<{ text: string }> }
 type ToolHandler = (input: unknown) => Promise<ToolResponse>
@@ -195,7 +196,7 @@ describe('9.4 brain-memory external client rollout', () => {
     expect(toolNames.has('gmail.read_thread')).toBe(false)
   })
 
-  it('uses capture-scoped hindsight document identities for repeated explicit brain-memory captures', async () => {
+  it('uses per-capture hindsight documents for repeated brain-memory captures', async () => {
     const tmk = await deriveTestTmk()
     const capture: HindsightCaptureState = { retainCount: 0, operationIds: [] }
     const testEnv = createHindsightTestEnv({ capture, operationStatus: 'completed' })
@@ -209,7 +210,7 @@ describe('9.4 brain-memory external client rollout', () => {
       client_name: 'Claude Code',
     })
     const second = await callTool<Record<string, string | object>>(registry, 'capture_memory', {
-      content: 'Decision: second explicit brain-memory capture should not collide in hindsight.',
+      content: 'Decision: second explicit brain-memory capture should stay isolated in hindsight.',
       scope: 'general',
       capture_mode: 'explicit',
       client_name: 'Claude Code',
@@ -247,9 +248,114 @@ describe('9.4 brain-memory external client rollout', () => {
     expect(capture.retainCount).toBe(2)
     expect(rows).toHaveLength(2)
     expect(rows.every((row) => row.status === 'completed')).toBe(true)
-    expect(rows.every((row) => row.engine_operation_id?.startsWith('op-'))).toBe(true)
     expect(rows[0]?.engine_document_id).toBeTruthy()
     expect(rows[1]?.engine_document_id).toBeTruthy()
     expect(rows[0]?.engine_document_id).not.toBe(rows[1]?.engine_document_id)
+    expect(rows[0]?.engine_operation_id).toBeTruthy()
+    expect(rows[1]?.engine_operation_id).toBeTruthy()
+    expect(rows[0]?.engine_operation_id).not.toBe(rows[1]?.engine_operation_id)
+    expect(rows[0]?.engine_document_id).toContain(String(rows[0]?.capture_id))
+    expect(rows[1]?.engine_document_id).toContain(String(rows[1]?.capture_id))
+  })
+
+  it('resolves semantic linkback to the correct capture using canonical metadata', async () => {
+    const tmk = await deriveTestTmk()
+    const capture: HindsightCaptureState = { retainCount: 0, operationIds: [] }
+    const recallResults: HindsightRecallRow[] = []
+    const testEnv = createHindsightTestEnv({ capture, operationStatus: 'completed', recallResults })
+    const sendSpy = vi.spyOn(testEnv.QUEUE_BULK, 'send').mockResolvedValue(undefined as never)
+    const registry = createToolRegistry(testEnv, tmk)
+
+    const first = await callTool<Record<string, string | object>>(registry, 'capture_memory', {
+      content: 'Decision: first semantic linkback candidate for isolated hindsight document.',
+      scope: 'general',
+      capture_mode: 'explicit',
+      client_name: 'Claude Code',
+    })
+    const second = await callTool<Record<string, string | object>>(registry, 'capture_memory', {
+      content: 'Decision: second semantic linkback candidate should be selected by canonical metadata.',
+      scope: 'general',
+      capture_mode: 'explicit',
+      client_name: 'Claude Code',
+    })
+
+    const messages = sendSpy.mock.calls.map((call) => call[0] as { tenantId: string; payload: Record<string, unknown> })
+    for (const message of messages) {
+      await processDispatch(message, testEnv)
+    }
+
+    const secondRow = await testEnv.D1_US.prepare(
+      `SELECT r.engine_document_id
+       FROM canonical_projection_jobs j
+       INNER JOIN canonical_projection_results r ON r.id = (
+         SELECT r2.id
+         FROM canonical_projection_results r2
+         WHERE r2.projection_job_id = j.id
+         ORDER BY r2.updated_at DESC, r2.created_at DESC, r2.id DESC
+         LIMIT 1
+       )
+       WHERE j.tenant_id = ? AND j.operation_id = ? AND j.projection_kind = 'hindsight'
+       LIMIT 1`,
+    ).bind(TENANT_ID, second.canonical_operation_id).first<{ engine_document_id: string }>()
+
+    recallResults.splice(0, recallResults.length, {
+      id: 'brain-memory-semantic-result',
+      document_id: secondRow!.engine_document_id,
+      text: 'Second semantic linkback candidate should be selected by canonical metadata.',
+      score: 0.93,
+      metadata: {
+        source: 'mcp:memory_write',
+        domain: 'general',
+        canonical_capture_id: second.canonical_capture_id,
+        canonical_document_id: second.canonical_document_id,
+        canonical_operation_id: second.canonical_operation_id,
+      },
+    })
+
+    const semantic = await callTool<CanonicalSearchResult>(registry, 'search_memory', {
+      query: 'selected by canonical metadata',
+      mode: 'semantic',
+      limit: 3,
+    })
+
+    expect(semantic.status).toBe('ok')
+    expect(semantic.items[0]?.captureId).toBe(second.canonical_capture_id)
+    expect(semantic.items[0]?.documentId).toBe(second.canonical_document_id)
+    expect(semantic.items[0]?.provenance?.canonicalOperationId).toBe(second.canonical_operation_id)
+    expect(semantic.items[0]?.captureId).not.toBe(first.canonical_capture_id)
+  })
+
+  it('eagerly dispatches async hindsight retain for brain-memory captures and becomes semantically ready after reconciliation completes', async () => {
+    const tmk = await deriveTestTmk()
+    const capture: HindsightCaptureState = { retainCount: 0, operationIds: [] }
+    const testEnv = createHindsightTestEnv({ capture, operationStatus: 'completed' })
+    const sendSpy = vi.spyOn(testEnv.QUEUE_BULK, 'send').mockResolvedValue(undefined as never)
+    const registry = createToolRegistry(testEnv, tmk)
+
+    const explicit = await callTool<Record<string, string | object>>(registry, 'capture_memory', {
+      content: 'Decision: fresh brain-memory captures should complete semantic handoff without async engine lag.',
+      scope: 'general',
+      capture_mode: 'explicit',
+      client_name: 'Claude Code',
+    })
+
+    const message = sendSpy.mock.calls[0]?.[0] as { tenantId: string; payload: Record<string, unknown> }
+    await processDispatch(message, testEnv)
+
+    const status = await getCanonicalMemoryStatus(
+      { tenantId: TENANT_ID, operationId: String(explicit.canonical_operation_id) },
+      testEnv,
+      TENANT_ID,
+    )
+    const hindsight = status.projections.find((item) => item.kind === 'hindsight')
+
+    expect(capture.retainCount).toBe(1)
+    expect(status.operation.status).toBe('queued')
+    expect(hindsight?.status).toBe('completed')
+    expect(hindsight?.resultStatus).toBe('completed')
+    expect(hindsight?.engineDocumentId).toContain(String(explicit.canonical_capture_id))
+    expect(hindsight?.engineOperationId).toContain('op-')
+    expect(hindsight?.semanticReady).toBe(true)
+    expect(status.compatibility?.status).toBe('retained')
   })
 })

@@ -9,6 +9,7 @@ import type { EntityTimelineResult, TraceRelationshipResult } from '../src/types
 import type { CanonicalSearchResult } from '../src/types/canonical-memory-query'
 import { processCanonicalProjectionDispatch } from '../src/workers/ingestion/canonical-projection-consumer'
 import { createGraphitiContainerTestEnv } from './support/graphiti-test-env'
+import { createHindsightTestEnv } from './support/hindsight-test-env'
 import conversationFixture from './fixtures/canonical-memory/conversation-capture.json'
 
 type ToolResponse = { content: Array<{ text: string }> }
@@ -126,7 +127,12 @@ describe('8.3 graph and timeline query surface', () => {
   it('traces a direct relationship through the canonical graph surface with provenance linkback', async () => {
     const tenantId = `${TENANT_PREFIX}-relationship`
     const tmk = await deriveTestTmk()
-    const { testEnv } = createGraphitiContainerTestEnv()
+    const { testEnv: graphEnv } = createGraphitiContainerTestEnv()
+    const testEnv = {
+      ...createHindsightTestEnv({ recallResults: [], operationStatus: 'completed' }),
+      GRAPHITI_RUNTIME_MODE: graphEnv.GRAPHITI_RUNTIME_MODE,
+      GRAPHITI: graphEnv.GRAPHITI,
+    } as typeof env
     await ensureTenantWithKek(tenantId)
     await captureAndProject({ tenantId, fixture: partnershipFixture, suffix: 'relationship', memoryType: 'episodic', testEnv, tmk })
 
@@ -145,7 +151,12 @@ describe('8.3 graph and timeline query surface', () => {
   it('returns a chronologically ordered timeline for a dated body-derived entity relation', async () => {
     const tenantId = `${TENANT_PREFIX}-timeline`
     const tmk = await deriveTestTmk()
-    const { testEnv } = createGraphitiContainerTestEnv()
+    const { testEnv: graphEnv } = createGraphitiContainerTestEnv()
+    const testEnv = {
+      ...createHindsightTestEnv({ recallResults: [], operationStatus: 'completed' }),
+      GRAPHITI_RUNTIME_MODE: graphEnv.GRAPHITI_RUNTIME_MODE,
+      GRAPHITI: graphEnv.GRAPHITI,
+    } as typeof env
     await ensureTenantWithKek(tenantId)
     await captureAndProject({ tenantId, fixture: meetingFixture, suffix: 'timeline-meeting', memoryType: 'episodic', testEnv, tmk })
 
@@ -162,7 +173,12 @@ describe('8.3 graph and timeline query surface', () => {
   it('reuses search_memory as an explicit graph-backed composed retrieval path', async () => {
     const tenantId = `${TENANT_PREFIX}-graph-search`
     const tmk = await deriveTestTmk()
-    const { testEnv } = createGraphitiContainerTestEnv()
+    const { testEnv: graphEnv } = createGraphitiContainerTestEnv()
+    const testEnv = {
+      ...createHindsightTestEnv({ recallResults: [], operationStatus: 'completed' }),
+      GRAPHITI_RUNTIME_MODE: graphEnv.GRAPHITI_RUNTIME_MODE,
+      GRAPHITI: graphEnv.GRAPHITI,
+    } as typeof env
     await ensureTenantWithKek(tenantId)
     await captureAndProject({ tenantId, fixture: dependencyFixture, suffix: 'graph-search', memoryType: 'episodic', testEnv, tmk })
 
@@ -181,7 +197,12 @@ describe('8.3 graph and timeline query surface', () => {
   it('keeps default canonical search behavior stable unless graph mode is requested explicitly', async () => {
     const tenantId = `${TENANT_PREFIX}-default-search`
     const tmk = await deriveTestTmk()
-    const { testEnv } = createGraphitiContainerTestEnv()
+    const { testEnv: graphEnv } = createGraphitiContainerTestEnv()
+    const testEnv = {
+      ...createHindsightTestEnv({ recallResults: [], operationStatus: 'completed' }),
+      GRAPHITI_RUNTIME_MODE: graphEnv.GRAPHITI_RUNTIME_MODE,
+      GRAPHITI: graphEnv.GRAPHITI,
+    } as typeof env
     await ensureTenantWithKek(tenantId)
     await captureAndProject({ tenantId, fixture: conversationFixture as CanonicalPipelineCaptureInput, suffix: 'default-search', memoryType: 'semantic', testEnv, tmk })
 

@@ -67,7 +67,12 @@ export async function prepareContextForAgent(
 ): Promise<AgentContextBundle> {
   const limit = clampCanonicalLimit(input.limit, 4, 6)
   const results = await Promise.all(POLICY[input.intent](input.target).map(async (plan) => {
-    const result = await searchCanonicalMemory({ tenantId, query: plan.query, scope: input.scope ?? null, limit, mode: plan.mode }, env, tenantId, options)
+    const result = await searchCanonicalMemory(
+      { tenantId, query: plan.query, scope: input.scope ?? null, limit, mode: plan.mode },
+      env,
+      tenantId,
+      options,
+    )
     return { result, query: plan.query }
   }))
   const evidence = results.map(({ result, query }) => ({ mode: result.mode, query, status: result.status, routeReason: result.route?.reason ?? null, items: toSource(result.mode, result) satisfies ContextSourceRef[] }))

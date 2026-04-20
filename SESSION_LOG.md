@@ -214,6 +214,42 @@
 
 ---
 
+## Session 9.8 - 2026-04-20
+
+**Spec:** Phase 9.8 - Broker Primary + Shadow Retrieval
+**Built:**
+- `src/services/canonical-memory-broker.ts`, `canonical-memory-dispatch.ts`, `canonical-broker-shadow.ts`, `canonical-broker-trace.ts`, `src/types/canonical-memory-broker.ts` - shipped the default read-path broker that reuses the 9.1 explainable router, dispatches the primary query on the hot path, runs a read-only shadow-secondary retrieval in the background, and persists tenant-scoped broker traces with engine identity and provenance intact
+- `src/services/canonical-memory-query.ts`, `canonical-memory-read-model.ts`, `chief-of-staff-context.ts`, `src/tools/canonical-memory.ts`, `src/types/canonical-memory-query.ts` - existing canonical `search_memory` and `prepare_context_for_agent` now flow through the broker without changing the stable public surface beyond additive broker metadata
+- `migrations/1021_broker_primary_shadow_trace.sql` - added the smallest architecture-consistent storage lane for tenant-visible broker trace metadata in D1, paired with encrypted detail blobs in `R2_OBSERVABILITY`
+- `tests/9.8-broker-primary-shadow-retrieval.test.ts`, `tests/8.3-graph-timeline-query-surface.test.ts`, `MANIFEST.md`, `specs/active/9.8-broker-primary-shadow-retrieval.md` - added primary/shadow/non-blocking/trace regression coverage, tightened graph tests for brokered shadow reads, regenerated the manifest, and completed the 9.8 As-Built record
+**Decisions:**
+- **The broker is now the default read path, but only the primary result reaches the user.** Session 9.8 deliberately stops at explainable routing plus background comparison and does not add any cross-engine synthesis.
+- **Shadow retrieval is bounded, read-only, and non-blocking.** Semantic-primary runs graph shadow, graph-primary runs semantic shadow, and the user-facing response does not wait for the shadow branch to finish.
+- **Tenant traces stay tenant-scoped, not platform-wide.** We store structured broker trace rows in D1 for queryable tenant history and place richer encrypted payloads in `R2_OBSERVABILITY` instead of creating a new broad admin inspection surface.
+**Verification:**
+- `npx vitest run tests/9.8-broker-primary-shadow-retrieval.test.ts` - passed
+- `npx vitest run tests/7.2-semantic-recall-through-canonical-interface.test.ts tests/8.3-graph-timeline-query-surface.test.ts tests/9.2-chief-of-staff-context-builder.test.ts tests/9.4-brain-memory-external-client-rollout.test.ts tests/9.7-graphiti-entity-relation-projection.test.ts` - passed
+- `npm test` - passed
+- `npm run postflight` - passed
+- `npm run manifest` - passed
+- Live protected MCP proof after deploy `580a228a-0a10-409d-baaf-e18b222b004a` - passed:
+  - meaningful fresh Hindsight semantic recall remained green
+  - fresh Graphiti relationship and timeline queries remained green
+  - `prepare_context_for_agent` remained green
+  - broker traces existed in live tenant-scoped storage for brokered queries
+  - non-blocking shadow behavior was confirmed live by a successful graph-primary result whose semantic shadow timed out independently
+**Current Health:**
+- **Hindsight:** green live after 9.8
+- **Graphiti:** green live after 9.8
+- **Brokered canonical reads:** green, with primary-only hot-path responses and persisted tenant-scoped traces
+- **Known caveat:** raw and composed reads currently skip shadow dispatch by design in 9.8
+**Hindsight Pin:** unchanged (`ghcr.io/vectorize-io/hindsight-api:0.5.3`)
+**Fixture Data:** Fresh live proof used meaningful semantic and graph captures around `Mira Sol` / `Jonah Vale`, plus the existing canonical regression fixtures for semantic, graph, and context assembly paths
+**Blockers:** None
+**Next:** Session 9.9 can build user-facing cross-engine synthesis on top of the broker traces, but platform-owner analytics, anonymized cross-tenant telemetry, and canonical Postgres migration remain intentionally out of scope
+
+---
+
 ## Session 6.3 - 2026-04-18
 
 **Spec:** Phase 6.3 - Canonical Capture Pipeline

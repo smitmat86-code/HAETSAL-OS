@@ -7,6 +7,12 @@ export type MemoryQueryMode = 'raw' | 'semantic' | 'graph' | 'composed'
 export type MemoryQueryModePreference = MemoryQueryMode | 'lexical'
 
 export interface CanonicalMemoryRouteDecision { mode: MemoryQueryMode; reason: string; explicit: boolean; dispatchQuery: string }
+export interface CanonicalMemoryRouteMetadata {
+  queryId: string
+  primaryMode: MemoryQueryMode
+  shadowMode: MemoryQueryMode | null
+  shadowDispatch: 'scheduled' | 'skipped'
+}
 export interface CanonicalSourceAttribution {
   mode: MemoryQueryMode; sourceSystem: string | null; captureId: string | null; documentId: string | null
   canonicalOperationId: string | null; projectionKind: 'hindsight' | 'graphiti' | null
@@ -41,7 +47,14 @@ export interface CanonicalMemoryListItem {
   } | null
 }
 
-export interface CanonicalSearchResult { query: string; mode: MemoryQueryMode; status: 'ok' | 'partial' | 'unavailable'; route?: CanonicalMemoryRouteDecision | null; items: CanonicalMemoryListItem[] }
+export interface CanonicalSearchResult {
+  query: string
+  mode: MemoryQueryMode
+  status: 'ok' | 'partial' | 'unavailable'
+  route?: CanonicalMemoryRouteDecision | null
+  broker?: CanonicalMemoryRouteMetadata | null
+  items: CanonicalMemoryListItem[]
+}
 export interface CanonicalRecentResult { items: CanonicalMemoryListItem[] }
 export interface CanonicalDocumentArtifact { artifactId: string; filename: string | null; mediaType: string | null; byteLength: number | null; storageKind?: string | null; storageKey?: string | null }
 export interface CanonicalDocumentResult {

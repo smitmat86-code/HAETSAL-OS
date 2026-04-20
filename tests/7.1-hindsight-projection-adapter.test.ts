@@ -4,6 +4,7 @@ import { captureThroughCanonicalPipeline } from '../src/services/canonical-captu
 import { getCanonicalMemoryStatus } from '../src/services/canonical-memory-status'
 import { encryptContentForArchive } from '../src/services/ingestion/encryption'
 import { processCanonicalProjectionDispatch } from '../src/workers/ingestion/canonical-projection-consumer'
+import { reconcileHindsightOperation } from '../src/cron/hindsight-operations'
 import type { CanonicalPipelineCaptureInput } from '../src/types/canonical-capture-pipeline'
 import { createHindsightTestEnv } from './support/hindsight-test-env'
 import conversationFixture from './fixtures/canonical-memory/conversation-capture.json'
@@ -81,6 +82,13 @@ async function processDispatch(
     waitUntil: (promise: Promise<unknown>) => { pending.push(promise) },
   })
   await Promise.allSettled(pending)
+}
+
+async function processDispatchWithoutWaitUntil(
+  message: { tenantId: string; payload: Record<string, unknown> },
+  testEnv: typeof env,
+): Promise<void> {
+  await processCanonicalProjectionDispatch(message.tenantId, message.payload, testEnv)
 }
 
 async function waitForResultRow<T>(
@@ -180,6 +188,42 @@ describe('7.1 hindsight projection adapter', () => {
     expect(latest?.engine_operation_id).toContain('op-')
     expect(latest?.target_ref).toContain('/documents/')
     expect(status.projections.find(item => item.kind === 'hindsight')?.status).toBe('completed')
+    expect(status.compatibility?.status).toBe('retained')
+  })
+
+  it('keeps reconciling queued hindsight projections until the operation itself completes', async () => {
+    const tenantId = `${TENANT_PREFIX}-reconcile`
+    await ensureTenantWithKek(tenantId)
+    const capture = { retainCount: 0, operationIds: [] as string[] }
+    const testEnv = createHindsightTestEnv({
+      capture,
+      operationStatuses: ['pending', 'completed'],
+    })
+    const sendSpy = vi.spyOn(testEnv.QUEUE_BULK, 'send').mockResolvedValue(undefined as never)
+    const input = await encryptFixture(noteFixture as CanonicalPipelineCaptureInput, tenantId, 'reconcile')
+
+    const result = await captureThroughCanonicalPipeline({
+      ...input,
+      memoryType: 'episodic',
+      compatibilityMode: 'current_hindsight',
+    }, testEnv, tenantId)
+    const message = sendSpy.mock.calls[0]?.[0] as { tenantId: string; payload: Record<string, unknown> }
+    await processDispatchWithoutWaitUntil(message, testEnv)
+
+    const firstPass = await reconcileHindsightOperation(`op-${result.compatibility.documentId}`, testEnv)
+    const secondPass = await reconcileHindsightOperation(`op-${result.compatibility.documentId}`, testEnv)
+    const status = await getCanonicalMemoryStatus(
+      { tenantId, operationId: result.capture.operationId },
+      testEnv,
+      tenantId,
+    )
+    const hindsightProjection = status.projections.find(item => item.kind === 'hindsight')
+
+    expect(firstPass).toBe('pending')
+    expect(secondPass).toBe('settled')
+    expect(hindsightProjection?.status).toBe('completed')
+    expect(hindsightProjection?.resultStatus).toBe('completed')
+    expect(hindsightProjection?.semanticReady).toBe(true)
     expect(status.compatibility?.status).toBe('retained')
   })
 

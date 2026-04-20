@@ -17,13 +17,13 @@ export async function reconcileHindsightOperation(
 
   const current = await readOperationState(operationId, env)
   if (!current) return 'missing'
-  if (current.status !== 'pending' || current.available_at != null) return 'settled'
+  if (current.status !== 'pending') return 'settled'
 
   await pollOperation(row, env)
 
   const refreshed = await readOperationState(operationId, env)
   if (!refreshed) return 'missing'
-  return refreshed.status === 'pending' && refreshed.available_at == null ? 'pending' : 'settled'
+  return refreshed.status === 'pending' ? 'pending' : 'settled'
 }
 
 export async function reconcileHindsightOperationSoon(

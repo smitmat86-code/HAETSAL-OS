@@ -8,11 +8,14 @@ export type HindsightCaptureState = {
   operationIds: string[]
 }
 
+type HindsightOperationStatusSequence = HindsightOperationStatus[]
+
 type CreateHindsightTestEnvOptions = {
   capture?: HindsightCaptureState
   failRecall?: boolean
   failRetain?: boolean
   operationStatus?: HindsightOperationStatus
+  operationStatuses?: HindsightOperationStatusSequence
   recallResults?: HindsightRecallRow[]
 }
 
@@ -29,8 +32,18 @@ export function createHindsightTestEnv(options: CreateHindsightTestEnvOptions = 
     failRecall = false,
     failRetain = false,
     operationStatus = 'completed',
+    operationStatuses,
     recallResults = [],
   } = options
+  const operationStatusById = new Map<string, { index: number }>()
+
+  function readOperationStatus(operationId: string): HindsightOperationStatus {
+    if (!operationStatuses?.length) return operationStatus
+    const state = operationStatusById.get(operationId) ?? { index: 0 }
+    const next = operationStatuses[Math.min(state.index, operationStatuses.length - 1)] ?? operationStatus
+    operationStatusById.set(operationId, { index: state.index + 1 })
+    return next
+  }
 
   return {
     ...env,
@@ -71,16 +84,17 @@ export function createHindsightTestEnv(options: CreateHindsightTestEnvOptions = 
 
         if (/^\/v1\/default\/banks\/[^/]+\/operations\/[^/]+$/.test(url.pathname)) {
           const operationId = url.pathname.split('/').at(-1)
+          const status = readOperationStatus(String(operationId))
           return json({
             operation_id: operationId,
-            status: operationStatus,
+            status,
             operation_type: 'retain',
             created_at: new Date().toISOString(),
             updated_at: new Date().toISOString(),
-            completed_at: operationStatus === 'completed' || operationStatus === 'failed'
+            completed_at: status === 'completed' || status === 'failed'
               ? new Date().toISOString()
               : null,
-            error_message: operationStatus === 'failed' ? 'adapter submission failed' : null,
+            error_message: status === 'failed' ? 'adapter submission failed' : null,
           })
         }
 

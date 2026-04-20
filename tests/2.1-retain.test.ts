@@ -319,6 +319,12 @@ describe('retainContent pipeline', () => {
       bankIds: [],
       retainBodies: [],
     }, { immediateProjectionDispatch: true })
+    testEnv.QUEUE_BULK.send = (async (message: {
+      tenantId: string
+      payload: Record<string, unknown>
+    }) => {
+      await processCanonicalProjectionDispatch(message.tenantId, message.payload, testEnv)
+    }) as typeof env.QUEUE_BULK.send
     testEnv.HINDSIGHT = {
       fetch: async (input: RequestInfo | URL, init?: RequestInit) => {
         const url =

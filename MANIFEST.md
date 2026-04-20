@@ -59,6 +59,8 @@ Last updated: 2026-04-18 | Session: 7.1 (Hindsight Projection Adapter)
 | src\services\bootstrap\historical-import.ts | 140 | historicalSalienceMultiplier | ✅ |
 | src\services\bootstrap\interview.ts | 76 | createInitialState, currentQuestion, currentDomain... | ✅ |
 | src\services\canonical-broker-shadow.ts | 122 | summaryOf, statusOf, traceOf... | ✅ |
+| src\services\canonical-broker-trace-read.ts | 63 | — | ✅ |
+| src\services\canonical-broker-trace-view.ts | 139 | CanonicalBrokerTraceRow, BROKER_TRACE_SELECT, viewFromRow... | ✅ |
 | src\services\canonical-broker-trace.ts | 63 | — | ✅ |
 | src\services\canonical-capture-compat.ts | 49 | — | ✅ |
 | src\services\canonical-capture-pipeline.ts | 98 | — | ✅ |
@@ -99,7 +101,7 @@ Last updated: 2026-04-18 | Session: 7.1 (Hindsight Projection Adapter)
 | src\services\delivery\telegram.ts | 31 | — | ✅ |
 | src\services\external-brain-contract.ts | 123 | EXTERNAL_BRAIN_SURFACES, EXTERNAL_BRAIN_CLIENT_MAPPINGS, EXTERNAL_CLIENT_FIXTURES... | ✅ |
 | src\services\external-client-memory-write.ts | 54 | — | ✅ |
-| src\services\external-client-memory.ts | 137 | BRAIN_MEMORY_SURFACE_PROFILE, EXTERNAL_CLIENT_CAPTURE_PATTERNS, usesBrainMemoryRollout... | ✅ |
+| src\services\external-client-memory.ts | 139 | BRAIN_MEMORY_SURFACE_PROFILE, EXTERNAL_CLIENT_CAPTURE_PATTERNS, usesBrainMemoryRollout... | ✅ |
 | src\services\google\calendar.ts | 82 | extractEventArtifact | ✅ |
 | src\services\google\drive.ts | 89 | ObsidianFrontmatter, parseObsidianFrontmatter, extractWikilinks | ✅ |
 | src\services\google\gmail.ts | 103 | extractThreadArtifact | ✅ |
@@ -134,8 +136,9 @@ Last updated: 2026-04-18 | Session: 7.1 (Hindsight Projection Adapter)
 | src\tools\act\search.ts | 33 | searchSchema | ✅ |
 | src\tools\act\send-message.ts | 33 | sendMessageSchema | ✅ |
 | src\tools\bootstrap.ts | 104 | registerBootstrapTools | ✅ |
-| src\tools\brain-memory-surface.ts | 30 | BRAIN_MEMORY_TOOL_NAMES, BrainMemoryToolName, BrainMemorySurfaceContext... | ✅ |
-| src\tools\canonical-memory.ts | 144 | registerCanonicalMemoryTools | ✅ |
+| src\tools\brain-memory-surface.ts | 32 | BRAIN_MEMORY_TOOL_NAMES, BrainMemoryToolName, BrainMemorySurfaceContext... | ✅ |
+| src\tools\canonical-memory-schema.ts | 73 | captureSchema, searchSchema, recentSchema... | ✅ |
+| src\tools\canonical-memory.ts | 127 | registerCanonicalMemoryTools | ✅ |
 | src\tools\hindsight-debug.ts | 32 | registerHindsightDebugTool | ✅ |
 | src\tools\memory.ts | 88 | registerMemoryTools | ✅ |
 | src\tools\recall.ts | 73 | — | ✅ |
@@ -145,13 +148,13 @@ Last updated: 2026-04-18 | Session: 7.1 (Hindsight Projection Adapter)
 | src\types\canonical-capture-pipeline.ts | 92 | CanonicalCompatibilityMode, CanonicalPipelineCaptureInput, CanonicalProjectionDispatchMessage... | ✅ |
 | src\types\canonical-graph-projection.ts | 139 | GraphitiDeploymentPostureId, GraphProjectionEpisodeKind, GraphProjectionEntityKind... | ✅ |
 | src\types\canonical-graph-query.ts | 67 | TraceRelationshipInput, EntityTimelineInput, CanonicalProjectionProvenance... | ✅ |
-| src\types\canonical-memory-broker.ts | 54 | CanonicalBrokerBranchStatus, CanonicalBrokerOverlap, CanonicalBrokerBranchTrace... | ✅ |
+| src\types\canonical-memory-broker.ts | 106 | CanonicalBrokerBranchStatus, CanonicalBrokerOverlap, CanonicalBrokerDetailStatus... | ✅ |
 | src\types\canonical-memory-query.ts | 103 | MemoryQueryMode, MemoryQueryModePreference, CanonicalMemoryRouteDecision... | ✅ |
 | src\types\canonical-memory.ts | 34 | CanonicalProjectionKind, CanonicalArtifactMode, CanonicalArtifactRef... | ✅ |
 | src\types\chief-of-staff-context.ts | 60 | ContextBundleIntent, ContextConfidenceLevel, PrepareContextForAgentInput... | ✅ |
 | src\types\env.ts | 67 | Env | ✅ |
 | src\types\external-brain.ts | 89 | BrainSurfaceId, BrainSurfaceStatus, BrainRiskLevel... | ✅ |
-| src\types\external-client-memory.ts | 71 | ExternalClientCaptureMode, BrainMemorySurfaceProfile, ExternalClientCaptureInput... | ✅ |
+| src\types\external-client-memory.ts | 73 | ExternalClientCaptureMode, BrainMemorySurfaceProfile, ExternalClientCaptureInput... | ✅ |
 | src\types\google-source-read.ts | 29 | GoogleSourceKind, GoogleSourceRef, GoogleSourceReadAttribution... | ✅ |
 | src\types\google.ts | 53 | GoogleOAuthTokens, GoogleThread, GoogleMessage... | ✅ |
 | src\types\hindsight.ts | 103 | HindsightRetainItem, HindsightRetainRequest, HindsightRetainResponse... | ✅ |

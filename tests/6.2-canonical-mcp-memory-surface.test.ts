@@ -106,7 +106,7 @@ async function markHindsightProjectionCompleted(operationId: string): Promise<vo
   ])
 }
 
-function createToolRegistry(tmk: CryptoKey | null, tenantId = TENANT_A): ToolRegistry {
+function createToolRegistry(tmk: CryptoKey | null, tenantId = TENANT_A, testEnv: typeof env = env): ToolRegistry {
   const handlers = new Map<string, ToolHandler>()
   const pending: Promise<unknown>[] = []
   const server = {
@@ -115,7 +115,7 @@ function createToolRegistry(tmk: CryptoKey | null, tenantId = TENANT_A): ToolReg
     },
   } as unknown as McpServer
   registerCanonicalMemoryTools(server, {
-    getEnv: () => env,
+    getEnv: () => testEnv,
     getTenantId: () => tenantId,
     getTmk: () => tmk,
     getExecutionContext: () => ({ waitUntil: (promise: Promise<unknown>) => { pending.push(promise) } }),
@@ -152,9 +152,12 @@ describe('6.2 canonical MCP memory surface', () => {
 
     expect(Array.from(registry.handlers.keys()).sort()).toEqual([
       'capture_memory',
+      'debug_hindsight_bank_state',
       'get_document',
       'get_entity_timeline',
+      'get_memory_trace',
       'get_recent_memories',
+      'get_recent_memory_traces',
       'memory_stats',
       'memory_status',
       'prepare_context_for_agent',
@@ -211,6 +214,89 @@ describe('6.2 canonical MCP memory surface', () => {
     expect(result.operation.status).toBe('accepted')
     expect(result.projections.map(item => item.kind)).toEqual(expect.arrayContaining(['hindsight', 'graphiti']))
     expect(result.projections.find(item => item.kind === 'hindsight')?.status).toBe('completed')
+  })
+
+  it('can inspect raw hindsight bank state for the current tenant', async () => {
+    const testEnv = {
+      ...env,
+      HINDSIGHT: {
+        fetch: async (input: RequestInfo | URL) => {
+          const url = input instanceof Request ? new URL(input.url) : new URL(input.toString())
+          if (/\/operations\/[^/]+$/.test(url.pathname)) {
+            return new Response(JSON.stringify({
+              operation_id: 'remote-op-62',
+              status: 'completed',
+              operation_type: 'retain',
+              completed_at: new Date().toISOString(),
+            }), { status: 200, headers: { 'Content-Type': 'application/json' } })
+          }
+          if (/\/documents\/[^/]+$/.test(url.pathname)) {
+            return new Response(JSON.stringify({
+              id: 'remote-doc-62',
+              bank_id: `hindsight-${TENANT_A}`,
+              memory_unit_count: 2,
+            }), { status: 200, headers: { 'Content-Type': 'application/json' } })
+          }
+          if (/\/memories\/recall$/.test(url.pathname)) {
+            return new Response(JSON.stringify({
+              results: [{
+                document_id: 'remote-doc-62',
+                text: 'The direct bank probe can see this retained memory.',
+                score: 0.98,
+              }],
+            }), { status: 200, headers: { 'Content-Type': 'application/json' } })
+          }
+          return new Response(JSON.stringify({ status: 'ok' }), { status: 200, headers: { 'Content-Type': 'application/json' } })
+        },
+      },
+    } as typeof env
+
+    const now = Date.now()
+    await env.D1_US.batch([
+      env.D1_US.prepare(
+        `UPDATE canonical_projection_jobs
+         SET status = 'completed'
+         WHERE id = (
+           SELECT id FROM canonical_projection_jobs
+           WHERE operation_id = ? AND projection_kind = 'hindsight'
+           LIMIT 1
+         )`,
+      ).bind(seeded.note.operationId),
+      env.D1_US.prepare(
+        `INSERT INTO canonical_projection_results
+         (id, tenant_id, projection_job_id, status, target_ref, error_message, engine_document_id, engine_operation_id, created_at, updated_at)
+         VALUES (?, ?, (
+           SELECT id FROM canonical_projection_jobs
+           WHERE operation_id = ? AND projection_kind = 'hindsight'
+           LIMIT 1
+         ), 'completed', ?, NULL, ?, ?, ?, ?)`,
+      ).bind(
+        crypto.randomUUID(),
+        TENANT_A,
+        seeded.note.operationId,
+        'hindsight://bank/documents/remote-doc-62/operations/remote-op-62',
+        'remote-doc-62',
+        'remote-op-62',
+        now,
+        now,
+      ),
+    ])
+
+    const result = await callTool<Record<string, unknown>>(
+      createToolRegistry(suiteTmk, TENANT_A, testEnv),
+      'debug_hindsight_bank_state',
+      {
+        operation_id: seeded.note.operationId,
+        recall_query: 'direct bank probe retained memory',
+        limit: 3,
+      },
+    )
+
+    expect(result.bankId).toBe(`hindsight-${TENANT_A}`)
+    expect((result.projection as Record<string, unknown>).engineDocumentId).toBe('remote-doc-62')
+    expect((result.remoteOperation as Record<string, unknown>).status).toBe('completed')
+    expect((result.remoteDocument as Record<string, unknown>).memory_unit_count).toBe(2)
+    expect((result.rawRecall as Record<string, unknown>).count).toBe(1)
   })
 
   it('returns tenant-scoped canonical memory stats without exposing content', async () => {

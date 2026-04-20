@@ -21,6 +21,8 @@ export const BRAIN_MEMORY_SURFACE_PROFILE: BrainMemorySurfaceProfile = {
     'trace_relationship',
     'get_entity_timeline',
     'prepare_context_for_agent',
+    'get_recent_memory_traces',
+    'get_memory_trace',
     'get_recent_memories',
     'get_document',
     'memory_status',

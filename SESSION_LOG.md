@@ -1274,3 +1274,32 @@
 **Next:** Commit and deploy the runtime hardening cut, then re-run protected production fresh-capture proof to confirm whether Hindsight semantic readiness now clears live.
 
 ---
+
+## Session 9.9 - 2026-04-20
+
+**Spec:** Tenant Memory Trace
+**Built:**
+- `src/services/canonical-broker-trace-read.ts`, `src/services/canonical-broker-trace-view.ts`, `src/types/canonical-memory-broker.ts` - tenant-scoped broker trace readback now lists recent traces and hydrates full trace detail from the existing 9.8 D1 + encrypted R2 storage shape
+- `src/tools/canonical-memory.ts`, `src/tools/canonical-memory-schema.ts`, `src/tools/brain-memory-surface.ts` - canonical memory surface now exposes `get_recent_memory_traces` and `get_memory_trace` as additive tenant-facing tools
+- `src/services/external-client-memory.ts`, `src/types/external-client-memory.ts` - `brain-memory` surface profile now includes the tenant trace readback tools
+- `src/tools/hindsight-debug.ts`, `src/services/canonical-hindsight-debug.ts` - existing tenant-scoped Hindsight debug surface was wired back into the canonical registrar so the declared `brain-memory` tool registry stayed internally consistent
+- `tests/9.9-tenant-memory-trace.test.ts`, `tests/6.2-canonical-mcp-memory-surface.test.ts` - coverage for recent trace listing, hydrated readback, missing-detail fallback, cross-tenant rejection, and additive canonical tool registration
+- `specs/active/9.9-tenant-memory-trace.md` - As-Built Record completed
+- `MANIFEST.md` - regenerated
+**Decisions:**
+- Session 9.9 stayed strictly read-side and migration-free on top of the 9.8 broker trace storage shape.
+- Structured summary rows remain in D1 `canonical_broker_traces`; rich detail remains tenant-encrypted in `R2_OBSERVABILITY`.
+- Missing or undecryptable rich detail returns a truthful gap via `detailStatus` instead of failing the whole trace read.
+- No platform-owner raw-content analytics or cross-tenant trace surface was introduced.
+**Verification:**
+- `npx vitest run tests/9.9-tenant-memory-trace.test.ts` - passed
+- `npx vitest run tests/9.8-broker-primary-shadow-retrieval.test.ts tests/9.2-chief-of-staff-context-builder.test.ts tests/7.2-semantic-recall-through-canonical-interface.test.ts tests/8.3-graph-timeline-query-surface.test.ts tests/9.7-graphiti-entity-relation-projection.test.ts` - passed
+- `npm test` - passed (`372 passed`, `1 skipped`)
+- `npm run postflight` - passed
+- `npm run manifest` - passed
+- live protected MCP proof after deploy - passed for fresh semantic query, fresh graph query, `prepare_context_for_agent`, `get_recent_memory_traces`, and `get_memory_trace`
+**Hindsight Pin:** unchanged (`ghcr.io/vectorize-io/hindsight-api:0.5.3`)
+**Blockers:** None
+**Next:** Session 9.9 can move to `specs/completed/`; canonical Postgres cutover remains a later storage migration phase while the tenant-facing trace tools stay stable.
+
+---

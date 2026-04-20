@@ -5,6 +5,31 @@
 
 ---
 
+## Session OPS.7 - 2026-04-19
+
+**Spec:** Operational - live `memory_status` D1 migration repair
+**Built:**
+- Live production D1 `brain-us` - applied missing `1014_hindsight_projection_adapter.sql` so `canonical_projection_results` now includes `engine_bank_id`, `engine_document_id`, and `engine_operation_id`, plus the operation lookup index
+- `d1_migrations` on live `brain-us` - recorded `1014_hindsight_projection_adapter.sql` as applied after confirming production had stopped at `1013_canonical_open_brain_foundation.sql`
+- No repo source changes - investigation confirmed `src/services/canonical-memory-status.ts`, `migrations/1014_hindsight_projection_adapter.sql`, and the existing 6.2 / 7.1 / 7.2 tests were already aligned
+**Decisions:**
+- **This was a production migration miss, not a code bug.** `memory_status` was truthfully reading adapter columns that the live database did not yet have.
+- **The smallest correct fix was operational.** We repaired live D1 instead of weakening the canonical status contract with fallback code that would hide a broken rollout state.
+- **Existing regression coverage was already adequate.** The repo already had tests asserting the adapter-backed fields, so no repo test change was needed for this incident.
+**Verification:**
+- `npx vitest run tests/6.2-canonical-mcp-memory-surface.test.ts` - passed
+- `npx vitest run tests/7.2-semantic-recall-through-canonical-interface.test.ts` - passed
+- `npm test` - passed (`344 passed`, `1 skipped`)
+- `npm run postflight` - passed
+- `npm run manifest` - passed
+- Live D1 verification - confirmed `canonical_projection_results` now exposes the adapter columns and the previously failing `r.engine_document_id` query shape executes cleanly
+**Hindsight Pin:** unchanged (`ghcr.io/vectorize-io/hindsight-api:0.5.2`)
+**Fixture Data:** N/A - operational production schema repair only
+**Blockers:** None
+**Next:** Keep deploy discipline tight around D1 migrations; this incident came from code and schema shipping out of sync, not from a faulty canonical-memory implementation
+
+---
+
 ## Session OPS.6 - 2026-04-19
 
 **Spec:** Operational - HAETSAL-first public MCP identity cleanup

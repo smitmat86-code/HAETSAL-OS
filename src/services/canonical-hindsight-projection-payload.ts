@@ -33,8 +33,14 @@ function projectionPayloadKey(tenantId: string, captureId: string): string {
 }
 
 export function resolveProjectionSourceRef(
-  row: Pick<ProjectionJobContext, 'source_ref' | 'capture_id'>,
+  row: Pick<ProjectionJobContext, 'source_system' | 'source_ref' | 'capture_id'>,
 ): string {
+  if (
+    row.source_system === 'mcp:memory_write'
+    && row.source_ref?.startsWith('brain-memory:')
+  ) {
+    return row.capture_id
+  }
   return row.source_ref?.trim() || row.capture_id
 }
 

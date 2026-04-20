@@ -10,6 +10,8 @@ import type {
 import { BRAIN_MEMORY_SURFACE_PROFILE, EXTERNAL_CLIENT_CAPTURE_PATTERNS } from '../src/services/external-client-memory'
 import { BRAIN_MEMORY_TOOL_NAMES } from '../src/tools/brain-memory-surface'
 import { registerCanonicalMemoryTools } from '../src/tools/canonical-memory'
+import { processCanonicalProjectionDispatch } from '../src/workers/ingestion/canonical-projection-consumer'
+import { createHindsightTestEnv, type HindsightCaptureState } from './support/hindsight-test-env'
 
 type ToolResponse = { content: Array<{ text: string }> }
 type ToolHandler = (input: unknown) => Promise<ToolResponse>
@@ -86,6 +88,17 @@ async function callTool<T>(registry: ToolRegistry, name: string, input: unknown 
   const response = await registry.handlers.get(name)?.(input)
   await Promise.allSettled(registry.pending.splice(0))
   return JSON.parse(response?.content[0]?.text ?? 'null') as T
+}
+
+async function processDispatch(
+  message: { tenantId: string; payload: Record<string, unknown> },
+  testEnv: typeof env,
+): Promise<void> {
+  const pending: Promise<unknown>[] = []
+  await processCanonicalProjectionDispatch(message.tenantId, message.payload, testEnv, {
+    waitUntil: (promise: Promise<unknown>) => { pending.push(promise) },
+  })
+  await Promise.allSettled(pending)
 }
 
 beforeAll(async () => { await ensureTenantWithKek() })
@@ -180,5 +193,63 @@ describe('9.4 brain-memory external client rollout', () => {
     expect(toolNames.has('memory_stats')).toBe(true)
     expect(toolNames.has('brain_v1_act_send_message')).toBe(false)
     expect(toolNames.has('gmail.read_thread')).toBe(false)
+  })
+
+  it('uses capture-scoped hindsight document identities for repeated explicit brain-memory captures', async () => {
+    const tmk = await deriveTestTmk()
+    const capture: HindsightCaptureState = { retainCount: 0, operationIds: [] }
+    const testEnv = createHindsightTestEnv({ capture, operationStatus: 'completed' })
+    const sendSpy = vi.spyOn(testEnv.QUEUE_BULK, 'send').mockResolvedValue(undefined as never)
+    const registry = createToolRegistry(testEnv, tmk)
+
+    const first = await callTool<Record<string, string | object>>(registry, 'capture_memory', {
+      content: 'Decision: first explicit brain-memory capture for unique projection identity.',
+      scope: 'general',
+      capture_mode: 'explicit',
+      client_name: 'Claude Code',
+    })
+    const second = await callTool<Record<string, string | object>>(registry, 'capture_memory', {
+      content: 'Decision: second explicit brain-memory capture should not collide in hindsight.',
+      scope: 'general',
+      capture_mode: 'explicit',
+      client_name: 'Claude Code',
+    })
+
+    const messages = sendSpy.mock.calls.map((call) => call[0] as { tenantId: string; payload: Record<string, unknown> })
+    for (const message of messages) {
+      await processDispatch(message, testEnv)
+    }
+
+    const hindsightRows = await testEnv.D1_US.prepare(
+      `SELECT j.capture_id, r.engine_document_id, r.engine_operation_id, r.status
+       FROM canonical_projection_jobs j
+       INNER JOIN canonical_projection_results r ON r.id = (
+         SELECT r2.id
+         FROM canonical_projection_results r2
+         WHERE r2.projection_job_id = j.id
+         ORDER BY r2.updated_at DESC, r2.created_at DESC, r2.id DESC
+         LIMIT 1
+       )
+       WHERE j.tenant_id = ? AND j.projection_kind = 'hindsight' AND j.capture_id IN (?, ?)
+       ORDER BY j.capture_id ASC`,
+    ).bind(
+      TENANT_ID,
+      first.canonical_capture_id,
+      second.canonical_capture_id,
+    ).all<{
+      capture_id: string
+      engine_document_id: string | null
+      engine_operation_id: string | null
+      status: string
+    }>()
+
+    const rows = hindsightRows.results ?? []
+    expect(capture.retainCount).toBe(2)
+    expect(rows).toHaveLength(2)
+    expect(rows.every((row) => row.status === 'completed')).toBe(true)
+    expect(rows.every((row) => row.engine_operation_id?.startsWith('op-'))).toBe(true)
+    expect(rows[0]?.engine_document_id).toBeTruthy()
+    expect(rows[1]?.engine_document_id).toBeTruthy()
+    expect(rows[0]?.engine_document_id).not.toBe(rows[1]?.engine_document_id)
   })
 })

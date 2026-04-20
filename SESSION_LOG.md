@@ -1050,6 +1050,27 @@
 **Next:** Session 9.5 or later can build selective `brain-sources-read` on top of the now-concrete `brain-memory` rollout without widening into a second brain or transcript-default retention
 
 ---
+## Session 9.x - 2026-04-19
+
+**Spec:** Live semantic recall follow-up - fresh `brain-memory` capture projection identity fix
+**Built:**
+- `src/services/canonical-hindsight-projection-payload.ts` - Hindsight projection identity now uses the canonical capture id for `mcp:memory_write` `brain-memory:*` captures instead of reusing the stable rollout `source_ref`
+- `tests/9.4-brain-memory-external-client-rollout.test.ts` - regression coverage for repeated explicit `brain-memory` captures from the same client now asserting distinct Hindsight engine document ids
+- `MANIFEST.md` - regenerated
+**Decisions:**
+- The fix stays surgical and truthful: semantic mode still depends on Hindsight, but fresh explicit `brain-memory` captures no longer collide onto one Hindsight document identity.
+- The stable rollout `source_ref` remains valuable for provenance/read attribution; only the Hindsight projection dedup/document identity path changes for `brain-memory` writes.
+- No raw fallback or synthetic semantic-ready behavior was introduced.
+**Verification:**
+- `npx vitest run tests/9.4-brain-memory-external-client-rollout.test.ts` - passed
+- `npx vitest run tests/7.1-hindsight-projection-adapter.test.ts tests/7.2-semantic-recall-through-canonical-interface.test.ts` - passed
+- `npm test` - passed (`345 passed`, `1 skipped`)
+- `npm run postflight` - passed
+- `npm run manifest` - passed
+**Blockers:** Live Claude Code semantic smoke still needs to be re-run after deploy to confirm the fresh capture path is now green on the public MCP edge.
+**Next:** Deploy this Hindsight projection identity fix, then re-run the live Claude Code semantic smoke for fresh explicit `brain-memory` captures.
+
+---
 ## Session 9.5 - 2026-04-19
 
 **Spec:** Phase 9.5 - Google Source-Read Ingestion Rollout

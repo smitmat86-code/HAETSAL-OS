@@ -66,7 +66,7 @@ Last updated: 2026-04-18 | Session: 7.1 (Hindsight Projection Adapter)
 | src\services\canonical-graphiti-payload.ts | 95 | GraphitiProjectionJobContext | ✅ |
 | src\services\canonical-graphiti-projection.ts | 148 | — | ✅ |
 | src\services\canonical-graphiti-reconcile.ts | 122 | — | ✅ |
-| src\services\canonical-hindsight-projection-payload.ts | 135 | ProjectionJobContext, HindsightProjectionPayload, resolveProjectionSourceRef... | ✅ |
+| src\services\canonical-hindsight-projection-payload.ts | 141 | ProjectionJobContext, HindsightProjectionPayload, resolveProjectionSourceRef... | ✅ |
 | src\services\canonical-hindsight-projection-state.ts | 119 | HindsightProjectionJobRow | ✅ |
 | src\services\canonical-hindsight-projection.ts | 137 | — | ✅ |
 | src\services\canonical-hindsight-reconcile.ts | 58 | — | ✅ |

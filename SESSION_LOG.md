@@ -1181,3 +1181,26 @@
 **Next:** Checkpoint this Hindsight repair tranche before continuing broader Graphiti/container migration work
 
 ---
+
+## Session 9.x - 2026-04-20
+
+**Spec:** Live semantic recall follow-up - Hindsight async retain runtime completion hardening
+**Built:**
+- `src/workers/mcpagent/do/HindsightContainer.ts`, `src/services/hindsight-transport.ts`, `wrangler.toml`, `hindsight/Dockerfile` - Hindsight runtime now prefers the shared API worker safety net, disables dedicated workers in production config, lowers retain retry pressure, bumps the shared instance name, and pins the image to `ghcr.io/vectorize-io/hindsight-api:0.5.3`
+- `tests/2.4b-hindsight-container-runtime.test.ts`, `tests/9.4-brain-memory-external-client-rollout.test.ts` - regression coverage for the runtime safety-net env contract and fresh semantic search linkback after truthful completion
+- `MANIFEST.md` - regenerated
+**Decisions:**
+- The remaining freshness gap was treated as a retain-runtime problem, not a status-mapping or semantic fallback problem.
+- `memory_status` remains truthful: `semanticReady` only flips after Hindsight actually completes and semantic results are visible through the canonical recall path.
+- No raw fallback or synthetic semantic-ready behavior was introduced.
+**Verification:**
+- `npx vitest run tests/2.4b-hindsight-container-runtime.test.ts tests/7.1-hindsight-projection-adapter.test.ts tests/7.2-semantic-recall-through-canonical-interface.test.ts tests/9.4-brain-memory-external-client-rollout.test.ts` - passed
+- `npx vitest run tests/7.1-hindsight-projection-adapter.test.ts tests/7.2-semantic-recall-through-canonical-interface.test.ts tests/9.4-brain-memory-external-client-rollout.test.ts` - passed
+- `npm test` - passed (`362 passed`, `1 skipped`)
+- `npm run postflight` - passed
+- `npm run manifest` - passed
+**Hindsight Pin:** `ghcr.io/vectorize-io/hindsight-api:0.5.3`
+**Blockers:** Live fresh Hindsight semantic recall is still not confirmed green; raw production Hindsight retain operations were observed stuck in `pending` even while Graphiti completed.
+**Next:** Commit and deploy the runtime hardening cut, then re-run protected production fresh-capture proof to confirm whether Hindsight semantic readiness now clears live.
+
+---

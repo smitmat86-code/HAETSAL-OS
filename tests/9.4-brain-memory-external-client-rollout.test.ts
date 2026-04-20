@@ -342,17 +342,19 @@ describe('9.4 brain-memory external client rollout', () => {
   it('eagerly dispatches async hindsight retain for brain-memory captures and becomes semantically ready after reconciliation completes', async () => {
     const tmk = await deriveTestTmk()
     const capture: HindsightCaptureState = { retainCount: 0, operationIds: [] }
+    const recallResults: HindsightRecallRow[] = []
     const { testEnv: graphEnv } = createGraphitiContainerTestEnv()
     const testEnv = {
-      ...createHindsightTestEnv({ capture, operationStatus: 'completed' }),
+      ...createHindsightTestEnv({ capture, operationStatus: 'completed', recallResults }),
       GRAPHITI_RUNTIME_MODE: graphEnv.GRAPHITI_RUNTIME_MODE,
       GRAPHITI: graphEnv.GRAPHITI,
     } as typeof env
     const sendSpy = vi.spyOn(testEnv.QUEUE_BULK, 'send').mockResolvedValue(undefined as never)
     const registry = createToolRegistry(testEnv, tmk)
 
+    const freshnessToken = 'HINDSIGHT_FRESHNESS_TEST_20260420_Z9Q1'
     const explicit = await callTool<Record<string, string | object>>(registry, 'capture_memory', {
-      content: 'Decision: fresh brain-memory captures should complete semantic handoff without async engine lag.',
+      content: `Decision: ${freshnessToken} should complete semantic handoff without async engine lag.`,
       scope: 'general',
       capture_mode: 'explicit',
       client_name: 'Claude Code',
@@ -367,6 +369,24 @@ describe('9.4 brain-memory external client rollout', () => {
       TENANT_ID,
     )
     const hindsight = status.projections.find((item) => item.kind === 'hindsight')
+    recallResults.splice(0, recallResults.length, {
+      id: 'brain-memory-freshness-result',
+      document_id: hindsight?.engineDocumentId,
+      text: `Decision: ${freshnessToken} should complete semantic handoff without async engine lag.`,
+      score: 0.99,
+      metadata: {
+        canonical_capture_id: String(explicit.canonical_capture_id),
+        canonical_document_id: String(explicit.canonical_document_id),
+        canonical_operation_id: String(explicit.canonical_operation_id),
+        source: 'mcp:memory_write',
+        domain: 'general',
+      },
+    })
+    const semantic = await callTool<CanonicalSearchResult>(registry, 'search_memory', {
+      query: freshnessToken,
+      mode: 'semantic',
+      limit: 3,
+    })
 
     expect(capture.retainCount).toBe(1)
     expect(status.operation.status).toBe('completed')
@@ -376,5 +396,8 @@ describe('9.4 brain-memory external client rollout', () => {
     expect(hindsight?.engineOperationId).toContain('op-')
     expect(hindsight?.semanticReady).toBe(true)
     expect(status.compatibility?.status).toBe('retained')
+    expect(semantic.status).toBe('ok')
+    expect(semantic.items[0]?.captureId).toBe(String(explicit.canonical_capture_id))
+    expect(semantic.items[0]?.provenance?.canonicalOperationId).toBe(String(explicit.canonical_operation_id))
   })
 })

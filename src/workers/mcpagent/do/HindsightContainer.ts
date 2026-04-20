@@ -1,6 +1,5 @@
 // src/workers/mcpagent/do/HindsightContainer.ts
 // Cloudflare Container DO class for Hindsight memory engine.
-// Hindsight API-only image + direct Neon Postgres + AI Gateway BYOK for Groq-backed LLMs.
 // Hindsight serves its API on port 8888; use startAndWaitForPorts for cold-start safety.
 
 import { Container } from '@cloudflare/containers'
@@ -44,6 +43,8 @@ function buildSharedHindsightModelEnv(env: Env): Record<string, string> {
     HINDSIGHT_API_LLM_API_KEY: gatewayToken,
     HINDSIGHT_API_LLM_BASE_URL: buildAIGatewayCompatUrl(env),
     HINDSIGHT_API_LLM_MODEL: 'groq/openai/gpt-oss-20b',
+    HINDSIGHT_API_LLM_MAX_RETRIES: '3',
+    HINDSIGHT_API_RETAIN_LLM_MAX_RETRIES: '3',
     HINDSIGHT_API_EMBEDDINGS_PROVIDER: 'local',
     HINDSIGHT_API_REFLECT_LLM_PROVIDER: 'openai',
     HINDSIGHT_API_REFLECT_LLM_API_KEY: gatewayToken,
@@ -66,7 +67,7 @@ export function buildHindsightContainerEnv(env: Env): Record<string, string> {
     HINDSIGHT_API_DATABASE_URL: databaseUrl,
     HINDSIGHT_API_MIGRATION_DATABASE_URL: databaseUrl,
     HINDSIGHT_API_RUN_MIGRATIONS_ON_STARTUP: 'true',
-    HINDSIGHT_API_WORKER_ENABLED: useDedicatedHindsightWorkers(env) ? 'false' : 'true',
+    HINDSIGHT_API_WORKER_ENABLED: 'true',
     HINDSIGHT_API_WORKER_ID: 'haetsal-api-internal',
     HINDSIGHT_API_WORKER_POLL_INTERVAL_MS: '500',
     HINDSIGHT_API_WORKER_MAX_SLOTS: '4',

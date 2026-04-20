@@ -160,7 +160,7 @@ Last updated: 2026-04-18 | Session: 7.1 (Hindsight Projection Adapter)
 | src\workers\ingestion\handlers.ts | 110 | — | ✅ |
 | src\workers\ingestion\retain-consumer.ts | 21 | — | ✅ |
 | src\workers\mcpagent\do\GraphitiContainer.ts | 37 | GRAPHITI_HEALTH_ENDPOINT, GRAPHITI_READY_ENDPOINT, GraphitiContainer | ✅ |
-| src\workers\mcpagent\do\HindsightContainer.ts | 149 | HINDSIGHT_PING_ENDPOINT, HINDSIGHT_WORKER_PING_ENDPOINT, useDedicatedHindsightWorkers... | ✅ |
+| src\workers\mcpagent\do\HindsightContainer.ts | 150 | HINDSIGHT_PING_ENDPOINT, HINDSIGHT_WORKER_PING_ENDPOINT, useDedicatedHindsightWorkers... | ✅ |
 | src\workers\mcpagent\do\identity.ts | 13 | MCP_STREAMABLE_HTTP_PREFIX, getMcpAgentObjectName, getMcpAgentObjectId | ✅ |
 | src\workers\mcpagent\do\inbound-message.ts | 37 | — | ✅ |
 | src\workers\mcpagent\do\McpAgent.ts | 149 | McpAgentDO | ✅ |

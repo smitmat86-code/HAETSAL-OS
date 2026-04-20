@@ -8,8 +8,8 @@ type StartableFetchLike = FetchLike & {
   start?: () => Promise<void>
   startAndWaitForPorts?: (args: { ports: number | number[] }) => Promise<void>
 }
-const HINDSIGHT_CONTAINER_NAME = 'hindsight-api-shared-v4'
-const HINDSIGHT_WORKER_PREFIX = 'hindsight-worker-v4'
+const HINDSIGHT_CONTAINER_NAME = 'hindsight-api-shared-v6'
+const HINDSIGHT_WORKER_PREFIX = 'hindsight-worker-v5'
 const HINDSIGHT_ORIGIN = 'http://hindsight'
 const HINDSIGHT_PORT = 8888
 const HINDSIGHT_WORKER_PORT = 8889

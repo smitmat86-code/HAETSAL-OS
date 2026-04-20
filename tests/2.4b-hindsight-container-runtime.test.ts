@@ -7,7 +7,7 @@ import {
 } from '../src/workers/mcpagent/do/HindsightContainer'
 
 describe('2.4b Hindsight Container Runtime', () => {
-  it('builds API-only runtime env with direct Neon + AI Gateway compat URL', () => {
+  it('builds API runtime env with direct Neon + AI Gateway compat URL and a worker safety net', () => {
     const env = buildHindsightContainerEnv({
       NEON_CONNECTION_STRING: 'postgresql://neon.example/brain',
       AI_GATEWAY_ID: 'haetsal-brain-gateway',
@@ -24,10 +24,12 @@ describe('2.4b Hindsight Container Runtime', () => {
       'https://gateway.ai.cloudflare.com/v1/acct123/haetsal-brain-gateway/compat',
     )
     expect(env.HINDSIGHT_API_LLM_MODEL).toBe('groq/openai/gpt-oss-20b')
+    expect(env.HINDSIGHT_API_LLM_MAX_RETRIES).toBe('3')
+    expect(env.HINDSIGHT_API_RETAIN_LLM_MAX_RETRIES).toBe('3')
     expect(env.HINDSIGHT_API_EMBEDDINGS_PROVIDER).toBe('local')
     expect(env.HINDSIGHT_API_RERANKER_PROVIDER).toBe('local')
     expect(env.HINDSIGHT_API_REFLECT_LLM_MODEL).toBe('groq/openai/gpt-oss-120b')
-    expect(env.HINDSIGHT_API_WORKER_ENABLED).toBe('false')
+    expect(env.HINDSIGHT_API_WORKER_ENABLED).toBe('true')
     expect(env.HINDSIGHT_API_WORKER_ID).toBe('haetsal-api-internal')
     expect(env.HINDSIGHT_API_WORKER_POLL_INTERVAL_MS).toBe('500')
     expect(env.HINDSIGHT_API_WORKER_MAX_SLOTS).toBe('4')
@@ -86,6 +88,8 @@ describe('2.4b Hindsight Container Runtime', () => {
     expect(env.HINDSIGHT_API_WORKER_ID).toBe('haetsal-worker-1')
     expect(env.HINDSIGHT_API_WORKER_HTTP_PORT).toBe('8889')
     expect(env.HINDSIGHT_API_LLM_MODEL).toBe('groq/openai/gpt-oss-20b')
+    expect(env.HINDSIGHT_API_LLM_MAX_RETRIES).toBe('3')
+    expect(env.HINDSIGHT_API_RETAIN_LLM_MAX_RETRIES).toBe('3')
     expect(HINDSIGHT_WORKER_PING_ENDPOINT).toBe('localhost/health')
   })
 })

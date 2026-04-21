@@ -4,6 +4,7 @@ import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { captureThroughCanonicalPipeline } from '../src/services/canonical-capture-pipeline'
 import { decryptCanonicalPayload } from '../src/services/canonical-memory-read-model'
 import { encryptContentForArchive } from '../src/services/ingestion/encryption'
+import { getCanonicalMemoryStore } from '../src/services/canonical-postgres'
 import { registerCanonicalMemoryTools } from '../src/tools/canonical-memory'
 import type { CanonicalPipelineCaptureInput } from '../src/types/canonical-capture-pipeline'
 import type { CanonicalBrokerTraceDetail } from '../src/types/canonical-memory-broker'
@@ -131,16 +132,11 @@ async function captureAndProject(
   })
   await Promise.allSettled(pending)
   sendSpy.mockRestore()
-  const projection = await testEnv.D1_US.prepare(
-    `SELECT r.engine_document_id
-     FROM canonical_projection_results r
-     INNER JOIN canonical_projection_jobs j ON j.id = r.projection_job_id
-     WHERE j.tenant_id = ? AND j.operation_id = ? AND j.projection_kind = 'hindsight'
-     ORDER BY r.updated_at DESC, r.created_at DESC, r.id DESC LIMIT 1`,
-  ).bind(TENANT_ID, result.capture.operationId).first<{ engine_document_id: string }>()
+  const projection = await getCanonicalMemoryStore(testEnv)
+    .getLatestProjectionResultForOperation(TENANT_ID, result.capture.operationId, 'hindsight')
   return {
     operationId: result.capture.operationId,
-    engineDocumentId: projection!.engine_document_id,
+    engineDocumentId: projection!.engine_document_id!,
   }
 }
 

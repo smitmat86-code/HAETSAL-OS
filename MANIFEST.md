@@ -65,17 +65,16 @@ Last updated: 2026-04-18 | Session: 7.1 (Hindsight Projection Adapter)
 | src\services\canonical-capture-compat.ts | 45 | — | ✅ |
 | src\services\canonical-capture-pipeline.ts | 98 | — | ✅ |
 | src\services\canonical-composed-graph-context.ts | 78 | — | ✅ |
-| src\services\canonical-d1-compat.ts | 245 | — | ⚠️ OVER LIMIT |
 | src\services\canonical-graph-body-facts.ts | 101 | BodyRelationCandidate, buildCanonicalGraphEntityKey, buildCanonicalGraphEdgeKey... | ✅ |
 | src\services\canonical-graph-projection-design.ts | 141 | GRAPHITI_DEPLOYMENT_POSTURE, GRAPHITI_RECONCILIATION_RULES, buildCanonicalGraphProjectionPlan... | ✅ |
 | src\services\canonical-graph-query-helpers.ts | 47 | parseCanonicalGraphEdgeKey, humanizeCanonicalGraphKey, labelCanonicalGraphEntity... | ✅ |
 | src\services\canonical-graph-query.ts | 53 | — | ✅ |
 | src\services\canonical-graphiti-payload.ts | 81 | GraphitiProjectionJobContext | ✅ |
 | src\services\canonical-graphiti-projection.ts | 103 | — | ✅ |
-| src\services\canonical-graphiti-reconcile.ts | 102 | — | ✅ |
+| src\services\canonical-graphiti-reconcile.ts | 88 | — | ✅ |
 | src\services\canonical-hindsight-debug.ts | 105 | HindsightDebugInput | ✅ |
 | src\services\canonical-hindsight-projection-payload.ts | 136 | ProjectionJobContext, HindsightProjectionPayload, resolveProjectionSourceRef... | ✅ |
-| src\services\canonical-hindsight-projection-state.ts | 103 | HindsightProjectionJobRow | ✅ |
+| src\services\canonical-hindsight-projection-state.ts | 88 | HindsightProjectionJobRow | ✅ |
 | src\services\canonical-hindsight-projection.ts | 137 | — | ✅ |
 | src\services\canonical-hindsight-reconcile.ts | 58 | — | ✅ |
 | src\services\canonical-hindsight-reflection-status.ts | 124 | — | ✅ |
@@ -91,11 +90,11 @@ Last updated: 2026-04-18 | Session: 7.1 (Hindsight Projection Adapter)
 | src\services\canonical-memory-stats.ts | 39 | — | ✅ |
 | src\services\canonical-memory-status.ts | 127 | — | ✅ |
 | src\services\canonical-memory-types.ts | 52 | CanonicalChunkPlan, CanonicalArtifactPlan, NormalizedCanonicalCapture... | ✅ |
-| src\services\canonical-memory.ts | 161 | — | ⚠️ OVER LIMIT |
+| src\services\canonical-memory.ts | 159 | — | ⚠️ OVER LIMIT |
 | src\services\canonical-postgres-repository.ts | 955 | CanonicalMemoryStore, InMemoryCanonicalMemoryStore, NeonCanonicalMemoryStore | ⚠️ OVER LIMIT |
 | src\services\canonical-postgres-schema.ts | 268 | CANONICAL_POSTGRES_SCHEMA, CanonicalProjectionKind, CanonicalProjectionStatus... | ⚠️ OVER LIMIT |
 | src\services\canonical-postgres.ts | 42 | installCanonicalMemoryStore, installCanonicalMemoryTestStore, getCanonicalMemoryStore | ✅ |
-| src\services\canonical-projection-dispatch.ts | 67 | — | ✅ |
+| src\services\canonical-projection-dispatch.ts | 51 | — | ✅ |
 | src\services\canonical-semantic-linkback.ts | 108 | CanonicalSemanticLinkback, extractSemanticLookup | ✅ |
 | src\services\canonical-semantic-recall.ts | 152 | — | ⚠️ OVER LIMIT |
 | src\services\canonical-source-attribution.ts | 66 | buildCanonicalSourceAttribution, applyCanonicalRoute | ✅ |

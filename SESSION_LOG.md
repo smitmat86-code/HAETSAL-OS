@@ -5,6 +5,40 @@
 
 ---
 
+## Session 10.1 - 2026-04-21
+
+**Spec:** Phase 10.1 - Retire Canonical D1 Compatibility Mirror
+**Built:**
+- `src/services/canonical-memory.ts`, `src/services/canonical-projection-dispatch.ts`, `src/services/canonical-hindsight-projection-state.ts`, `src/services/canonical-graphiti-reconcile.ts` - removed the temporary canonical D1 metadata mirror writes so canonical capture and projection reconciliation now persist canonical truth in Postgres only while leaving D1 audit/trace roles intact
+- `src/services/canonical-d1-compat.ts` - removed the temporary D1 compatibility helper entirely because no canonical runtime path still needs mirrored metadata rows after the 10.0 cutover
+- `tests/10.1-retire-canonical-d1-compat-mirror.test.ts` plus updated 1.2 / 6.1 / 6.2 / 6.3 / 7.1 / 7.2 / 8.2 / 9.1 / 9.2 / 9.4 / 9.6 / 9.7 / 9.8 / 9.9 / 10.0 suites - regression coverage now proves canonical capture, Hindsight reconciliation, Graphiti reconciliation, and public read/status/query behavior all work from Postgres-only canonical truth while D1 remains limited to broker traces, memory audit, hindsight operations, and tenant/control-plane/runtime-local state
+- `specs/active/10.1-retire-canonical-d1-compat-mirror.md` - completed the As-Built record with the mirror-retirement decision, remaining D1 roles, verification results, and live-proof outcome
+**Decisions:**
+- **The D1 canonical metadata mirror is fully retired.** Canonical memory families now have one authoritative runtime home: Postgres + R2.
+- **D1 remains intentionally narrow.** We kept D1 only for broker traces, memory audit, hindsight operations, and tenant/control-plane/runtime-local state instead of preserving any just-in-case canonical mirror rows.
+- **Public MCP/tool contracts stay stable while storage internals simplify.** Read/status/query/capture surfaces still behave the same externally, but they now resolve canonical truth from Postgres only.
+**Verification:**
+- `npx vitest run tests/10.1-retire-canonical-d1-compat-mirror.test.ts` - passed
+- `npx vitest run tests/7.1-hindsight-projection-adapter.test.ts tests/8.2-graphiti-ingestion-projection.test.ts tests/9.8-broker-primary-shadow-retrieval.test.ts tests/9.9-tenant-memory-trace.test.ts tests/10.0-canonical-postgres-source-of-truth-cutover.test.ts` - passed
+- `npm test` - passed (`387 passed`, `1 skipped`)
+- `npm run postflight` - passed
+- `npm run manifest` - passed
+- Live protected MCP proof on April 21, 2026:
+  - Graphiti remained green: fresh relationship and timeline queries returned the new live facts
+  - broker + tenant trace remained green: `prepare_context_for_agent`, `get_recent_memory_traces`, and `get_memory_trace` all succeeded live
+  - Hindsight did **not** remain green for fresh semantic recall: fresh captures reconciled to completed projection state, but live Hindsight debug still showed `memory_unit_count = 0`, so meaningful fresh semantic recall did not surface the new facts
+**Current Health:**
+- **Canonical storage boundary:** green locally; canonical D1 metadata mirroring is removed and Postgres-only truth passed the requested regression suites
+- **Graphiti:** green live
+- **Broker + tenant trace:** green live
+- **Hindsight:** not green live for fresh semantic materialization despite completed projection state
+**Hindsight Pin:** unchanged from the deployed environment under test
+**Fixture Data:** Live proof facts used `Harbor Ledger Echo depends on Quartz Bridge Echo for billing sync.` and `Northfield Ledger Echo uses Quartz Bridge Echo for billing sync, and if billing sync breaks, inspect Quartz Bridge Echo first.`
+**Blockers:** Live Hindsight semantic materialization remains unhealthy; fresh captures complete reconciliation but still show zero materialized memory units
+**Next:** Remove the now-dead canonical D1 schema/migration baggage for the retired mirror, then investigate the live Hindsight semantic materialization gap separately
+
+---
+
 ## Session OPS.9 - 2026-04-20
 
 **Spec:** Operational - Hindsight semantic acceptance hardening

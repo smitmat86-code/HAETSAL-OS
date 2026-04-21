@@ -14,6 +14,11 @@ import { processCanonicalProjectionDispatch } from '../src/workers/ingestion/can
 import { createGraphitiContainerTestEnv } from './support/graphiti-test-env'
 import { createHindsightTestEnv, type HindsightCaptureState, type HindsightRecallRow } from './support/hindsight-test-env'
 import { getCanonicalMemoryStatus } from '../src/services/canonical-memory-status'
+import { getCanonicalMemoryStore } from '../src/services/canonical-postgres'
+import { buildExpectedHindsightDocumentId } from '../src/services/canonical-hindsight-projection-payload'
+import { buildHindsightBankProvisioningSpec } from '../src/services/bootstrap/hindsight-bank-spec'
+import { normalizeExternalClientCapture } from '../src/services/external-client-memory'
+import { buildHindsightRetainRequest } from '../src/services/ingestion/retain-request'
 
 type ToolResponse = { content: Array<{ text: string }> }
 type ToolHandler = (input: unknown) => Promise<ToolResponse>
@@ -200,6 +205,77 @@ describe('9.4 brain-memory external client rollout', () => {
     expect(toolNames.has('gmail.read_thread')).toBe(false)
   })
 
+  it('defaults brain-memory captures to episodic unless the caller explicitly overrides memory_type', async () => {
+    const tmk = await deriveTestTmk()
+    const testEnv = makeEnvWithHindsightStub()
+    const retainMetadata: Array<Record<string, string>> = []
+    const originalFetch = testEnv.HINDSIGHT.fetch.bind(testEnv.HINDSIGHT)
+    vi.spyOn(testEnv.HINDSIGHT, 'fetch').mockImplementation(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = input instanceof Request ? new URL(input.url) : new URL(input.toString())
+      if (/^\/v1\/default\/banks\/[^/]+\/memories$/.test(url.pathname)) {
+        const request = input instanceof Request ? input : new Request(input.toString(), init)
+        const body = await request.clone().json() as { items?: Array<{ metadata?: Record<string, string> }> }
+        retainMetadata.push(body.items?.[0]?.metadata ?? {})
+      }
+      return originalFetch(input, init)
+    })
+    vi.spyOn(testEnv.QUEUE_BULK, 'send').mockResolvedValue(undefined as never)
+    const registry = createToolRegistry(testEnv, tmk)
+
+    await callTool<Record<string, string | object>>(registry, 'capture_memory', {
+      content: 'Decision: keep Northgate Studio focused on durable factual recall.',
+      scope: 'general',
+      capture_mode: 'explicit',
+      client_name: 'Codex',
+    })
+    await callTool<Record<string, string | object>>(registry, 'capture_memory', {
+      content: 'Session summary: reviewed the open loops and next actions for Northgate Studio.',
+      scope: 'general',
+      capture_mode: 'session_summary',
+      client_name: 'Codex',
+      session_id: 'trace-99',
+    })
+    await callTool<Record<string, string | object>>(registry, 'capture_memory', {
+      content: 'Artifact summary: the rollout spec is the durable meaning worth recalling.',
+      scope: 'research',
+      capture_mode: 'artifact',
+      client_name: 'Codex',
+      artifact_ref: 'specs/active/9.9-tenant-memory-trace.md',
+      artifact_filename: '9.9-tenant-memory-trace.md',
+    })
+
+    expect(retainMetadata).toHaveLength(3)
+    expect(retainMetadata[0]?.app_memory_type).toBe('episodic')
+    expect(retainMetadata[1]?.app_memory_type).toBe('episodic')
+    expect(retainMetadata[2]?.app_memory_type).toBe('episodic')
+    const explicitBrainMemory = JSON.parse(retainMetadata[0]?.brain_memory ?? '{}') as Record<string, unknown>
+    expect(explicitBrainMemory.client_name).toBeUndefined()
+    expect(explicitBrainMemory.capture_mode).toBe('explicit')
+    expect(explicitBrainMemory.provenance).toBe('user_authored')
+  })
+
+  it('defaults capture_memory to the brain-memory explicit rollout path when capture_mode is omitted', async () => {
+    const tmk = await deriveTestTmk()
+    const testEnv = makeEnvWithHindsightStub()
+    vi.spyOn(testEnv.QUEUE_BULK, 'send').mockResolvedValue(undefined as never)
+    const registry = createToolRegistry(testEnv, tmk)
+
+    const capture = await callTool<Record<string, string | object>>(registry, 'capture_memory', {
+      content: 'Decision: default brain-memory capture should still normalize to explicit mode.',
+      scope: 'general',
+    })
+
+    const status = await callTool<CanonicalMemoryStatusResult>(registry, 'memory_status', {
+      operation_id: capture.canonical_operation_id,
+    })
+
+    expect(capture.source_system).toBe('mcp:memory_write')
+    expect(capture.capture_mode).toBe('explicit')
+    expect(capture.provenance).toBe('user_authored')
+    expect(status.sourceSystem).toBe('mcp:memory_write')
+    expect(status.brainMemory?.captureMode).toBe('explicit')
+  })
+
   it('uses per-capture hindsight documents for repeated brain-memory captures', async () => {
     const tmk = await deriveTestTmk()
     const capture: HindsightCaptureState = { retainCount: 0, operationIds: [] }
@@ -230,41 +306,22 @@ describe('9.4 brain-memory external client rollout', () => {
       await processDispatch(message, testEnv)
     }
 
-    const hindsightRows = await testEnv.D1_US.prepare(
-      `SELECT j.capture_id, r.engine_document_id, r.engine_operation_id, r.status
-       FROM canonical_projection_jobs j
-       INNER JOIN canonical_projection_results r ON r.id = (
-         SELECT r2.id
-         FROM canonical_projection_results r2
-         WHERE r2.projection_job_id = j.id
-         ORDER BY r2.updated_at DESC, r2.created_at DESC, r2.id DESC
-         LIMIT 1
-       )
-       WHERE j.tenant_id = ? AND j.projection_kind = 'hindsight' AND j.capture_id IN (?, ?)
-       ORDER BY j.capture_id ASC`,
-    ).bind(
-      TENANT_ID,
-      first.canonical_capture_id,
-      second.canonical_capture_id,
-    ).all<{
-      capture_id: string
-      engine_document_id: string | null
-      engine_operation_id: string | null
-      status: string
-    }>()
-
-    const rows = hindsightRows.results ?? []
+    const store = getCanonicalMemoryStore(testEnv)
+    const rows = await Promise.all([
+      store.getLatestProjectionResultForOperation(TENANT_ID, String(first.canonical_operation_id), 'hindsight'),
+      store.getLatestProjectionResultForOperation(TENANT_ID, String(second.canonical_operation_id), 'hindsight'),
+    ])
     expect(capture.retainCount).toBe(2)
     expect(rows).toHaveLength(2)
-    expect(rows.every((row) => row.status === 'completed')).toBe(true)
+    expect(rows.every((row) => row?.result_status === 'completed')).toBe(true)
     expect(rows[0]?.engine_document_id).toBeTruthy()
     expect(rows[1]?.engine_document_id).toBeTruthy()
     expect(rows[0]?.engine_document_id).not.toBe(rows[1]?.engine_document_id)
     expect(rows[0]?.engine_operation_id).toBeTruthy()
     expect(rows[1]?.engine_operation_id).toBeTruthy()
     expect(rows[0]?.engine_operation_id).not.toBe(rows[1]?.engine_operation_id)
-    expect(rows[0]?.engine_document_id).toContain(String(rows[0]?.capture_id))
-    expect(rows[1]?.engine_document_id).toContain(String(rows[1]?.capture_id))
+    expect(rows[0]?.engine_document_id).toContain(String(first.canonical_capture_id))
+    expect(rows[1]?.engine_document_id).toContain(String(second.canonical_capture_id))
   })
 
   it('resolves semantic linkback to the correct capture using canonical metadata', async () => {
@@ -298,23 +355,12 @@ describe('9.4 brain-memory external client rollout', () => {
       await processDispatch(message, testEnv)
     }
 
-    const secondRow = await testEnv.D1_US.prepare(
-      `SELECT r.engine_document_id
-       FROM canonical_projection_jobs j
-       INNER JOIN canonical_projection_results r ON r.id = (
-         SELECT r2.id
-         FROM canonical_projection_results r2
-         WHERE r2.projection_job_id = j.id
-         ORDER BY r2.updated_at DESC, r2.created_at DESC, r2.id DESC
-         LIMIT 1
-       )
-       WHERE j.tenant_id = ? AND j.operation_id = ? AND j.projection_kind = 'hindsight'
-       LIMIT 1`,
-    ).bind(TENANT_ID, second.canonical_operation_id).first<{ engine_document_id: string }>()
+    const secondRow = await getCanonicalMemoryStore(testEnv)
+      .getLatestProjectionResultForOperation(TENANT_ID, String(second.canonical_operation_id), 'hindsight')
 
     recallResults.splice(0, recallResults.length, {
       id: 'brain-memory-semantic-result',
-      document_id: secondRow!.engine_document_id,
+      document_id: secondRow!.engine_document_id!,
       text: 'Second semantic linkback candidate should be selected by canonical metadata.',
       score: 0.93,
       metadata: {
@@ -399,5 +445,67 @@ describe('9.4 brain-memory external client rollout', () => {
     expect(semantic.status).toBe('ok')
     expect(semantic.items[0]?.captureId).toBe(String(explicit.canonical_capture_id))
     expect(semantic.items[0]?.provenance?.canonicalOperationId).toBe(String(explicit.canonical_operation_id))
+  })
+
+  it('plans per-capture hindsight document ids consistently for brain-memory captures', () => {
+    const captureId = crypto.randomUUID()
+    const normalized = normalizeExternalClientCapture({
+      content: 'Decision: durable dependency facts should stay isolated per capture.',
+      capture_mode: 'explicit',
+      client_name: 'Claude Code',
+      source_ref: 'same-logical-locator',
+    })
+
+    const documentId = buildExpectedHindsightDocumentId(
+      TENANT_ID,
+      normalized.sourceSystem,
+      normalized.sourceRef,
+      captureId,
+    )
+
+    expect(documentId).toContain(captureId)
+    expect(documentId).not.toContain('same-logical-locator')
+  })
+
+  it('keeps hindsight retain context terse and stable for explicit brain-memory writes', () => {
+    const normalized = normalizeExternalClientCapture({
+      content: 'Decision: Northgate Studio depends on Meridian Stack for delivery planning.',
+      capture_mode: 'explicit',
+      client_name: 'Claude Code',
+    })
+
+    const { request } = buildHindsightRetainRequest({
+      tenantId: TENANT_ID,
+      source: normalized.sourceSystem,
+      sourceRef: normalized.sourceRef,
+      content: 'Decision: Northgate Studio depends on Meridian Stack for delivery planning.',
+      occurredAt: Date.now(),
+      memoryType: 'episodic',
+      domain: 'general',
+      provenance: normalized.provenance,
+      metadata: normalized.metadata,
+    }, 'dedup-hash', 'episodic', 'general', 3, true)
+
+    const context = request.items[0]?.context ?? ''
+    expect(context).toContain('source=mcp:memory_write')
+    expect(context).toContain('provenance=user_authored')
+    expect(context).toContain('domain=general')
+    expect(context).toContain('capture_mode=explicit')
+    expect(context).toContain('intent=retain_durable_fact')
+    expect(context).toContain('pattern=durable_dependency')
+    expect(context).toContain('subject=Northgate_Studio')
+    expect(context).toContain('object=Meridian_Stack')
+  })
+
+  it('keeps the hindsight bank mission focused on durable long-horizon patterns', () => {
+    const spec = buildHindsightBankProvisioningSpec('haetsalos.specialdarksystems.com', 'test-secret')
+    const retainMission = String(spec.bankConfig.retain_mission)
+    const observationsMission = String(spec.bankConfig.observations_mission)
+
+    expect(retainMission).toContain('career decisions and professional milestones')
+    expect(retainMission).toContain('durable dependencies')
+    expect(retainMission).toContain('lasting dependency')
+    expect(observationsMission).toContain('professional trajectory')
+    expect(observationsMission).toContain('domain expertise')
   })
 })

@@ -7,6 +7,7 @@ import { prepareContextForAgent } from '../src/services/chief-of-staff-context'
 import { healthcheckGraphitiRuntime } from '../src/services/graphiti-client'
 import { getCanonicalMemoryStatus } from '../src/services/canonical-memory-status'
 import { encryptContentForArchive } from '../src/services/ingestion/encryption'
+import { getCanonicalMemoryStore } from '../src/services/canonical-postgres'
 import type { CanonicalPipelineCaptureInput } from '../src/types/canonical-capture-pipeline'
 import { processCanonicalProjectionDispatch } from '../src/workers/ingestion/canonical-projection-consumer'
 import conversationFixture from './fixtures/canonical-memory/conversation-capture.json'
@@ -97,17 +98,12 @@ async function captureAndDispatch(args: {
   })
   await Promise.allSettled(pending)
   sendSpy.mockRestore()
-  const projection = await args.testEnv.D1_US.prepare(
-    `SELECT r.engine_document_id
-     FROM canonical_projection_results r
-     INNER JOIN canonical_projection_jobs j ON j.id = r.projection_job_id
-     WHERE j.tenant_id = ? AND j.operation_id = ? AND j.projection_kind = 'hindsight'
-     ORDER BY r.updated_at DESC, r.created_at DESC, r.id DESC LIMIT 1`,
-  ).bind(TENANT_ID, result.capture.operationId).first<{ engine_document_id: string }>()
+  const projection = await getCanonicalMemoryStore(args.testEnv)
+    .getLatestProjectionResultForOperation(TENANT_ID, result.capture.operationId, 'hindsight')
   return {
     operationId: result.capture.operationId,
     documentId: result.capture.documentId,
-    engineDocumentId: projection!.engine_document_id,
+    engineDocumentId: projection!.engine_document_id!,
   }
 }
 
@@ -215,12 +211,9 @@ describe('9.6 graphiti internal container parity', () => {
       limit: 4,
       scope: null,
     }, testEnv, TENANT_ID, { tmk })
-    const mappings = await testEnv.D1_US.prepare(
-      `SELECT graph_kind FROM canonical_graph_identity_mappings
-       WHERE tenant_id = ? ORDER BY graph_kind, canonical_key`,
-    ).bind(TENANT_ID).all<{ graph_kind: string }>()
+    const mappings = await getCanonicalMemoryStore(testEnv).listGraphIdentityMappings(TENANT_ID)
 
-    expect(mappings.results.map((row) => row.graph_kind)).toEqual(expect.arrayContaining(['edge', 'entity', 'episode']))
+    expect(mappings.map((row) => row.graph_kind)).toEqual(expect.arrayContaining(['edge', 'entity', 'episode']))
     expect(relationship.items[0]?.provenance.graphRef).toContain('graphiti://edges/')
     expect(timeline.items.map((item) => item.title)).toEqual(expect.arrayContaining(['Daily note', 'Conversation recap']))
     expect(bundle.relationships[0]).toContain('User')
@@ -238,10 +231,9 @@ describe('9.6 graphiti internal container parity', () => {
       memoryType: 'episodic',
       compatibilityMode: 'current_hindsight',
     }, testEnv, TENANT_ID)
-    const graphJob = await testEnv.D1_US.prepare(
-      `SELECT id FROM canonical_projection_jobs
-       WHERE tenant_id = ? AND operation_id = ? AND projection_kind = 'graphiti'`,
-    ).bind(TENANT_ID, capture.capture.operationId).first<{ id: string }>()
+    const graphJob = (await getCanonicalMemoryStore(testEnv)
+      .listProjectionJobsForOperation(TENANT_ID, capture.capture.operationId))
+      .find((job) => job.projection_kind === 'graphiti')
 
     const submission = await submitGraphitiProjection({
       tenantId: TENANT_ID,

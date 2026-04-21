@@ -1,7 +1,6 @@
 import { beforeAll, describe, expect, it, vi } from 'vitest'
 import { env } from 'cloudflare:test'
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
-import { mirrorCanonicalProjectionState } from '../src/services/canonical-d1-compat'
 import { captureCanonicalMemory } from '../src/services/canonical-memory'
 import { getCanonicalMemoryStore } from '../src/services/canonical-postgres'
 import { encryptContentForArchive } from '../src/services/ingestion/encryption'
@@ -94,16 +93,6 @@ async function markHindsightProjectionCompleted(operationId: string): Promise<vo
   if (!hindsightJob) return
   const now = Date.now()
   await store.recordProjectionState({
-    tenantId: TENANT_A,
-    jobId: hindsightJob.id,
-    operationId,
-    jobStatus: 'completed',
-    resultStatus: 'completed',
-    targetRef: `hindsight://memory/${operationId}`,
-    updatedAt: now,
-  })
-  await mirrorCanonicalProjectionState({
-    env,
     tenantId: TENANT_A,
     jobId: hindsightJob.id,
     operationId,
@@ -265,18 +254,6 @@ describe('6.2 canonical MCP memory surface', () => {
       .find((job) => job.projection_kind === 'hindsight')
     expect(hindsightJob).toBeTruthy()
     await store.recordProjectionState({
-      tenantId: TENANT_A,
-      jobId: hindsightJob!.id,
-      operationId: seeded.note.operationId,
-      jobStatus: 'completed',
-      resultStatus: 'completed',
-      targetRef: 'hindsight://bank/documents/remote-doc-62/operations/remote-op-62',
-      engineDocumentId: 'remote-doc-62',
-      engineOperationId: 'remote-op-62',
-      updatedAt: now,
-    })
-    await mirrorCanonicalProjectionState({
-      env,
       tenantId: TENANT_A,
       jobId: hindsightJob!.id,
       operationId: seeded.note.operationId,

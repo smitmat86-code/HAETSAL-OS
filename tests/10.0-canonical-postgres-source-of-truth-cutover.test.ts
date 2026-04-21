@@ -118,7 +118,7 @@ beforeEach(() => {
 })
 
 describe('10.0 canonical Postgres source-of-truth cutover', () => {
-  it('writes canonical note captures into Postgres first and keeps D1 metadata-only', async () => {
+  it('writes canonical note captures into Postgres first without recreating the retired D1 mirror', async () => {
     const id = tenantId('note')
     const tmk = await deriveTestTmk(id)
     await ensureTenantWithKek(id)
@@ -142,9 +142,7 @@ describe('10.0 canonical Postgres source-of-truth cutover', () => {
 
     expect(capture?.id).toBe(result.capture.captureId)
     expect(projection?.result_status).toBe('completed')
-    expect(d1Mirror?.body_r2_key).toBeTruthy()
-    expect(JSON.stringify(d1Mirror)).not.toContain(input.body)
-    expect(JSON.stringify(d1Mirror)).not.toContain(input.bodyEncrypted!)
+    expect(d1Mirror).toBeNull()
   })
 
   it('stores conversation chunks in Postgres and keeps memory_status/get_document stable after cutover', async () => {
@@ -207,7 +205,6 @@ describe('10.0 canonical Postgres source-of-truth cutover', () => {
     expect(hindsight?.result_status).toBe('completed')
     expect(graph?.result_status).toBe('completed')
     expect(mappings.length).toBeGreaterThan(0)
-    expect(d1Artifact?.filename).toBe('brief.txt')
-    expect(d1Artifact?.media_type).toBe('text/plain')
+    expect(d1Artifact).toBeNull()
   })
 })

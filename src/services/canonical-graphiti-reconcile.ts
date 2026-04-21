@@ -1,6 +1,5 @@
 import type { Env } from '../types/env'
 import type { CanonicalGraphIdentityMapping } from '../types/canonical-graph-projection'
-import { mirrorCanonicalProjectionState } from './canonical-d1-compat'
 import { buildCanonicalGraphitiProjectionAuditBatch } from './canonical-memory-audit'
 import { getCanonicalMemoryStore } from './canonical-postgres'
 
@@ -68,19 +67,6 @@ export async function recordGraphitiProjectionState(args: {
   const mappings = dedupeMappings(args.submission.mappings)
 
   await getCanonicalMemoryStore(args.env).recordProjectionState({
-    tenantId: args.tenantId,
-    jobId: args.job.id,
-    operationId: args.job.operation_id,
-    jobStatus: args.jobStatus,
-    resultStatus: args.resultStatus,
-    targetRef: args.submission.targetRef,
-    errorMessage: args.errorMessage ?? null,
-    engineOperationId: args.submission.operationRef ?? null,
-    updatedAt,
-    graphMappings: mappings,
-  })
-  await mirrorCanonicalProjectionState({
-    env: args.env,
     tenantId: args.tenantId,
     jobId: args.job.id,
     operationId: args.job.operation_id,

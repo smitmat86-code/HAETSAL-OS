@@ -2,6 +2,7 @@ import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import { env } from 'cloudflare:test'
 import { captureThroughCanonicalPipeline } from '../src/services/canonical-capture-pipeline'
 import { getCanonicalMemoryStatus } from '../src/services/canonical-memory-status'
+import { getCanonicalMemoryStore } from '../src/services/canonical-postgres'
 import { encryptContentForArchive } from '../src/services/ingestion/encryption'
 import { processCanonicalProjectionDispatch } from '../src/workers/ingestion/canonical-projection-consumer'
 import type { CanonicalPipelineCaptureInput } from '../src/types/canonical-capture-pipeline'
@@ -107,12 +108,7 @@ describe('8.2 graphiti ingestion projection', () => {
     const message = sendSpy.mock.calls[0]?.[0] as { tenantId: string; payload: Record<string, unknown> }
     await processGraphitiDispatch(message, testEnv)
 
-    const mappings = await testEnv.D1_US.prepare(
-      `SELECT canonical_key, graph_ref, graph_kind
-       FROM canonical_graph_identity_mappings
-       WHERE tenant_id = ?
-       ORDER BY graph_kind ASC, canonical_key ASC`,
-    ).bind(TENANT_A).all<{ canonical_key: string; graph_ref: string; graph_kind: string }>()
+    const mappings = await getCanonicalMemoryStore(testEnv).listGraphIdentityMappings(TENANT_A)
     const status = await getCanonicalMemoryStatus(
       { tenantId: TENANT_A, operationId: result.capture.operationId },
       testEnv,
@@ -123,7 +119,7 @@ describe('8.2 graphiti ingestion projection', () => {
     expect(JSON.stringify(message)).not.toContain(input.bodyEncrypted!)
     expect(requests[0]?.plan.episode.kind).toBe('note')
     expect(requests[0]?.content.body).toBe(input.body)
-    expect(mappings.results.map((row) => row.graph_kind)).toEqual(expect.arrayContaining(['edge', 'entity', 'episode']))
+    expect(mappings.map((row) => row.graph_kind)).toEqual(expect.arrayContaining(['edge', 'entity', 'episode']))
     expect(status.graph?.status).toBe('projected')
     expect(status.graph?.ready).toBe(true)
     expect(status.graph?.targetRef).toContain('graphiti://episodes/')

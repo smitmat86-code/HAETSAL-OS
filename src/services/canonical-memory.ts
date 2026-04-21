@@ -4,7 +4,6 @@ import type {
   CanonicalCaptureResult,
 } from '../types/canonical-memory'
 import { buildCanonicalCaptureAcceptedAuditBatch } from './canonical-memory-audit'
-import { mirrorCanonicalCaptureWrite } from './canonical-d1-compat'
 import { persistCanonicalPayloads, sha256Hex } from './canonical-memory-artifacts'
 import { getCanonicalMemoryStore } from './canonical-postgres'
 import {
@@ -126,7 +125,6 @@ export async function captureCanonicalMemory(
     })),
   }
   await store.writeCapture(write)
-  await mirrorCanonicalCaptureWrite(env, write)
 
   await env.D1_US.batch(buildCanonicalCaptureAcceptedAuditBatch(env.D1_US, {
       tenantId,

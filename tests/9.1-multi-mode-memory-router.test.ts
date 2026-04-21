@@ -3,6 +3,7 @@ import { env } from 'cloudflare:test'
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { captureThroughCanonicalPipeline } from '../src/services/canonical-capture-pipeline'
 import { encryptContentForArchive } from '../src/services/ingestion/encryption'
+import { getCanonicalMemoryStore } from '../src/services/canonical-postgres'
 import { registerCanonicalMemoryTools } from '../src/tools/canonical-memory'
 import type { CanonicalPipelineCaptureInput } from '../src/types/canonical-capture-pipeline'
 import type { CanonicalSearchResult } from '../src/types/canonical-memory-query'
@@ -112,13 +113,8 @@ async function captureAndProject(args: {
   const message = sendSpy.mock.calls[0]?.[0] as { tenantId: string; payload: Record<string, unknown> }
   await processCanonicalProjectionDispatch(message.tenantId, message.payload, args.testEnv)
   sendSpy.mockRestore()
-  const projection = await args.testEnv.D1_US.prepare(
-    `SELECT r.engine_document_id
-     FROM canonical_projection_results r
-     INNER JOIN canonical_projection_jobs j ON j.id = r.projection_job_id
-     WHERE j.tenant_id = ? AND j.operation_id = ? AND j.projection_kind = 'hindsight'
-     ORDER BY r.updated_at DESC, r.created_at DESC, r.id DESC LIMIT 1`,
-  ).bind(TENANT_A, result.capture.operationId).first<{ engine_document_id: string }>()
+  const projection = await getCanonicalMemoryStore(args.testEnv)
+    .getLatestProjectionResultForOperation(TENANT_A, result.capture.operationId, 'hindsight')
   return {
     captureId: result.capture.captureId,
     documentId: result.capture.documentId,

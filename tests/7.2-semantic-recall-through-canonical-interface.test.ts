@@ -3,6 +3,7 @@ import { env } from 'cloudflare:test'
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { captureThroughCanonicalPipeline } from '../src/services/canonical-capture-pipeline'
 import { getCanonicalMemoryStatus } from '../src/services/canonical-memory-status'
+import { getCanonicalMemoryStore } from '../src/services/canonical-postgres'
 import { encryptContentForArchive } from '../src/services/ingestion/encryption'
 import { registerCanonicalMemoryTools } from '../src/tools/canonical-memory'
 import type { CanonicalPipelineCaptureInput } from '../src/types/canonical-capture-pipeline'
@@ -145,19 +146,13 @@ async function captureAndProject(args: {
   const message = sendSpy.mock.calls[0]?.[0] as { tenantId: string; payload: Record<string, unknown> }
   await processDispatch(message, args.testEnv)
   sendSpy.mockRestore()
-  const projection = await args.testEnv.D1_US.prepare(
-    `SELECT r.engine_document_id, r.engine_operation_id
-     FROM canonical_projection_results r
-     INNER JOIN canonical_projection_jobs j ON j.id = r.projection_job_id
-     WHERE j.tenant_id = ? AND j.operation_id = ? AND j.projection_kind = 'hindsight'
-     ORDER BY r.updated_at DESC, r.created_at DESC, r.id DESC
-     LIMIT 1`,
-  ).bind(TENANT_A, result.capture.operationId).first<{ engine_document_id: string; engine_operation_id: string | null }>()
+  const projection = await getCanonicalMemoryStore(args.testEnv)
+    .getLatestProjectionResultForOperation(TENANT_A, result.capture.operationId, 'hindsight')
   return {
     captureId: result.capture.captureId,
     documentId: result.capture.documentId,
     operationId: result.capture.operationId,
-    engineDocumentId: projection!.engine_document_id,
+    engineDocumentId: projection!.engine_document_id!,
     engineOperationId: projection!.engine_operation_id,
   }
 }
@@ -261,14 +256,8 @@ describe('7.2 semantic recall through canonical interface', () => {
     }, testEnv, TENANT_A)
     const message = sendSpy.mock.calls[0]?.[0] as { tenantId: string; payload: Record<string, unknown> }
     await processDispatchWithoutWaitUntil(message, testEnv)
-    const seeded = await testEnv.D1_US.prepare(
-      `SELECT r.engine_document_id, r.engine_operation_id
-       FROM canonical_projection_results r
-       INNER JOIN canonical_projection_jobs j ON j.id = r.projection_job_id
-       WHERE j.tenant_id = ? AND j.operation_id = ? AND j.projection_kind = 'hindsight'
-       ORDER BY r.updated_at DESC, r.created_at DESC, r.id DESC
-       LIMIT 1`,
-    ).bind(TENANT_A, seededCapture.capture.operationId).first<{ engine_document_id: string; engine_operation_id: string | null }>()
+    const seeded = await getCanonicalMemoryStore(testEnv)
+      .getLatestProjectionResultForOperation(TENANT_A, seededCapture.capture.operationId, 'hindsight')
 
     const pendingState = await reconcileHindsightOperation(seeded!.engine_operation_id!, testEnv)
     replaceRecallResults(recallResults, [])
@@ -280,7 +269,7 @@ describe('7.2 semantic recall through canonical interface', () => {
 
     replaceRecallResults(recallResults, [{
       id: 'semantic-note-result-after-reconcile',
-      document_id: seeded!.engine_document_id,
+      document_id: seeded!.engine_document_id!,
       text: 'The user committed to following up with two open questions tomorrow.',
       score: 0.97,
       metadata: { source: 'mcp_retain', domain: 'general' },
@@ -321,19 +310,13 @@ describe('7.2 semantic recall through canonical interface', () => {
     }, testEnv, TENANT_A)
     const message = sendSpy.mock.calls[0]?.[0] as { tenantId: string; payload: Record<string, unknown> }
     await processDispatchWithoutWaitUntil(message, testEnv)
-    const seeded = await testEnv.D1_US.prepare(
-      `SELECT r.engine_document_id, r.engine_operation_id
-       FROM canonical_projection_results r
-       INNER JOIN canonical_projection_jobs j ON j.id = r.projection_job_id
-       WHERE j.tenant_id = ? AND j.operation_id = ? AND j.projection_kind = 'hindsight'
-       ORDER BY r.updated_at DESC, r.created_at DESC, r.id DESC
-       LIMIT 1`,
-    ).bind(TENANT_A, seededCapture.capture.operationId).first<{ engine_document_id: string; engine_operation_id: string | null }>()
+    const seeded = await getCanonicalMemoryStore(testEnv)
+      .getLatestProjectionResultForOperation(TENANT_A, seededCapture.capture.operationId, 'hindsight')
     const settledState = await reconcileHindsightOperation(seeded!.engine_operation_id!, testEnv)
 
     replaceRecallResults(recallResults, [{
       id: 'semantic-zero-unit-result',
-      document_id: seeded!.engine_document_id,
+      document_id: seeded!.engine_document_id!,
       text: 'The user committed to following up with two open questions tomorrow.',
       score: 0.91,
       metadata: { source: 'mcp_retain', domain: 'general' },

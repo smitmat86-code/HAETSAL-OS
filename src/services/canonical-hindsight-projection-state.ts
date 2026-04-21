@@ -1,6 +1,5 @@
 import type { Env } from '../types/env'
 import type { HindsightProjectionSubmissionResult } from '../types/canonical-capture-pipeline'
-import { mirrorCanonicalProjectionState } from './canonical-d1-compat'
 import { buildCanonicalHindsightProjectionAuditBatch } from './canonical-memory-audit'
 import { getCanonicalMemoryStore } from './canonical-postgres'
 
@@ -65,20 +64,6 @@ export async function recordHindsightProjectionState(args: {
   )
   const updatedAt = Math.max(Date.now(), (latest?.updated_at ?? 0) + 1)
   await getCanonicalMemoryStore(args.env).recordProjectionState({
-    tenantId: args.tenantId,
-    jobId: args.job.id,
-    operationId: args.job.operation_id,
-    jobStatus: args.jobStatus,
-    resultStatus: args.resultStatus,
-    targetRef: buildTargetRef(args.submission),
-    errorMessage: args.errorMessage ?? null,
-    engineBankId: args.submission.bankId,
-    engineDocumentId: args.submission.documentId,
-    engineOperationId: args.submission.operationId,
-    updatedAt,
-  })
-  await mirrorCanonicalProjectionState({
-    env: args.env,
     tenantId: args.tenantId,
     jobId: args.job.id,
     operationId: args.job.operation_id,

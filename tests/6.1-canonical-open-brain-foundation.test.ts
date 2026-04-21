@@ -1,6 +1,7 @@
 import { beforeAll, describe, expect, it } from 'vitest'
 import { env } from 'cloudflare:test'
 import { captureCanonicalMemory, maybeShadowWriteCanonicalCapture } from '../src/services/canonical-memory'
+import { getCanonicalMemoryStore } from '../src/services/canonical-postgres'
 import { encryptContentForArchive } from '../src/services/ingestion/encryption'
 import type { CanonicalCaptureInput } from '../src/types/canonical-memory'
 import noteFixture from './fixtures/canonical-memory/note-capture.json'
@@ -60,15 +61,10 @@ describe('6.1 canonical open-brain foundation', () => {
   it('persists a note capture with document, chunks, operation, projection jobs, and audit rows', async () => {
     const input = await encryptFixture(noteFixture as CanonicalCaptureInput, await deriveTestTmk())
     const result = await captureCanonicalMemory(input, env, input.tenantId)
-    const capture = await env.D1_US.prepare(
-      `SELECT source_system, scope, body_r2_key FROM canonical_captures WHERE id = ?`,
-    ).bind(result.captureId).first<{ source_system: string; scope: string; body_r2_key: string }>()
-    const document = await env.D1_US.prepare(
-      `SELECT chunk_count FROM canonical_documents WHERE id = ?`,
-    ).bind(result.documentId).first<{ chunk_count: number }>()
-    const projections = await env.D1_US.prepare(
-      `SELECT projection_kind FROM canonical_projection_jobs WHERE operation_id = ? ORDER BY projection_kind`,
-    ).bind(result.operationId).all<{ projection_kind: string }>()
+    const store = getCanonicalMemoryStore(env)
+    const capture = await store.getCapture(input.tenantId, result.captureId)
+    const document = await store.getDocument(input.tenantId, result.documentId)
+    const projections = await store.listProjectionJobsForOperation(input.tenantId, result.operationId)
     const audit = await env.D1_US.prepare(
       `SELECT operation FROM memory_audit WHERE tenant_id = ? AND memory_id IN (?, ?)`,
     ).bind(input.tenantId, result.captureId, result.operationId).all<{ operation: string }>()
@@ -79,47 +75,37 @@ describe('6.1 canonical open-brain foundation', () => {
     expect(capture!.source_system).toBe('mcp_retain')
     expect(capture!.scope).toBe('general')
     expect(document!.chunk_count).toBe(result.chunkIds.length)
-    expect(projections.results.map(row => row.projection_kind)).toEqual(['graphiti', 'hindsight'])
+    expect(projections.map((row) => row.projection_kind)).toEqual(['graphiti', 'hindsight'])
     expect(audit.results.map(row => row.operation)).toEqual(['memory.capture.accepted'])
   })
 
   it('creates multiple chunks for conversation-style captures', async () => {
     const input = await encryptFixture(conversationFixture as CanonicalCaptureInput, await deriveTestTmk())
     const result = await captureCanonicalMemory(input, env, input.tenantId)
-    const chunks = await env.D1_US.prepare(
-      `SELECT ordinal, start_offset, end_offset FROM canonical_chunks WHERE document_id = ? ORDER BY ordinal`,
-    ).bind(result.documentId).all<{ ordinal: number; start_offset: number; end_offset: number }>()
+    const document = await getCanonicalMemoryStore(env).getDocument(input.tenantId, result.documentId)
 
     expect(result.chunkIds.length).toBeGreaterThan(1)
-    expect(chunks.results[0]?.ordinal).toBe(0)
-    expect(chunks.results.at(-1)!.end_offset).toBeGreaterThan(chunks.results[0]!.start_offset)
+    expect(document?.chunk_count).toBe(result.chunkIds.length)
   })
 
   it('links artifact-backed captures to canonical artifact metadata', async () => {
     const input = await encryptFixture(artifactFixture as CanonicalCaptureInput, await deriveTestTmk())
     const result = await captureCanonicalMemory(input, env, input.tenantId)
-    const document = await env.D1_US.prepare(
-      `SELECT artifact_id FROM canonical_documents WHERE id = ?`,
-    ).bind(result.documentId).first<{ artifact_id: string }>()
-    const artifact = await env.D1_US.prepare(
-      `SELECT filename, media_type, r2_key FROM canonical_artifacts WHERE id = ?`,
-    ).bind(document!.artifact_id).first<{ filename: string; media_type: string; r2_key: string }>()
+    const document = await getCanonicalMemoryStore(env).getDocument(input.tenantId, result.documentId)
 
     expect(document!.artifact_id).toBeTruthy()
-    expect(artifact!.filename).toBe('brief.txt')
-    expect(artifact!.media_type).toBe('text/plain')
-    expect(artifact!.r2_key).toContain('canonical/test-tenant-canonical/artifacts/')
+    expect(document!.filename).toBe('brief.txt')
+    expect(document!.media_type).toBe('text/plain')
+    expect(document!.r2_key).toContain('canonical/test-tenant-canonical/artifacts/')
   })
 
   it('keeps HAETSAL-owned content encrypted and tenant-scoped', async () => {
     const input = await encryptFixture(noteFixture as CanonicalCaptureInput, await deriveTestTmk())
     const result = await captureCanonicalMemory(input, env, input.tenantId)
-    const stored = await env.R2_ARTIFACTS.get((await env.D1_US.prepare(
-      `SELECT body_r2_key FROM canonical_documents WHERE id = ?`,
-    ).bind(result.documentId).first<{ body_r2_key: string }>())!.body_r2_key)
-    const foreignTenantView = await env.D1_US.prepare(
-      `SELECT id FROM canonical_captures WHERE tenant_id = ? AND id = ?`,
-    ).bind('test-tenant-canonical-b', result.captureId).first()
+    const store = getCanonicalMemoryStore(env)
+    const bodyR2Key = (await store.getDocument(input.tenantId, result.documentId))!.body_r2_key
+    const stored = await env.R2_ARTIFACTS.get(bodyR2Key)
+    const foreignTenantView = await store.getCapture('test-tenant-canonical-b', result.captureId)
     const storedBody = await stored!.text()
 
     expect(storedBody).toBe(input.bodyEncrypted)
@@ -130,6 +116,8 @@ describe('6.1 canonical open-brain foundation', () => {
   it('supports an off-by-default shadow-write hook without touching the retain contract', async () => {
     const fixture = await encryptFixture(noteFixture as CanonicalCaptureInput, await deriveTestTmk())
     const shadowEnv = { ...env, CANONICAL_MEMORY_SHADOW_WRITES: 'true' }
+    const store = getCanonicalMemoryStore(env)
+    const before = await store.getStats(fixture.tenantId)
     await maybeShadowWriteCanonicalCapture({
       tenantId: fixture.tenantId,
       sourceSystem: fixture.sourceSystem,
@@ -139,10 +127,9 @@ describe('6.1 canonical open-brain foundation', () => {
       body: fixture.body,
       bodyEncrypted: fixture.bodyEncrypted,
     }, shadowEnv)
-    const shadowed = await env.D1_US.prepare(
-      `SELECT projection_kind FROM canonical_projection_jobs WHERE tenant_id = ? AND projection_kind IN ('hindsight', 'graphiti')`,
-    ).bind(fixture.tenantId).all<{ projection_kind: string }>()
+    const after = await store.getStats(fixture.tenantId)
 
-    expect(shadowed.results.map(row => row.projection_kind)).toEqual(expect.arrayContaining(['hindsight', 'graphiti']))
+    expect(after.captureCount).toBe(before.captureCount + 1)
+    expect(after.pendingProjectionCount).toBeGreaterThanOrEqual(before.pendingProjectionCount + 2)
   })
 })

@@ -4,6 +4,7 @@ import { captureThroughCanonicalPipeline } from '../src/services/canonical-captu
 import { getCanonicalEntityTimeline, traceCanonicalRelationship } from '../src/services/canonical-graph-query'
 import { prepareContextForAgent } from '../src/services/chief-of-staff-context'
 import { encryptContentForArchive } from '../src/services/ingestion/encryption'
+import { getCanonicalMemoryStore } from '../src/services/canonical-postgres'
 import { processCanonicalProjectionDispatch } from '../src/workers/ingestion/canonical-projection-consumer'
 import type { CanonicalPipelineCaptureInput } from '../src/types/canonical-capture-pipeline'
 import { createGraphitiContainerTestEnv } from './support/graphiti-test-env'
@@ -130,15 +131,10 @@ async function captureAndDispatch(args: {
   })
   await Promise.allSettled(pending)
   sendSpy.mockRestore()
-  const projection = await args.testEnv.D1_US.prepare(
-    `SELECT r.engine_document_id
-     FROM canonical_projection_results r
-     INNER JOIN canonical_projection_jobs j ON j.id = r.projection_job_id
-     WHERE j.tenant_id = ? AND j.operation_id = ? AND j.projection_kind = 'hindsight'
-     ORDER BY r.updated_at DESC, r.created_at DESC, r.id DESC LIMIT 1`,
-  ).bind(TENANT_ID, result.capture.operationId).first<{ engine_document_id: string }>()
+  const projection = await getCanonicalMemoryStore(args.testEnv)
+    .getLatestProjectionResultForOperation(TENANT_ID, result.capture.operationId, 'hindsight')
   return {
-    engineDocumentId: projection!.engine_document_id,
+    engineDocumentId: projection!.engine_document_id!,
   }
 }
 

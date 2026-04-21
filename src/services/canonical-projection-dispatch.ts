@@ -4,7 +4,6 @@ import {
   buildCanonicalCaptureFailedAuditBatch,
   buildCanonicalProjectionQueuedAuditBatch,
 } from './canonical-memory-audit'
-import { mirrorCanonicalDispatchState } from './canonical-d1-compat'
 import { getCanonicalMemoryStore } from './canonical-postgres'
 
 export async function enqueueCanonicalProjectionDispatch(
@@ -15,13 +14,6 @@ export async function enqueueCanonicalProjectionDispatch(
   const queuedAt = Date.now()
 
   await getCanonicalMemoryStore(env).recordDispatchState({
-    tenantId: message.tenantId,
-    operationId: message.payload.operationId,
-    status: 'queued',
-    updatedAt: queuedAt,
-  })
-  await mirrorCanonicalDispatchState({
-    env,
     tenantId: message.tenantId,
     operationId: message.payload.operationId,
     status: 'queued',
@@ -44,14 +36,6 @@ export async function markCanonicalProjectionDispatchFailed(
   const detail = error instanceof Error ? error.message : String(error)
 
   await getCanonicalMemoryStore(env).recordDispatchState({
-    tenantId: message.tenantId,
-    operationId: message.payload.operationId,
-    status: 'failed',
-    updatedAt: failedAt,
-    errorMessage: detail,
-  })
-  await mirrorCanonicalDispatchState({
-    env,
     tenantId: message.tenantId,
     operationId: message.payload.operationId,
     status: 'failed',

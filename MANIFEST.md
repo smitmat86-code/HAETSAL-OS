@@ -12,7 +12,7 @@ Last updated: 2026-04-18 | Session: 7.1 (Hindsight Projection Adapter)
 
 <!-- AUTO-GENERATED MODULE REGISTRY - DO NOT EDIT -->
 
-*Auto-generated: 2026-04-20*
+*Auto-generated: 2026-04-21*
 
 ### src/
 
@@ -28,9 +28,9 @@ Last updated: 2026-04-18 | Session: 7.1 (Hindsight Projection Adapter)
 | src\cron\heartbeat.ts | 62 | — | ✅ |
 | src\cron\hindsight-operation-poll.ts | 117 | — | ✅ |
 | src\cron\hindsight-operation-reconcile.ts | 54 | — | ✅ |
-| src\cron\hindsight-operation-side-effects.ts | 149 | toUnixMs | ✅ |
-| src\cron\hindsight-operation-types.ts | 25 | PendingOperationRow, OperationStateRow, MAX_POLLS_PER_TICK... | ✅ |
-| src\cron\hindsight-operations.ts | 38 | — | ✅ |
+| src\cron\hindsight-operation-side-effects.ts | 150 | toUnixMs | ✅ |
+| src\cron\hindsight-operation-types.ts | 27 | PendingOperationRow, OperationStateRow, MAX_POLLS_PER_TICK... | ✅ |
+| src\cron\hindsight-operations.ts | 55 | — | ✅ |
 | src\cron\kek.ts | 61 | — | ✅ |
 | src\cron\morning-brief.ts | 94 | — | ✅ |
 | src\cron\obsidian-poll.ts | 41 | — | ✅ |
@@ -88,7 +88,7 @@ Last updated: 2026-04-18 | Session: 7.1 (Hindsight Projection Adapter)
 | src\services\canonical-memory-router.ts | 120 | normalizeMemoryQueryMode, decideCanonicalMemoryRoute | ✅ |
 | src\services\canonical-memory-schema.ts | 75 | CANONICAL_PROJECTION_KINDS, normalizeCanonicalBody, assertCanonicalIdentity... | ✅ |
 | src\services\canonical-memory-stats.ts | 56 | — | ✅ |
-| src\services\canonical-memory-status.ts | 134 | — | ✅ |
+| src\services\canonical-memory-status.ts | 139 | — | ✅ |
 | src\services\canonical-memory-types.ts | 52 | CanonicalChunkPlan, CanonicalArtifactPlan, NormalizedCanonicalCapture... | ✅ |
 | src\services\canonical-memory.ts | 117 | — | ✅ |
 | src\services\canonical-projection-dispatch.ts | 92 | — | ✅ |
@@ -100,8 +100,8 @@ Last updated: 2026-04-18 | Session: 7.1 (Hindsight Projection Adapter)
 | src\services\delivery\sms.ts | 35 | — | ✅ |
 | src\services\delivery\telegram.ts | 31 | — | ✅ |
 | src\services\external-brain-contract.ts | 123 | EXTERNAL_BRAIN_SURFACES, EXTERNAL_BRAIN_CLIENT_MAPPINGS, EXTERNAL_CLIENT_FIXTURES... | ✅ |
-| src\services\external-client-memory-write.ts | 54 | — | ✅ |
-| src\services\external-client-memory.ts | 139 | BRAIN_MEMORY_SURFACE_PROFILE, EXTERNAL_CLIENT_CAPTURE_PATTERNS, usesBrainMemoryRollout... | ✅ |
+| src\services\external-client-memory-write.ts | 43 | — | ✅ |
+| src\services\external-client-memory.ts | 145 | BRAIN_MEMORY_SURFACE_PROFILE, EXTERNAL_CLIENT_CAPTURE_PATTERNS, resolveBrainMemoryType... | ✅ |
 | src\services\google\calendar.ts | 82 | extractEventArtifact | ✅ |
 | src\services\google\drive.ts | 89 | ObsidianFrontmatter, parseObsidianFrontmatter, extractWikilinks | ✅ |
 | src\services\google\gmail.ts | 103 | extractThreadArtifact | ✅ |
@@ -111,7 +111,7 @@ Last updated: 2026-04-18 | Session: 7.1 (Hindsight Projection Adapter)
 | src\services\google-source-read.ts | 110 | — | ✅ |
 | src\services\graphiti-client.ts | 136 | InternalGraphitiProjectionRequest, resolveGraphitiRuntimeMode | ✅ |
 | src\services\hindsight-client.ts | 115 | HindsightClient, createHindsightClient | ✅ |
-| src\services\hindsight-formatters.ts | 30 | buildHindsightDocumentId, buildHindsightTags, buildRetainContext | ✅ |
+| src\services\hindsight-formatters.ts | 122 | buildHindsightDocumentId, buildHindsightTags, buildRetainContext | ✅ |
 | src\services\hindsight-ops-webhooks.ts | 37 | HindsightWebhookHealth | ✅ |
 | src\services\hindsight-ops.ts | 149 | HINDSIGHT_PENDING_SLOW_MS, HINDSIGHT_PENDING_STUCK_MS, HindsightQueueState... | ✅ |
 | src\services\hindsight-transport.ts | 147 | jsonInit, getHindsightStub | ✅ |
@@ -121,7 +121,7 @@ Last updated: 2026-04-18 | Session: 7.1 (Hindsight Projection Adapter)
 | src\services\ingestion\encryption.ts | 17 | — | ✅ |
 | src\services\ingestion\enqueue.ts | 55 | EnqueuedRetainResult | ✅ |
 | src\services\ingestion\retain-persistence.ts | 140 | — | ✅ |
-| src\services\ingestion\retain-request.ts | 55 | normalizeHindsightMetadata, buildHindsightRetainRequest | ✅ |
+| src\services\ingestion\retain-request.ts | 87 | normalizeHindsightMetadata, buildHindsightRetainRequest | ✅ |
 | src\services\ingestion\retain.ts | 97 | — | ✅ |
 | src\services\ingestion\salience.ts | 80 | scoreSalience | ✅ |
 | src\services\ingestion\write-policy.ts | 74 | WritePolicyResult | ✅ |

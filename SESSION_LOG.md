@@ -1303,3 +1303,27 @@
 **Next:** Session 9.9 can move to `specs/completed/`; canonical Postgres cutover remains a later storage migration phase while the tenant-facing trace tools stay stable.
 
 ---
+
+## Session 9.x - 2026-04-21
+
+**Spec:** Live Hindsight green follow-up - retain-model override for fresh semantic extraction
+**Built:**
+- `src/workers/mcpagent/do/HindsightContainer.ts` - Hindsight now keeps the existing Groq-backed general and reflect lanes, but overrides retain specifically to `openai/gpt-4.1-nano` through the same AI Gateway compat path so fresh fact extraction materializes semantic memory units again
+- `tests/2.4b-hindsight-container-runtime.test.ts` - runtime coverage now locks the retain-model override and its AI Gateway wiring for both API and worker container env generation
+- `MANIFEST.md` - regenerated
+**Decisions:**
+- The fix stayed in the Hindsight engine/provider lane rather than adding more HAETSAL-side shaping or fallback behavior.
+- Only the retain lane changed; Graphiti, broker traces, and the reflect path were left structurally untouched.
+- Fresh meaningful semantic recall remains the acceptance bar, not token-only smoke strings.
+**Verification:**
+- `npx vitest run tests/2.4b-hindsight-container-runtime.test.ts` - passed
+- `npx vitest run tests/9.4-brain-memory-external-client-rollout.test.ts` - passed
+- `npm test` - passed (`380 passed`, `1 skipped`)
+- `npm run postflight` - passed
+- `npm run manifest` - passed
+- live protected MCP proof after deploy `ff444b79-1b39-4b72-b053-62071f053962` - passed for fresh Hindsight semantic capture/retrieval (`dd1b4e56-e8e5-4e1f-b92a-3de1434f256a`), Graphiti relationship/timeline checks, and combined `prepare_context_for_agent`
+**Hindsight Pin:** unchanged container image (`ghcr.io/vectorize-io/hindsight-api:0.5.3-cfroll1`), retain model overridden to `openai/gpt-4.1-nano` via AI Gateway compat
+**Blockers:** None
+**Next:** Checkpoint this restore-to-green tranche, then return to the broker/tenant-trace/Postgres roadmap with Hindsight and Graphiti both green again.
+
+---

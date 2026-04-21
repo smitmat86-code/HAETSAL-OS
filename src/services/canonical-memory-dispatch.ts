@@ -16,6 +16,7 @@ import { searchCanonicalComposedMemory, searchCanonicalGraphMemory } from './can
 import { searchCanonicalSemanticMemory } from './canonical-semantic-recall'
 import { parseBrainMemoryRolloutAttribution } from './external-client-memory'
 import { parseGoogleSourceReadAttribution } from './google-source-read-contract'
+import { getCanonicalMemoryStore } from './canonical-postgres'
 
 export async function listCanonicalRows(
   env: Env,
@@ -23,12 +24,7 @@ export async function listCanonicalRows(
   scope: string | null,
   limit: number,
 ): Promise<CanonicalListRow[]> {
-  const rows = await env.D1_US.prepare(
-    `SELECT c.id AS capture_id, d.id AS document_id, d.title, c.scope, c.source_system, c.source_ref, c.captured_at, d.body_r2_key
-     FROM canonical_documents d INNER JOIN canonical_captures c ON c.id = d.capture_id
-     WHERE d.tenant_id = ? AND (? IS NULL OR c.scope = ?) ORDER BY c.captured_at DESC LIMIT ?`,
-  ).bind(tenantId, scope, scope, limit).all<CanonicalListRow>()
-  return rows.results ?? []
+  return getCanonicalMemoryStore(env).listRecentDocuments(tenantId, scope, limit)
 }
 
 export function toMemoryListItem(

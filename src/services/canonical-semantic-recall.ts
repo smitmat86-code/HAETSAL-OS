@@ -27,7 +27,11 @@ function metadataOf(raw: Record<string, unknown>): Record<string, unknown> {
 }
 
 function normalizeRecallResults(response: HindsightRecallResponse): Record<string, unknown>[] {
-  return [...(response.results ?? []), ...(response.items ?? []), ...(response.memories ?? [])]
+  return [
+    ...((response.results ?? []) as unknown as Record<string, unknown>[]),
+    ...((response.items ?? []) as unknown as Record<string, unknown>[]),
+    ...((response.memories ?? []) as unknown as Record<string, unknown>[]),
+  ]
 }
 
 function readRecallText(raw: Record<string, unknown>): string {

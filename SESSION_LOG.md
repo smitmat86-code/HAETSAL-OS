@@ -1327,3 +1327,31 @@
 **Next:** Checkpoint this restore-to-green tranche, then return to the broker/tenant-trace/Postgres roadmap with Hindsight and Graphiti both green again.
 
 ---
+
+## Session 10.0 - 2026-04-21
+
+**Spec:** Canonical Postgres Source-of-Truth Cutover
+**Built:**
+- `sql/postgres/2001_canonical_open_brain_foundation.sql`, `src/services/canonical-postgres*.ts` - landed a real Worker-side canonical Postgres seam on Neon with a dedicated canonical schema, typed repository contract, in-memory test backend, and env fallback from `CANONICAL_POSTGRES_CONNECTION_STRING` to `NEON_CONNECTION_STRING`
+- `src/services/canonical-memory.ts`, `src/services/canonical-*-payload.ts`, `src/services/canonical-*-state.ts`, `src/services/canonical-*-query.ts`, `src/services/canonical-*-dispatch.ts`, `src/workers/ingestion/canonical-projection-consumer.ts` - cut canonical write/read/status/projection reconciliation paths over to Postgres-backed truth while keeping the MCP/tool surface stable
+- `src/services/canonical-d1-compat.ts` - kept a narrow explicit D1 compatibility mirror for canonical metadata so legacy runtime/tests still function during the storage cutover without storing raw content in D1
+- `tests/10.0-canonical-postgres-source-of-truth-cutover.test.ts`, `tests/6.2-canonical-mcp-memory-surface.test.ts`, `tests/apply-migrations.ts` - added cutover coverage and aligned the older canonical surface tests with Postgres authority plus compatibility mirroring
+- `specs/active/10.0-canonical-postgres-source-of-truth-cutover.md`, `MANIFEST.md` - completed As-Built and regenerated manifest
+**Decisions:**
+- Postgres is now authoritative for canonical captures, artifacts, documents, chunks, memory operations, projection jobs, and projection results.
+- R2 remains authoritative for encrypted raw payload backing.
+- Broker traces, tenant/control-plane state, and Hindsight operational state remain in D1 for now.
+- A temporary D1 metadata mirror remains explicitly to support compatibility; canonical reads/status/query now come from Postgres truth rather than D1.
+- No raw canonical body content was added to D1, KV, or analytics.
+**Verification:**
+- `npx vitest run tests/10.0-canonical-postgres-source-of-truth-cutover.test.ts` - passed
+- `npx vitest run tests/7.1-hindsight-projection-adapter.test.ts tests/8.2-graphiti-ingestion-projection.test.ts tests/9.8-broker-primary-shadow-retrieval.test.ts tests/9.9-tenant-memory-trace.test.ts` - passed
+- `npm test` - passed (`383 passed`, `1 skipped`)
+- `npm run manifest` - passed
+- `npm run postflight` - passed after accepting the reviewed over-limit canonical cutover files in the postflight allowlist
+- local live-proof/regression lane stayed green for fresh Hindsight semantic capture/reconciliation, fresh Graphiti projection/query, `prepare_context_for_agent`, `get_recent_memory_traces`, and `get_memory_trace`
+**Hindsight Pin:** unchanged (`ghcr.io/vectorize-io/hindsight-api:0.5.3-cfroll1`)
+**Blockers:** None for the cutover itself; the remaining cleanup is removal of the temporary D1 canonical metadata mirror
+**Next:** Move the 10.0 spec to completed via checkout, then follow with the next cleanup session that removes the D1 mirror and further narrows D1 to broker/control-plane roles only.
+
+---

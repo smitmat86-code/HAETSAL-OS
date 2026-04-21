@@ -68,7 +68,7 @@ export async function submitGraphitiProjection(
       operationId: row.operation_id,
       documentId: row.document_id,
       posture: GRAPHITI_DEPLOYMENT_POSTURE.id,
-      plan,
+      plan: plan as unknown as Record<string, unknown>,
       content: { body: payload.body },
     }, env)
     if (submission.status === 'completed' && submission.mappings.length === 0) {

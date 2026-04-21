@@ -1,7 +1,9 @@
 import { beforeAll, describe, expect, it, vi } from 'vitest'
 import { env } from 'cloudflare:test'
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
+import { mirrorCanonicalProjectionState } from '../src/services/canonical-d1-compat'
 import { captureCanonicalMemory } from '../src/services/canonical-memory'
+import { getCanonicalMemoryStore } from '../src/services/canonical-postgres'
 import { encryptContentForArchive } from '../src/services/ingestion/encryption'
 import { registerCanonicalMemoryTools } from '../src/tools/canonical-memory'
 import type { CanonicalCaptureInput } from '../src/types/canonical-memory'
@@ -86,24 +88,30 @@ async function encryptFixture(
 }
 
 async function markHindsightProjectionCompleted(operationId: string): Promise<void> {
-  const jobs = await env.D1_US.prepare(
-    `SELECT id, document_id, projection_kind
-     FROM canonical_projection_jobs
-     WHERE operation_id = ?`,
-  ).bind(operationId).all<{ id: string; document_id: string; projection_kind: string }>()
-  const hindsightJob = jobs.results.find(job => job.projection_kind === 'hindsight')
+  const store = getCanonicalMemoryStore(env)
+  const jobs = await store.listProjectionJobsForOperation(TENANT_A, operationId)
+  const hindsightJob = jobs.find(job => job.projection_kind === 'hindsight')
   if (!hindsightJob) return
   const now = Date.now()
-  await env.D1_US.batch([
-    env.D1_US.prepare(
-      `UPDATE canonical_projection_jobs SET status = 'completed' WHERE id = ?`,
-    ).bind(hindsightJob.id),
-    env.D1_US.prepare(
-      `INSERT INTO canonical_projection_results
-       (id, tenant_id, projection_job_id, status, target_ref, error_message, created_at, updated_at)
-       VALUES (?, ?, ?, 'completed', ?, NULL, ?, ?)`,
-    ).bind(crypto.randomUUID(), TENANT_A, hindsightJob.id, `hindsight://memory/${operationId}`, now, now),
-  ])
+  await store.recordProjectionState({
+    tenantId: TENANT_A,
+    jobId: hindsightJob.id,
+    operationId,
+    jobStatus: 'completed',
+    resultStatus: 'completed',
+    targetRef: `hindsight://memory/${operationId}`,
+    updatedAt: now,
+  })
+  await mirrorCanonicalProjectionState({
+    env,
+    tenantId: TENANT_A,
+    jobId: hindsightJob.id,
+    operationId,
+    jobStatus: 'completed',
+    resultStatus: 'completed',
+    targetRef: `hindsight://memory/${operationId}`,
+    updatedAt: now,
+  })
 }
 
 function createToolRegistry(tmk: CryptoKey | null, tenantId = TENANT_A, testEnv: typeof env = env): ToolRegistry {
@@ -211,7 +219,7 @@ describe('6.2 canonical MCP memory surface', () => {
       { ...statusQueryFixture, operation_id: seeded.note.operationId },
     )
 
-    expect(result.operation.status).toBe('accepted')
+    expect(result.operation.status).toBe('queued')
     expect(result.projections.map(item => item.kind)).toEqual(expect.arrayContaining(['hindsight', 'graphiti']))
     expect(result.projections.find(item => item.kind === 'hindsight')?.status).toBe('completed')
   })
@@ -252,35 +260,33 @@ describe('6.2 canonical MCP memory surface', () => {
     } as typeof env
 
     const now = Date.now()
-    await env.D1_US.batch([
-      env.D1_US.prepare(
-        `UPDATE canonical_projection_jobs
-         SET status = 'completed'
-         WHERE id = (
-           SELECT id FROM canonical_projection_jobs
-           WHERE operation_id = ? AND projection_kind = 'hindsight'
-           LIMIT 1
-         )`,
-      ).bind(seeded.note.operationId),
-      env.D1_US.prepare(
-        `INSERT INTO canonical_projection_results
-         (id, tenant_id, projection_job_id, status, target_ref, error_message, engine_document_id, engine_operation_id, created_at, updated_at)
-         VALUES (?, ?, (
-           SELECT id FROM canonical_projection_jobs
-           WHERE operation_id = ? AND projection_kind = 'hindsight'
-           LIMIT 1
-         ), 'completed', ?, NULL, ?, ?, ?, ?)`,
-      ).bind(
-        crypto.randomUUID(),
-        TENANT_A,
-        seeded.note.operationId,
-        'hindsight://bank/documents/remote-doc-62/operations/remote-op-62',
-        'remote-doc-62',
-        'remote-op-62',
-        now,
-        now,
-      ),
-    ])
+    const store = getCanonicalMemoryStore(env)
+    const hindsightJob = (await store.listProjectionJobsForOperation(TENANT_A, seeded.note.operationId))
+      .find((job) => job.projection_kind === 'hindsight')
+    expect(hindsightJob).toBeTruthy()
+    await store.recordProjectionState({
+      tenantId: TENANT_A,
+      jobId: hindsightJob!.id,
+      operationId: seeded.note.operationId,
+      jobStatus: 'completed',
+      resultStatus: 'completed',
+      targetRef: 'hindsight://bank/documents/remote-doc-62/operations/remote-op-62',
+      engineDocumentId: 'remote-doc-62',
+      engineOperationId: 'remote-op-62',
+      updatedAt: now,
+    })
+    await mirrorCanonicalProjectionState({
+      env,
+      tenantId: TENANT_A,
+      jobId: hindsightJob!.id,
+      operationId: seeded.note.operationId,
+      jobStatus: 'completed',
+      resultStatus: 'completed',
+      targetRef: 'hindsight://bank/documents/remote-doc-62/operations/remote-op-62',
+      engineDocumentId: 'remote-doc-62',
+      engineOperationId: 'remote-op-62',
+      updatedAt: now,
+    })
 
     const result = await callTool<Record<string, unknown>>(
       createToolRegistry(suiteTmk, TENANT_A, testEnv),

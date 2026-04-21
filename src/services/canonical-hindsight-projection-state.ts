@@ -1,6 +1,8 @@
 import type { Env } from '../types/env'
 import type { HindsightProjectionSubmissionResult } from '../types/canonical-capture-pipeline'
+import { mirrorCanonicalProjectionState } from './canonical-d1-compat'
 import { buildCanonicalHindsightProjectionAuditBatch } from './canonical-memory-audit'
+import { getCanonicalMemoryStore } from './canonical-postgres'
 
 export interface HindsightProjectionJobRow {
   id: string
@@ -23,13 +25,9 @@ async function readAggregateOperationStatus(
   currentJobId: string,
   nextJobStatus: 'queued' | 'completed' | 'failed',
 ): Promise<'accepted' | 'queued' | 'completed' | 'failed'> {
-  const rows = await env.D1_US.prepare(
-    `SELECT id, status
-     FROM canonical_projection_jobs
-     WHERE tenant_id = ? AND operation_id = ?`,
-  ).bind(tenantId, operationId).all<{ id: string; status: string }>()
-  const statuses = (rows.results ?? []).map(row =>
-    row.id === currentJobId ? nextJobStatus : row.status,
+  const rows = await getCanonicalMemoryStore(env).listProjectionStatesForOperation(tenantId, operationId)
+  const statuses = rows.map(row =>
+    row.job_id === currentJobId ? nextJobStatus : row.status,
   )
   if (statuses.includes('failed')) return 'failed'
   if (statuses.length > 0 && statuses.every(status => status === 'completed')) return 'completed'
@@ -50,18 +48,7 @@ export async function recordHindsightProjectionState(args: {
     | 'memory.projection.hindsight_completed'
     | 'memory.projection.hindsight_failed'
 }): Promise<void> {
-  const latest = await args.env.D1_US.prepare(
-    `SELECT status, engine_operation_id, error_message, updated_at
-     FROM canonical_projection_results
-     WHERE tenant_id = ? AND projection_job_id = ?
-     ORDER BY updated_at DESC, created_at DESC, id DESC
-     LIMIT 1`,
-  ).bind(args.tenantId, args.job.id).first<{
-    status: string | null
-    engine_operation_id: string | null
-    error_message: string | null
-    updated_at: number | null
-  }>()
+  const latest = await getCanonicalMemoryStore(args.env).getLatestProjectionResult(args.tenantId, args.job.id)
   if (
     latest?.status === args.resultStatus &&
     latest.engine_operation_id === (args.submission.operationId ?? null) &&
@@ -77,42 +64,39 @@ export async function recordHindsightProjectionState(args: {
     args.jobStatus,
   )
   const updatedAt = Math.max(Date.now(), (latest?.updated_at ?? 0) + 1)
-  await args.env.D1_US.batch([
-    args.env.D1_US.prepare(
-      `UPDATE canonical_memory_operations
-       SET status = ?, updated_at = ?
-       WHERE tenant_id = ? AND id = ?`,
-    ).bind(operationStatus, updatedAt, args.tenantId, args.job.operation_id),
-    args.env.D1_US.prepare(
-      `UPDATE canonical_projection_jobs
-       SET status = ?
-       WHERE tenant_id = ? AND id = ?`,
-    ).bind(args.jobStatus, args.tenantId, args.job.id),
-    args.env.D1_US.prepare(
-      `INSERT INTO canonical_projection_results
-       (id, tenant_id, projection_job_id, status, target_ref, error_message,
-        engine_bank_id, engine_document_id, engine_operation_id, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-    ).bind(
-      crypto.randomUUID(),
-      args.tenantId,
-      args.job.id,
-      args.resultStatus,
-      buildTargetRef(args.submission),
-      args.errorMessage ?? null,
-      args.submission.bankId,
-      args.submission.documentId,
-      args.submission.operationId,
-      updatedAt,
-      updatedAt,
-    ),
-    ...buildCanonicalHindsightProjectionAuditBatch(args.env.D1_US, {
+  await getCanonicalMemoryStore(args.env).recordProjectionState({
+    tenantId: args.tenantId,
+    jobId: args.job.id,
+    operationId: args.job.operation_id,
+    jobStatus: args.jobStatus,
+    resultStatus: args.resultStatus,
+    targetRef: buildTargetRef(args.submission),
+    errorMessage: args.errorMessage ?? null,
+    engineBankId: args.submission.bankId,
+    engineDocumentId: args.submission.documentId,
+    engineOperationId: args.submission.operationId,
+    updatedAt,
+  })
+  await mirrorCanonicalProjectionState({
+    env: args.env,
+    tenantId: args.tenantId,
+    jobId: args.job.id,
+    operationId: args.job.operation_id,
+    jobStatus: args.jobStatus,
+    resultStatus: args.resultStatus,
+    targetRef: buildTargetRef(args.submission),
+    errorMessage: args.errorMessage ?? null,
+    engineBankId: args.submission.bankId,
+    engineDocumentId: args.submission.documentId,
+    engineOperationId: args.submission.operationId,
+    updatedAt,
+  })
+  await args.env.D1_US.batch(buildCanonicalHindsightProjectionAuditBatch(args.env.D1_US, {
       tenantId: args.tenantId,
       operationId: args.job.operation_id,
       createdAt: updatedAt,
       action: args.auditAction,
-    }),
-  ])
+    }))
 }
 
 export { buildTargetRef }

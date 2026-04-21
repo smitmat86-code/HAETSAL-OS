@@ -5,6 +5,7 @@ import { searchCanonicalMemoryWithBroker } from './canonical-memory-broker'
 import { listCanonicalRows, searchCanonicalRawMemory, toMemoryListItem } from './canonical-memory-dispatch'
 import { parseBrainMemoryRolloutAttribution } from './external-client-memory'
 import { parseGoogleSourceReadAttribution } from './google-source-read-contract'
+import { getCanonicalMemoryStore } from './canonical-postgres'
 
 export async function searchCanonicalMemory(input: CanonicalSearchInput, env: Env, tenantId: string, options: CanonicalMemoryReadOptions = {}): Promise<CanonicalSearchResult> {
   return (await searchCanonicalMemoryWithBroker(input, env, tenantId, options)).result
@@ -22,13 +23,7 @@ export async function listRecentCanonicalMemories(input: CanonicalRecentInput, e
 
 export async function getCanonicalDocument(input: CanonicalDocumentInput, env: Env, tenantId: string, options: CanonicalMemoryReadOptions = {}): Promise<CanonicalDocumentResult> {
   if (!options.tmk) throw new Error('Active session key required for canonical document reads')
-  const row = await env.D1_US.prepare(
-    `SELECT c.id AS capture_id, d.id AS document_id, d.title, c.scope, c.source_system, c.source_ref, c.captured_at,
-            d.body_r2_key, d.chunk_count, d.created_at AS document_created_at,
-            a.id AS artifact_id, a.filename, a.media_type, a.byte_length, a.storage_kind, a.r2_key
-     FROM canonical_documents d INNER JOIN canonical_captures c ON c.id = d.capture_id
-     LEFT JOIN canonical_artifacts a ON a.id = d.artifact_id WHERE d.tenant_id = ? AND d.id = ?`,
-  ).bind(tenantId, input.documentId).first<CanonicalDocumentRow>()
+  const row = await getCanonicalMemoryStore(env).getDocument(tenantId, input.documentId) as CanonicalDocumentRow | null
   if (!row) throw new Error(`Canonical document not found: ${input.documentId}`)
   return {
     captureId: row.capture_id,

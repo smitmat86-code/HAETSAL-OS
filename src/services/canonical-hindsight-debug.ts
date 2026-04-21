@@ -1,5 +1,6 @@
 import type { Env } from '../types/env'
 import type { HindsightRecallResponse } from '../types/hindsight'
+import { getCanonicalMemoryStore } from './canonical-postgres'
 import { fetchDocument, getOperationStatus, recallMemory } from './hindsight'
 import { resolveHindsightBankId } from './hindsight-transport'
 
@@ -25,7 +26,11 @@ interface HindsightProjectionLookupRow {
 }
 
 function normalizeRecallResults(response: HindsightRecallResponse): Record<string, unknown>[] {
-  return [...(response.results ?? []), ...(response.items ?? []), ...(response.memories ?? [])]
+  return [
+    ...((response.results ?? []) as unknown as Record<string, unknown>[]),
+    ...((response.items ?? []) as unknown as Record<string, unknown>[]),
+    ...((response.memories ?? []) as unknown as Record<string, unknown>[]),
+  ]
 }
 
 async function loadLatestHindsightProjection(
@@ -34,38 +39,7 @@ async function loadLatestHindsightProjection(
   args: { captureId?: string | null; operationId?: string | null },
 ): Promise<HindsightProjectionLookupRow | null> {
   if (!args.captureId && !args.operationId) return null
-  return env.D1_US.prepare(
-    `SELECT
-       c.id AS capture_id,
-       d.id AS document_id,
-       o.id AS operation_id,
-       j.id AS projection_job_id,
-       r.id AS projection_result_id,
-       j.status AS projection_status,
-       r.status AS result_status,
-       r.engine_document_id,
-       r.engine_operation_id,
-       r.target_ref
-     FROM canonical_projection_results r
-     INNER JOIN canonical_projection_jobs j ON j.id = r.projection_job_id
-     INNER JOIN canonical_captures c ON c.id = j.capture_id
-     INNER JOIN canonical_documents d ON d.id = j.document_id
-     INNER JOIN canonical_memory_operations o ON o.id = j.operation_id
-     WHERE j.tenant_id = ?
-       AND j.projection_kind = 'hindsight'
-       AND (
-         (? IS NOT NULL AND c.id = ?)
-         OR (? IS NOT NULL AND o.id = ?)
-       )
-     ORDER BY r.updated_at DESC, r.created_at DESC, r.id DESC
-     LIMIT 1`,
-  ).bind(
-    tenantId,
-    args.captureId ?? null,
-    args.captureId ?? null,
-    args.operationId ?? null,
-    args.operationId ?? null,
-  ).first<HindsightProjectionLookupRow>()
+  return getCanonicalMemoryStore(env).getLatestHindsightProjection(tenantId, args) as Promise<HindsightProjectionLookupRow | null>
 }
 
 export async function debugHindsightBankState(

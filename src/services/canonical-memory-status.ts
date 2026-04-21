@@ -4,6 +4,7 @@ import { buildCanonicalGraphProjectionStatus } from './canonical-graph-projectio
 import { readCanonicalHindsightReflectionStatus } from './canonical-hindsight-reflection-status'
 import { parseBrainMemoryRolloutAttribution } from './external-client-memory'
 import { parseGoogleSourceReadAttribution } from './google-source-read-contract'
+import { getCanonicalMemoryStore } from './canonical-postgres'
 
 interface OperationRow {
   id: string; capture_id: string; operation_type: string; status: string; created_at: number; updated_at: number
@@ -17,36 +18,26 @@ interface ProjectionRow {
   availability_source: string | null
 }
 
-const normalizeCompatibilityStatus = (status: string | null): 'queued' | 'retained' | 'failed' | null =>
-  !status ? null
-    : status === 'completed' || status === 'compatibility_completed' ? 'retained'
-      : status === 'failed' || status === 'compatibility_failed' ? 'failed'
-        : status === 'queued' || status === 'compatibility_queued' ? 'queued'
-          : null
+const normalizeCompatibilityStatus = (
+  status: string | null,
+  availabilitySource: string | null,
+): 'queued' | 'retained' | 'failed' | null =>
+  availabilitySource === 'document' ? 'retained'
+    : !status ? null
+      : status === 'completed' || status === 'compatibility_completed' ? 'retained'
+        : status === 'failed' || status === 'compatibility_failed' ? 'failed'
+          : status === 'queued' || status === 'compatibility_queued' ? 'queued'
+            : null
 
 const isSemanticReady = (row: ProjectionRow): boolean =>
   row.projection_kind === 'hindsight'
-  && row.status === 'completed'
-  && row.result_status === 'completed'
-  && row.availability_source !== 'operation_completed'
+  && row.availability_source === 'document'
 
 async function readOperationRow(input: CanonicalMemoryStatusInput, env: Env, tenantId: string): Promise<OperationRow | null> {
+  const store = getCanonicalMemoryStore(env)
   return input.operationId
-    ? env.D1_US.prepare(
-      `SELECT o.id, o.capture_id, o.operation_type, o.status, o.created_at, o.updated_at,
-              c.source_system, c.source_ref, c.scope, c.title, c.captured_at
-       FROM canonical_memory_operations o
-       INNER JOIN canonical_captures c ON c.id = o.capture_id
-       WHERE o.tenant_id = ? AND o.id = ?`,
-    ).bind(tenantId, input.operationId).first<OperationRow>()
-    : env.D1_US.prepare(
-      `SELECT o.id, o.capture_id, o.operation_type, o.status, o.created_at, o.updated_at,
-              c.source_system, c.source_ref, c.scope, c.title, c.captured_at
-       FROM canonical_memory_operations o
-       INNER JOIN canonical_captures c ON c.id = o.capture_id
-       WHERE o.tenant_id = ? AND o.capture_id = ?
-       ORDER BY o.created_at DESC LIMIT 1`,
-    ).bind(tenantId, input.captureId ?? null).first<OperationRow>()
+    ? await store.getOperationById(tenantId, input.operationId) as OperationRow | null
+    : await store.getLatestOperationForCapture(tenantId, input.captureId ?? '') as OperationRow | null
 }
 
 export async function getCanonicalMemoryStatus(input: CanonicalMemoryStatusInput, env: Env, tenantId: string): Promise<CanonicalMemoryStatusResult> {
@@ -54,25 +45,27 @@ export async function getCanonicalMemoryStatus(input: CanonicalMemoryStatusInput
   const operation = await readOperationRow(input, env, tenantId)
   if (!operation) throw new Error('Canonical memory status not found')
 
-  const projections = await env.D1_US.prepare(
-    `SELECT j.id AS job_id, j.document_id, j.projection_kind, j.status,
-            r.id AS projection_result_id, r.status AS result_status, r.target_ref, r.error_message,
-            r.engine_document_id, r.engine_operation_id, r.updated_at AS result_updated_at,
-            h.availability_source
-     FROM canonical_projection_jobs j
-     LEFT JOIN canonical_projection_results r ON r.id = (
-       SELECT r2.id FROM canonical_projection_results r2
-       WHERE r2.projection_job_id = j.id
-       ORDER BY r2.updated_at DESC, r2.created_at DESC, r2.id DESC LIMIT 1
-     )
-     LEFT JOIN hindsight_operations h ON h.operation_id = r.engine_operation_id
-     WHERE j.tenant_id = ? AND j.operation_id = ?
-     ORDER BY j.projection_kind ASC`,
-  ).bind(tenantId, operation.id).all<ProjectionRow>()
-  const rows = projections.results ?? []
+  const rows = await Promise.all(
+    (await getCanonicalMemoryStore(env).listProjectionStatesForOperation(tenantId, operation.id)).map(async (row) => {
+      const availability = row.engine_operation_id
+        ? await env.D1_US.prepare(
+          `SELECT availability_source
+           FROM hindsight_operations
+           WHERE operation_id = ?`,
+        ).bind(row.engine_operation_id).first<{ availability_source: string | null }>()
+        : null
+      return {
+        ...row,
+        availability_source: availability?.availability_source ?? null,
+      }
+    }),
+  ) as ProjectionRow[]
   const compatibility = rows.find((row) => row.projection_kind === 'hindsight')
   const graph = rows.find((row) => row.projection_kind === 'graphiti')
-  const compatibilityStatus = normalizeCompatibilityStatus(compatibility?.result_status ?? compatibility?.status ?? null)
+  const compatibilityStatus = normalizeCompatibilityStatus(
+    compatibility?.result_status ?? compatibility?.status ?? null,
+    compatibility?.availability_source ?? null,
+  )
   const reflection = await readCanonicalHindsightReflectionStatus({
     env,
     tenantId,

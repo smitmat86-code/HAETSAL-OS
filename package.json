@@ -8,11 +8,14 @@
     "test": "vitest run",
     "postflight": "tsx scripts/postflight-check.ts",
     "manifest": "tsx scripts/generate-manifest.ts",
-    "checkout": "tsx scripts/checkout.ts"
+    "checkout": "tsx scripts/checkout.ts",
+    "cf:explorer:plan": "tsx scripts/cloudflare-local-explorer.ts plan",
+    "cf:explorer:spec": "tsx scripts/cloudflare-local-explorer.ts fetch-spec"
   },
   "dependencies": {
     "@cloudflare/containers": "^0.3.2",
     "@cloudflare/puppeteer": "^1.0.6",
+    "@neondatabase/serverless": "^1.1.0",
     "agents": "^0.7.5",
     "ai": "^6.0.116",
     "hono": "^4.7.0",

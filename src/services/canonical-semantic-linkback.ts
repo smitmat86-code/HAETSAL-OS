@@ -1,4 +1,5 @@
 import type { Env } from '../types/env'
+import { getCanonicalMemoryStore } from './canonical-postgres'
 
 const CAPTURE_KEYS = ['canonical_capture_id', 'canonicalCaptureId', 'capture_id', 'captureId']
 const DOCUMENT_KEYS = ['document_id', 'documentId', 'source_document_id', 'sourceDocumentId', 'memory_id', 'memoryId', 'id']
@@ -76,58 +77,15 @@ export async function resolveCanonicalSemanticLinkback(
 ): Promise<CanonicalSemanticLinkback | null> {
   const lookup = extractSemanticLookup(raw)
   if (!lookup.captureId && !lookup.documentId && !lookup.operationId && !lookup.targetRef) return null
-  const row = await env.D1_US.prepare(
-    `SELECT c.id AS capture_id, d.id AS document_id, o.id AS operation_id,
-            j.id AS projection_job_id, r.id AS projection_result_id,
-            c.scope, c.source_system, c.source_ref, d.title, c.captured_at,
-            j.status AS projection_status, r.status AS result_status,
-            r.target_ref, r.engine_document_id, r.engine_operation_id,
-            h.availability_source
-     FROM canonical_projection_results r
-     INNER JOIN canonical_projection_jobs j ON j.id = r.projection_job_id
-     INNER JOIN canonical_captures c ON c.id = j.capture_id
-     INNER JOIN canonical_documents d ON d.id = j.document_id
-     INNER JOIN canonical_memory_operations o ON o.id = j.operation_id
-     LEFT JOIN hindsight_operations h ON h.operation_id = r.engine_operation_id
-     WHERE j.tenant_id = ?
-       AND j.projection_kind = 'hindsight'
-       AND (
-         (? IS NOT NULL AND c.id = ?)
-         OR (? IS NOT NULL AND r.engine_document_id = ?)
-         OR (? IS NOT NULL AND r.engine_operation_id = ?)
-         OR (? IS NOT NULL AND r.target_ref = ?)
-       )
-     ORDER BY r.updated_at DESC, r.created_at DESC, r.id DESC
-     LIMIT 1`,
-  ).bind(
-    tenantId,
-    lookup.captureId,
-    lookup.captureId,
-    lookup.documentId,
-    lookup.documentId,
-    lookup.operationId,
-    lookup.operationId,
-    lookup.targetRef,
-    lookup.targetRef,
-  ).first<{
-    capture_id: string
-    document_id: string
-    operation_id: string
-    projection_job_id: string
-    projection_result_id: string
-    scope: string
-    source_system: string
-    source_ref: string | null
-    title: string | null
-    captured_at: number
-    projection_status: string
-    result_status: string
-    target_ref: string | null
-    engine_document_id: string | null
-    engine_operation_id: string | null
-    availability_source: string | null
-  }>()
+  const row = await getCanonicalMemoryStore(env).findSemanticLinkback(tenantId, lookup)
   if (!row) return null
+  const availability = row.engine_operation_id
+    ? await env.D1_US.prepare(
+      `SELECT availability_source
+       FROM hindsight_operations
+       WHERE operation_id = ?`,
+    ).bind(row.engine_operation_id).first<{ availability_source: string | null }>()
+    : null
   return {
     captureId: row.capture_id,
     documentId: row.document_id,
@@ -144,6 +102,6 @@ export async function resolveCanonicalSemanticLinkback(
     targetRef: row.target_ref,
     engineDocumentId: row.engine_document_id,
     engineOperationId: row.engine_operation_id,
-    availabilitySource: row.availability_source,
+    availabilitySource: availability?.availability_source ?? null,
   }
 }

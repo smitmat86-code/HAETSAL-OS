@@ -1,5 +1,6 @@
 import type { Env } from '../types/env'
 import { buildCanonicalHindsightReflectionAuditBatch } from './canonical-memory-audit'
+import { getCanonicalMemoryStore } from './canonical-postgres'
 
 export type CanonicalHindsightReflectionAuditAction =
   | 'memory.projection.hindsight_reflect_started'
@@ -25,20 +26,7 @@ async function listCompletedHindsightOperations(
   env: Env,
   tenantId: string,
 ): Promise<string[]> {
-  const rows = await env.D1_US.prepare(
-    `SELECT j.operation_id
-     FROM canonical_projection_jobs j
-     INNER JOIN canonical_projection_results r ON r.id = (
-       SELECT r2.id
-       FROM canonical_projection_results r2
-       WHERE r2.projection_job_id = j.id
-       ORDER BY r2.updated_at DESC, r2.created_at DESC, r2.id DESC
-       LIMIT 1
-     )
-     WHERE j.tenant_id = ? AND j.projection_kind = 'hindsight' AND r.status = 'completed'
-     ORDER BY j.operation_id ASC`,
-  ).bind(tenantId).all<CompletedProjectionRow>()
-  return (rows.results ?? []).map(row => row.operation_id)
+  return getCanonicalMemoryStore(env).listCompletedProjectionOperationIds(tenantId, 'hindsight')
 }
 
 async function readLatestReflectionAuditAction(

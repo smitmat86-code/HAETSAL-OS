@@ -62,38 +62,42 @@ Last updated: 2026-04-18 | Session: 7.1 (Hindsight Projection Adapter)
 | src\services\canonical-broker-trace-read.ts | 63 | — | ✅ |
 | src\services\canonical-broker-trace-view.ts | 139 | CanonicalBrokerTraceRow, BROKER_TRACE_SELECT, viewFromRow... | ✅ |
 | src\services\canonical-broker-trace.ts | 63 | — | ✅ |
-| src\services\canonical-capture-compat.ts | 49 | — | ✅ |
+| src\services\canonical-capture-compat.ts | 45 | — | ✅ |
 | src\services\canonical-capture-pipeline.ts | 98 | — | ✅ |
 | src\services\canonical-composed-graph-context.ts | 78 | — | ✅ |
+| src\services\canonical-d1-compat.ts | 245 | — | ⚠️ OVER LIMIT |
 | src\services\canonical-graph-body-facts.ts | 101 | BodyRelationCandidate, buildCanonicalGraphEntityKey, buildCanonicalGraphEdgeKey... | ✅ |
 | src\services\canonical-graph-projection-design.ts | 141 | GRAPHITI_DEPLOYMENT_POSTURE, GRAPHITI_RECONCILIATION_RULES, buildCanonicalGraphProjectionPlan... | ✅ |
 | src\services\canonical-graph-query-helpers.ts | 47 | parseCanonicalGraphEdgeKey, humanizeCanonicalGraphKey, labelCanonicalGraphEntity... | ✅ |
-| src\services\canonical-graph-query.ts | 66 | — | ✅ |
-| src\services\canonical-graphiti-payload.ts | 95 | GraphitiProjectionJobContext | ✅ |
+| src\services\canonical-graph-query.ts | 53 | — | ✅ |
+| src\services\canonical-graphiti-payload.ts | 81 | GraphitiProjectionJobContext | ✅ |
 | src\services\canonical-graphiti-projection.ts | 103 | — | ✅ |
-| src\services\canonical-graphiti-reconcile.ts | 122 | — | ✅ |
-| src\services\canonical-hindsight-debug.ts | 131 | HindsightDebugInput | ✅ |
-| src\services\canonical-hindsight-projection-payload.ts | 148 | ProjectionJobContext, HindsightProjectionPayload, resolveProjectionSourceRef... | ✅ |
-| src\services\canonical-hindsight-projection-state.ts | 119 | HindsightProjectionJobRow | ✅ |
+| src\services\canonical-graphiti-reconcile.ts | 102 | — | ✅ |
+| src\services\canonical-hindsight-debug.ts | 105 | HindsightDebugInput | ✅ |
+| src\services\canonical-hindsight-projection-payload.ts | 136 | ProjectionJobContext, HindsightProjectionPayload, resolveProjectionSourceRef... | ✅ |
+| src\services\canonical-hindsight-projection-state.ts | 103 | HindsightProjectionJobRow | ✅ |
 | src\services\canonical-hindsight-projection.ts | 137 | — | ✅ |
 | src\services\canonical-hindsight-reconcile.ts | 58 | — | ✅ |
 | src\services\canonical-hindsight-reflection-status.ts | 124 | — | ✅ |
-| src\services\canonical-hindsight-reflection.ts | 139 | CanonicalHindsightReflectionAuditAction, CanonicalHindsightReflectionRun | ✅ |
+| src\services\canonical-hindsight-reflection.ts | 127 | CanonicalHindsightReflectionAuditAction, CanonicalHindsightReflectionRun | ✅ |
 | src\services\canonical-memory-artifacts.ts | 66 | PersistedCanonicalPayloads | ✅ |
 | src\services\canonical-memory-audit.ts | 132 | buildCanonicalCaptureAcceptedAuditBatch, buildCanonicalProjectionQueuedAuditBatch, buildCanonicalCaptureFailedAuditBatch... | ✅ |
 | src\services\canonical-memory-broker.ts | 88 | — | ✅ |
-| src\services\canonical-memory-dispatch.ts | 117 | toMemoryListItem | ✅ |
-| src\services\canonical-memory-query.ts | 65 | — | ✅ |
+| src\services\canonical-memory-dispatch.ts | 113 | toMemoryListItem | ✅ |
+| src\services\canonical-memory-query.ts | 60 | — | ✅ |
 | src\services\canonical-memory-read-model.ts | 70 | CanonicalMemoryReadOptions, CanonicalListRow, CanonicalDocumentRow... | ✅ |
 | src\services\canonical-memory-router.ts | 120 | normalizeMemoryQueryMode, decideCanonicalMemoryRoute | ✅ |
 | src\services\canonical-memory-schema.ts | 75 | CANONICAL_PROJECTION_KINDS, normalizeCanonicalBody, assertCanonicalIdentity... | ✅ |
-| src\services\canonical-memory-stats.ts | 56 | — | ✅ |
-| src\services\canonical-memory-status.ts | 139 | — | ✅ |
+| src\services\canonical-memory-stats.ts | 39 | — | ✅ |
+| src\services\canonical-memory-status.ts | 127 | — | ✅ |
 | src\services\canonical-memory-types.ts | 52 | CanonicalChunkPlan, CanonicalArtifactPlan, NormalizedCanonicalCapture... | ✅ |
-| src\services\canonical-memory.ts | 117 | — | ✅ |
-| src\services\canonical-projection-dispatch.ts | 92 | — | ✅ |
-| src\services\canonical-semantic-linkback.ts | 150 | CanonicalSemanticLinkback, extractSemanticLookup | ✅ |
-| src\services\canonical-semantic-recall.ts | 148 | — | ✅ |
+| src\services\canonical-memory.ts | 161 | — | ⚠️ OVER LIMIT |
+| src\services\canonical-postgres-repository.ts | 955 | CanonicalMemoryStore, InMemoryCanonicalMemoryStore, NeonCanonicalMemoryStore | ⚠️ OVER LIMIT |
+| src\services\canonical-postgres-schema.ts | 268 | CANONICAL_POSTGRES_SCHEMA, CanonicalProjectionKind, CanonicalProjectionStatus... | ⚠️ OVER LIMIT |
+| src\services\canonical-postgres.ts | 42 | installCanonicalMemoryStore, installCanonicalMemoryTestStore, getCanonicalMemoryStore | ✅ |
+| src\services\canonical-projection-dispatch.ts | 67 | — | ✅ |
+| src\services\canonical-semantic-linkback.ts | 108 | CanonicalSemanticLinkback, extractSemanticLookup | ✅ |
+| src\services\canonical-semantic-recall.ts | 152 | — | ⚠️ OVER LIMIT |
 | src\services\canonical-source-attribution.ts | 66 | buildCanonicalSourceAttribution, applyCanonicalRoute | ✅ |
 | src\services\chief-of-staff-context.ts | 112 | — | ✅ |
 | src\services\delivery\obsidian-write.ts | 52 | — | ✅ |
@@ -152,7 +156,7 @@ Last updated: 2026-04-18 | Session: 7.1 (Hindsight Projection Adapter)
 | src\types\canonical-memory-query.ts | 103 | MemoryQueryMode, MemoryQueryModePreference, CanonicalMemoryRouteDecision... | ✅ |
 | src\types\canonical-memory.ts | 34 | CanonicalProjectionKind, CanonicalArtifactMode, CanonicalArtifactRef... | ✅ |
 | src\types\chief-of-staff-context.ts | 60 | ContextBundleIntent, ContextConfidenceLevel, PrepareContextForAgentInput... | ✅ |
-| src\types\env.ts | 67 | Env | ✅ |
+| src\types\env.ts | 68 | Env | ✅ |
 | src\types\external-brain.ts | 89 | BrainSurfaceId, BrainSurfaceStatus, BrainRiskLevel... | ✅ |
 | src\types\external-client-memory.ts | 73 | ExternalClientCaptureMode, BrainMemorySurfaceProfile, ExternalClientCaptureInput... | ✅ |
 | src\types\google-source-read.ts | 29 | GoogleSourceKind, GoogleSourceRef, GoogleSourceReadAttribution... | ✅ |
@@ -163,7 +167,7 @@ Last updated: 2026-04-18 | Session: 7.1 (Hindsight Projection Adapter)
 | src\types\tools.ts | 59 | RetainInput, RetainOutput, RecallInput... | ✅ |
 | src\workers\action\index.ts | 105 | — | ✅ |
 | src\workers\ingestion\bootstrap-handlers.ts | 91 | — | ✅ |
-| src\workers\ingestion\canonical-projection-consumer.ts | 60 | — | ✅ |
+| src\workers\ingestion\canonical-projection-consumer.ts | 56 | — | ✅ |
 | src\workers\ingestion\consumer.ts | 115 | — | ✅ |
 | src\workers\ingestion\handlers.ts | 110 | — | ✅ |
 | src\workers\ingestion\retain-consumer.ts | 21 | — | ✅ |

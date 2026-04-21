@@ -2,6 +2,7 @@ import type { Env } from '../types/env'
 import type { CanonicalGraphEntityRef, CanonicalProjectionProvenance, EntityTimelineInput, EntityTimelineResult, TraceRelationshipInput, TraceRelationshipResult } from '../types/canonical-graph-query'
 import { clampCanonicalLimit } from './canonical-memory-read-model'
 import { labelCanonicalGraphEntity, matchesCanonicalGraphEntity, parseCanonicalGraphEdgeKey } from './canonical-graph-query-helpers'
+import { getCanonicalMemoryStore } from './canonical-postgres'
 
 interface EdgeRow { canonical_key: string; graph_ref: string; projection_job_id: string; projection_result_id: string | null; target_ref: string | null; operation_id: string; capture_id: string; document_id: string; scope: string; source_system: string; source_ref: string | null; title: string | null; captured_at: number | null }
 interface EdgeObservation extends EdgeRow { fromKey: string; toKey: string; relation: string; eventAt: number | null }
@@ -11,22 +12,8 @@ function toProvenance(row: EdgeRow): CanonicalProjectionProvenance {
 }
 
 async function listEdgeObservations(env: Env, tenantId: string): Promise<EdgeObservation[]> {
-  const rows = await env.D1_US.prepare(
-    `SELECT m.canonical_key, m.graph_ref, j.id AS projection_job_id, j.operation_id, j.document_id,
-            c.id AS capture_id, c.scope, c.source_system, c.source_ref, c.title, c.captured_at,
-            r.id AS projection_result_id, r.target_ref
-     FROM canonical_graph_identity_mappings m
-     INNER JOIN canonical_projection_jobs j ON j.id = m.projection_job_id
-     INNER JOIN canonical_captures c ON c.id = j.capture_id
-     LEFT JOIN canonical_projection_results r ON r.id = (
-       SELECT r2.id FROM canonical_projection_results r2
-       WHERE r2.projection_job_id = j.id
-       ORDER BY r2.updated_at DESC, r2.created_at DESC, r2.id DESC LIMIT 1
-     )
-     WHERE m.tenant_id = ? AND m.graph_kind = 'edge'
-       AND j.projection_kind = 'graphiti' AND j.status = 'completed'`,
-  ).bind(tenantId).all<EdgeRow>()
-  return (rows.results ?? []).flatMap(row => {
+  const rows = await getCanonicalMemoryStore(env).listGraphEdgeObservations(tenantId) as EdgeRow[]
+  return rows.flatMap(row => {
     const parsed = parseCanonicalGraphEdgeKey(row.canonical_key)
     return parsed ? [{ ...row, ...parsed }] : []
   })

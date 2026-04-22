@@ -57,6 +57,7 @@ const FILE_SIZE_ACCEPTED = new Set<string>([
     'src/services/canonical-postgres-repository.ts', // Canonical store implementation spans in-memory test store + Neon store
     'src/services/canonical-postgres-schema.ts', // Canonical schema contracts collected in one place for migration clarity
     'src/services/canonical-semantic-recall.ts', // Slightly over limit; semantic recall mapping kept intact during cutover
+    'src/services/compiled-synthesis-repository.ts', // Compiled synthesis store mirrors canonical store structure across in-memory and Neon implementations
 ]);
 
 interface Violation {

@@ -5,6 +5,33 @@
 
 ---
 
+## Session 11.0 - 2026-04-22
+
+**Spec:** HAETSAL Compiled Synthesis Foundation
+**Built:**
+- `sql/postgres/2002_compiled_synthesis_foundation.sql` - added first-class compiled synthesis tables for compiled documents, canonical provenance links, generated artifact refs, entities, facts, relationships, contradictions, and context packs in the existing `haetsal_canonical` schema
+- `src/services/compiled-synthesis-*.ts` - added the additive compiled synthesis repository, Neon/test store installation seam, deterministic R2 artifact persistence, and small persist/read service surface for future compiler jobs
+- `tests/11.0-haetsal-compiled-synthesis-foundation.test.ts`, `tests/apply-migrations.ts` - added dedicated 11.0 coverage for compiled record creation, provenance linkage, R2 artifact linkage, context-pack storage, and regeneration-safe identities; wired the compiled test store into the shared test bootstrap
+- `scripts/postflight-check.ts` - accepted the compiled repository file under the same reviewed over-limit exception pattern already used for the canonical Postgres repository
+- `specs/active/11.0-haetsal-compiled-synthesis-foundation.md`, `MANIFEST.md` - completed As-Built and regenerated manifest
+**Decisions:**
+- Session 11.0 stayed additive and did not reroute the existing production memory path.
+- Compiled outputs reuse the existing Neon/Postgres + R2 substrate instead of introducing any new foundational Hindsight or Graphiti dependency.
+- Canonical provenance is explicit via `compiled_document_sources`; generated compiled artifacts are explicit via `compiled_document_artifacts`.
+- Regeneration safety is handled through tenant-scoped stable-key upserts for compiled documents and family records, while artifacts remain versioned in R2.
+- No compatibility shim was required for current local read/write memory flows.
+**Verification:**
+- `npx vitest run tests/11.0-haetsal-compiled-synthesis-foundation.test.ts` - passed
+- `npx vitest run tests/11.0-haetsal-compiled-synthesis-foundation.test.ts tests/canonical-postgres-repository.test.ts tests/6.1-canonical-open-brain-foundation.test.ts tests/6.3-canonical-capture-pipeline.test.ts tests/9.4-brain-memory-external-client-rollout.test.ts` - passed
+- `npm test` - passed (`400 passed`, `1 skipped`)
+- `npm run postflight` - passed
+- `npm run manifest` - passed
+**Hindsight Pin:** unchanged
+**Blockers:** None for 11.0; the remaining work is future-session compiler/read-path wiring, not foundation stability
+**Next:** Use 11.1 to refine dossier/context-pack semantics and read models, then 11.2 to build the actual compilation pipeline/jobs on top of this foundation.
+
+---
+
 ## Session 10.1 - 2026-04-21
 
 **Spec:** Phase 10.1 - Retire Canonical D1 Compatibility Mirror

@@ -101,6 +101,17 @@ Last updated: 2026-04-18 | Session: 7.1 (Hindsight Projection Adapter)
 | src\services\canonical-semantic-recall.ts | 172 | — | ⚠️ OVER LIMIT |
 | src\services\canonical-source-attribution.ts | 66 | buildCanonicalSourceAttribution, applyCanonicalRoute | ✅ |
 | src\services\chief-of-staff-context.ts | 112 | — | ✅ |
+| src\services\compiled-synthesis-artifacts.ts | 72 | CompiledArtifactPayloadInput, PersistedCompiledArtifactPayload, buildCompiledArtifactR2Key | ✅ |
+| src\services\compiled-synthesis-inputs.ts | 105 | CompiledDocumentUpsertInput, CompiledDocumentSourceInput, CompiledDocumentArtifactInput... | ✅ |
+| src\services\compiled-synthesis-persist.ts | 148 | — | ✅ |
+| src\services\compiled-synthesis-postgres.ts | 46 | installCompiledSynthesisStore, installCompiledSynthesisTestStore, getCompiledSynthesisStore | ✅ |
+| src\services\compiled-synthesis-read.ts | 12 | — | ✅ |
+| src\services\compiled-synthesis-records.ts | 127 | CompiledDocumentFamily, CompiledDocumentAudience, CompiledArtifactFormat... | ✅ |
+| src\services\compiled-synthesis-repository.ts | 887 | CompiledSynthesisStore, InMemoryCompiledSynthesisStore, NeonCompiledSynthesisStore | ⚠️ OVER LIMIT |
+| src\services\compiled-synthesis-schema.ts | 18 | COMPILED_SYNTHESIS_SCHEMA, CompiledSynthesisBundle | ✅ |
+| src\services\compiled-synthesis-service-types.ts | 95 | PersistCompiledEntityInput, PersistCompiledFactInput, PersistCompiledRelationshipInput... | ✅ |
+| src\services\compiled-synthesis-utils.ts | 10 | trimRequired, normalizeJson | ✅ |
+| src\services\compiled-synthesis.ts | 4 | — | ✅ |
 | src\services\delivery\obsidian-write.ts | 52 | — | ✅ |
 | src\services\delivery\sms.ts | 35 | — | ✅ |
 | src\services\delivery\telegram.ts | 31 | — | ✅ |
@@ -117,6 +128,8 @@ Last updated: 2026-04-18 | Session: 7.1 (Hindsight Projection Adapter)
 | src\services\graphiti-client.ts | 136 | InternalGraphitiProjectionRequest, resolveGraphitiRuntimeMode | ✅ |
 | src\services\hindsight-client.ts | 115 | HindsightClient, createHindsightClient | ✅ |
 | src\services\hindsight-formatters.ts | 30 | buildHindsightDocumentId, buildHindsightTags, buildRetainContext | ✅ |
+| src\services\hindsight-only-format.ts | 46 | recallRows, toHindsightOnlyItem, rankingObservation | ✅ |
+| src\services\hindsight-only.ts | 116 | — | ✅ |
 | src\services\hindsight-ops-webhooks.ts | 37 | HindsightWebhookHealth | ✅ |
 | src\services\hindsight-ops.ts | 149 | HINDSIGHT_PENDING_SLOW_MS, HINDSIGHT_PENDING_STUCK_MS, HindsightQueueState... | ✅ |
 | src\services\hindsight-scratch-debug.ts | 100 | HindsightScratchRetainInput | ✅ |
@@ -144,8 +157,10 @@ Last updated: 2026-04-18 | Session: 7.1 (Hindsight Projection Adapter)
 | src\tools\bootstrap.ts | 104 | registerBootstrapTools | ✅ |
 | src\tools\brain-memory-surface.ts | 32 | BRAIN_MEMORY_TOOL_NAMES, BrainMemoryToolName, BrainMemorySurfaceContext... | ✅ |
 | src\tools\canonical-memory-schema.ts | 73 | captureSchema, searchSchema, recentSchema... | ✅ |
-| src\tools\canonical-memory.ts | 127 | registerCanonicalMemoryTools | ✅ |
+| src\tools\canonical-memory.ts | 133 | registerCanonicalMemoryTools | ✅ |
 | src\tools\hindsight-debug.ts | 75 | registerHindsightDebugTool | ✅ |
+| src\tools\hindsight-only-schema.ts | 39 | hindsightOnlyCaptureSchema, hindsightOnlySearchSchema, hindsightOnlyStatusSchema... | ✅ |
+| src\tools\hindsight-only.ts | 82 | HINDSIGHT_ONLY_TOOL_NAMES, registerHindsightOnlyExperimentalTools | ✅ |
 | src\tools\memory.ts | 88 | registerMemoryTools | ✅ |
 | src\tools\recall.ts | 73 | — | ✅ |
 | src\tools\retain.ts | 73 | — | ✅ |
@@ -163,7 +178,8 @@ Last updated: 2026-04-18 | Session: 7.1 (Hindsight Projection Adapter)
 | src\types\external-client-memory.ts | 73 | ExternalClientCaptureMode, BrainMemorySurfaceProfile, ExternalClientCaptureInput... | ✅ |
 | src\types\google-source-read.ts | 29 | GoogleSourceKind, GoogleSourceRef, GoogleSourceReadAttribution... | ✅ |
 | src\types\google.ts | 53 | GoogleOAuthTokens, GoogleThread, GoogleMessage... | ✅ |
-| src\types\hindsight.ts | 109 | HindsightRetainItem, HindsightRetainRequest, HindsightRetainResponse... | ✅ |
+| src\types\hindsight-only.ts | 56 | HindsightOnlyCaptureInput, HindsightOnlySearchInput, HindsightOnlyStatusInput... | ✅ |
+| src\types\hindsight.ts | 131 | HindsightRetainItem, HindsightRetainRequest, HindsightRetainResponse... | ✅ |
 | src\types\ingestion.ts | 72 | IngestionSource, IngestionArtifact, SalienceResult... | ✅ |
 | src\types\tenant.ts | 30 | TenantContext, TenantRow | ✅ |
 | src\types\tools.ts | 59 | RetainInput, RetainOutput, RecallInput... | ✅ |

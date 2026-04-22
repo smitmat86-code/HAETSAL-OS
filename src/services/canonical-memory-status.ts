@@ -1,6 +1,7 @@
 import type { Env } from '../types/env'
 import type { CanonicalMemoryStatusInput, CanonicalMemoryStatusResult } from '../types/canonical-memory-query'
 import { buildCanonicalGraphProjectionStatus } from './canonical-graph-projection-design'
+import { refreshQueuedHindsightProjection } from './canonical-hindsight-status-refresh'
 import { readCanonicalHindsightReflectionStatus } from './canonical-hindsight-reflection-status'
 import { parseBrainMemoryRolloutAttribution } from './external-client-memory'
 import { parseGoogleSourceReadAttribution } from './google-source-read-contract'
@@ -45,7 +46,7 @@ export async function getCanonicalMemoryStatus(input: CanonicalMemoryStatusInput
   const operation = await readOperationRow(input, env, tenantId)
   if (!operation) throw new Error('Canonical memory status not found')
 
-  const rows = await Promise.all(
+  const loadRows = async (): Promise<ProjectionRow[]> => Promise.all(
     (await getCanonicalMemoryStore(env).listProjectionStatesForOperation(tenantId, operation.id)).map(async (row) => {
       const availability = row.engine_operation_id
         ? await env.D1_US.prepare(
@@ -59,7 +60,13 @@ export async function getCanonicalMemoryStatus(input: CanonicalMemoryStatusInput
         availability_source: availability?.availability_source ?? null,
       }
     }),
-  ) as ProjectionRow[]
+  ) as Promise<ProjectionRow[]>
+
+  let rows = await loadRows()
+  const refreshed = await Promise.all(rows.map((row) => refreshQueuedHindsightProjection(row, env, tenantId)))
+  if (refreshed.some(Boolean)) {
+    rows = await loadRows()
+  }
   const compatibility = rows.find((row) => row.projection_kind === 'hindsight')
   const graph = rows.find((row) => row.projection_kind === 'graphiti')
   const compatibilityStatus = normalizeCompatibilityStatus(

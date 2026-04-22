@@ -1389,3 +1389,26 @@
 **Next:** Move the 10.0 spec to completed via checkout, then follow with the next cleanup session that removes the D1 mirror and further narrows D1 to broker/control-plane roles only.
 
 ---
+
+## Session 10.x - 2026-04-21
+
+**Spec:** Live Hindsight green restoration follow-up - config refresh and truthful status read-through
+**Built:**
+- `src/services/bootstrap/hindsight-config.ts` - `ensureHindsightBankConfigured` now always reapplies live bank config before trusting the cached D1 config hash, while still skipping the heavier mental-model/webhook setup when the version already matches
+- `src/services/canonical-hindsight-status-refresh.ts` - added a read-through Hindsight refresh helper that checks the remote operation/document state, updates `hindsight_operations`, and reconciles stale queued projections when the live engine is already ahead
+- `src/services/canonical-memory-status.ts` - `memory_status` now reloads projection rows after the read-through refresh so stale local Hindsight queue state no longer masks a completed remote retain
+- `tests/2.4a-hindsight-config.test.ts`, `tests/7.1-hindsight-projection-adapter.test.ts` - coverage for always-refresh bank config, truthful completed-document readiness, and stale queued Hindsight status read-through
+**Decisions:**
+- The fix stayed in HAETSAL's config/status truth layer rather than further changing the Hindsight model/provider lane.
+- Cached D1 config hashes are no longer trusted as sufficient proof that the live Hindsight bank is correctly configured.
+- `memory_status` should prefer truthful live reconciliation over waiting for a later cron tick when Hindsight is obviously stale locally.
+- Semantic ranking still has a polish gap where an unlinked source-fact echo can outrank the linked canonical capture, but that is no longer a green/red blocker.
+**Verification:**
+- `npx vitest run tests/2.4a-hindsight-config.test.ts tests/7.1-hindsight-projection-adapter.test.ts tests/9.4-brain-memory-external-client-rollout.test.ts` - passed
+- `npm run postflight` - passed
+- live protected MCP proof after deploy `ebcda960-6fc7-40aa-9e78-1664a7efcbf2` - passed for fresh Hindsight semantic capture/retrieval (`5931d36c-efe3-4035-9b3d-5c88ba7c2807`), truthful `memory_status` (`completed`, `semanticReady: true`), remote document `memory_unit_count: 1`, Graphiti checks, and `prepare_context_for_agent`
+**Hindsight Pin:** unchanged (`ghcr.io/vectorize-io/hindsight-api:0.5.3-cfroll1`)
+**Blockers:** None for the restore-to-green tranche; only semantic ranking polish remains
+**Next:** Checkpoint this restore-to-green tranche cleanly, then return to the canonical Postgres / D1 cleanup roadmap with Hindsight, Graphiti, broker, and tenant trace all green again.
+
+---

@@ -12,7 +12,7 @@ Last updated: 2026-04-18 | Session: 7.1 (Hindsight Projection Adapter)
 
 <!-- AUTO-GENERATED MODULE REGISTRY - DO NOT EDIT -->
 
-*Auto-generated: 2026-04-21*
+*Auto-generated: 2026-04-22*
 
 ### src/
 
@@ -54,6 +54,7 @@ Last updated: 2026-04-18 | Session: 7.1 (Hindsight Projection Adapter)
 | src\services\action\router.ts | 111 | — | ✅ |
 | src\services\action\toctou.ts | 23 | — | ✅ |
 | src\services\agents\router.ts | 57 | — | ✅ |
+| src\services\ai-gateway-debug.ts | 75 | AiGatewayRetainProbeInput, AiGatewayRetainProbeResult | ✅ |
 | src\services\bootstrap\hindsight-bank-spec.ts | 74 | HindsightBankProvisioningSpec, buildHindsightBankProvisioningSpec, computeHindsightConfigVersion... | ✅ |
 | src\services\bootstrap\hindsight-config.ts | 106 | — | ✅ |
 | src\services\bootstrap\historical-import.ts | 140 | historicalSalienceMultiplier | ✅ |
@@ -79,6 +80,7 @@ Last updated: 2026-04-18 | Session: 7.1 (Hindsight Projection Adapter)
 | src\services\canonical-hindsight-reconcile.ts | 58 | — | ✅ |
 | src\services\canonical-hindsight-reflection-status.ts | 124 | — | ✅ |
 | src\services\canonical-hindsight-reflection.ts | 127 | CanonicalHindsightReflectionAuditAction, CanonicalHindsightReflectionRun | ✅ |
+| src\services\canonical-hindsight-status-refresh.ts | 102 | HindsightStatusRefreshRow | ✅ |
 | src\services\canonical-memory-artifacts.ts | 66 | PersistedCanonicalPayloads | ✅ |
 | src\services\canonical-memory-audit.ts | 132 | buildCanonicalCaptureAcceptedAuditBatch, buildCanonicalProjectionQueuedAuditBatch, buildCanonicalCaptureFailedAuditBatch... | ✅ |
 | src\services\canonical-memory-broker.ts | 88 | — | ✅ |
@@ -88,15 +90,15 @@ Last updated: 2026-04-18 | Session: 7.1 (Hindsight Projection Adapter)
 | src\services\canonical-memory-router.ts | 120 | normalizeMemoryQueryMode, decideCanonicalMemoryRoute | ✅ |
 | src\services\canonical-memory-schema.ts | 75 | CANONICAL_PROJECTION_KINDS, normalizeCanonicalBody, assertCanonicalIdentity... | ✅ |
 | src\services\canonical-memory-stats.ts | 39 | — | ✅ |
-| src\services\canonical-memory-status.ts | 127 | — | ✅ |
+| src\services\canonical-memory-status.ts | 134 | — | ✅ |
 | src\services\canonical-memory-types.ts | 52 | CanonicalChunkPlan, CanonicalArtifactPlan, NormalizedCanonicalCapture... | ✅ |
 | src\services\canonical-memory.ts | 159 | — | ⚠️ OVER LIMIT |
-| src\services\canonical-postgres-repository.ts | 955 | CanonicalMemoryStore, InMemoryCanonicalMemoryStore, NeonCanonicalMemoryStore | ⚠️ OVER LIMIT |
+| src\services\canonical-postgres-repository.ts | 1130 | CanonicalMemoryStore, InMemoryCanonicalMemoryStore, NeonCanonicalMemoryStore | ⚠️ OVER LIMIT |
 | src\services\canonical-postgres-schema.ts | 268 | CANONICAL_POSTGRES_SCHEMA, CanonicalProjectionKind, CanonicalProjectionStatus... | ⚠️ OVER LIMIT |
 | src\services\canonical-postgres.ts | 42 | installCanonicalMemoryStore, installCanonicalMemoryTestStore, getCanonicalMemoryStore | ✅ |
 | src\services\canonical-projection-dispatch.ts | 51 | — | ✅ |
 | src\services\canonical-semantic-linkback.ts | 108 | CanonicalSemanticLinkback, extractSemanticLookup | ✅ |
-| src\services\canonical-semantic-recall.ts | 152 | — | ⚠️ OVER LIMIT |
+| src\services\canonical-semantic-recall.ts | 172 | — | ⚠️ OVER LIMIT |
 | src\services\canonical-source-attribution.ts | 66 | buildCanonicalSourceAttribution, applyCanonicalRoute | ✅ |
 | src\services\chief-of-staff-context.ts | 112 | — | ✅ |
 | src\services\delivery\obsidian-write.ts | 52 | — | ✅ |
@@ -114,17 +116,18 @@ Last updated: 2026-04-18 | Session: 7.1 (Hindsight Projection Adapter)
 | src\services\google-source-read.ts | 110 | — | ✅ |
 | src\services\graphiti-client.ts | 136 | InternalGraphitiProjectionRequest, resolveGraphitiRuntimeMode | ✅ |
 | src\services\hindsight-client.ts | 115 | HindsightClient, createHindsightClient | ✅ |
-| src\services\hindsight-formatters.ts | 122 | buildHindsightDocumentId, buildHindsightTags, buildRetainContext | ✅ |
+| src\services\hindsight-formatters.ts | 30 | buildHindsightDocumentId, buildHindsightTags, buildRetainContext | ✅ |
 | src\services\hindsight-ops-webhooks.ts | 37 | HindsightWebhookHealth | ✅ |
 | src\services\hindsight-ops.ts | 149 | HINDSIGHT_PENDING_SLOW_MS, HINDSIGHT_PENDING_STUCK_MS, HindsightQueueState... | ✅ |
-| src\services\hindsight-transport.ts | 147 | jsonInit, getHindsightStub | ✅ |
+| src\services\hindsight-scratch-debug.ts | 100 | HindsightScratchRetainInput | ✅ |
+| src\services\hindsight-transport.ts | 150 | jsonInit, getHindsightStub | ✅ |
 | src\services\hindsight.ts | 140 | — | ✅ |
 | src\services\ingestion\dedup.ts | 44 | — | ✅ |
 | src\services\ingestion\domain.ts | 63 | inferDomain, inferMemoryType | ✅ |
 | src\services\ingestion\encryption.ts | 17 | — | ✅ |
 | src\services\ingestion\enqueue.ts | 55 | EnqueuedRetainResult | ✅ |
 | src\services\ingestion\retain-persistence.ts | 140 | — | ✅ |
-| src\services\ingestion\retain-request.ts | 87 | normalizeHindsightMetadata, buildHindsightRetainRequest | ✅ |
+| src\services\ingestion\retain-request.ts | 55 | normalizeHindsightMetadata, buildHindsightRetainRequest | ✅ |
 | src\services\ingestion\retain.ts | 97 | — | ✅ |
 | src\services\ingestion\salience.ts | 80 | scoreSalience | ✅ |
 | src\services\ingestion\write-policy.ts | 74 | WritePolicyResult | ✅ |
@@ -142,7 +145,7 @@ Last updated: 2026-04-18 | Session: 7.1 (Hindsight Projection Adapter)
 | src\tools\brain-memory-surface.ts | 32 | BRAIN_MEMORY_TOOL_NAMES, BrainMemoryToolName, BrainMemorySurfaceContext... | ✅ |
 | src\tools\canonical-memory-schema.ts | 73 | captureSchema, searchSchema, recentSchema... | ✅ |
 | src\tools\canonical-memory.ts | 127 | registerCanonicalMemoryTools | ✅ |
-| src\tools\hindsight-debug.ts | 32 | registerHindsightDebugTool | ✅ |
+| src\tools\hindsight-debug.ts | 75 | registerHindsightDebugTool | ✅ |
 | src\tools\memory.ts | 88 | registerMemoryTools | ✅ |
 | src\tools\recall.ts | 73 | — | ✅ |
 | src\tools\retain.ts | 73 | — | ✅ |
@@ -155,12 +158,12 @@ Last updated: 2026-04-18 | Session: 7.1 (Hindsight Projection Adapter)
 | src\types\canonical-memory-query.ts | 103 | MemoryQueryMode, MemoryQueryModePreference, CanonicalMemoryRouteDecision... | ✅ |
 | src\types\canonical-memory.ts | 34 | CanonicalProjectionKind, CanonicalArtifactMode, CanonicalArtifactRef... | ✅ |
 | src\types\chief-of-staff-context.ts | 60 | ContextBundleIntent, ContextConfidenceLevel, PrepareContextForAgentInput... | ✅ |
-| src\types\env.ts | 68 | Env | ✅ |
+| src\types\env.ts | 69 | Env | ✅ |
 | src\types\external-brain.ts | 89 | BrainSurfaceId, BrainSurfaceStatus, BrainRiskLevel... | ✅ |
 | src\types\external-client-memory.ts | 73 | ExternalClientCaptureMode, BrainMemorySurfaceProfile, ExternalClientCaptureInput... | ✅ |
 | src\types\google-source-read.ts | 29 | GoogleSourceKind, GoogleSourceRef, GoogleSourceReadAttribution... | ✅ |
 | src\types\google.ts | 53 | GoogleOAuthTokens, GoogleThread, GoogleMessage... | ✅ |
-| src\types\hindsight.ts | 103 | HindsightRetainItem, HindsightRetainRequest, HindsightRetainResponse... | ✅ |
+| src\types\hindsight.ts | 109 | HindsightRetainItem, HindsightRetainRequest, HindsightRetainResponse... | ✅ |
 | src\types\ingestion.ts | 72 | IngestionSource, IngestionArtifact, SalienceResult... | ✅ |
 | src\types\tenant.ts | 30 | TenantContext, TenantRow | ✅ |
 | src\types\tools.ts | 59 | RetainInput, RetainOutput, RecallInput... | ✅ |
@@ -171,7 +174,8 @@ Last updated: 2026-04-18 | Session: 7.1 (Hindsight Projection Adapter)
 | src\workers\ingestion\handlers.ts | 110 | — | ✅ |
 | src\workers\ingestion\retain-consumer.ts | 21 | — | ✅ |
 | src\workers\mcpagent\do\GraphitiContainer.ts | 37 | GRAPHITI_HEALTH_ENDPOINT, GRAPHITI_READY_ENDPOINT, GraphitiContainer | ✅ |
-| src\workers\mcpagent\do\HindsightContainer.ts | 150 | HINDSIGHT_PING_ENDPOINT, HINDSIGHT_WORKER_PING_ENDPOINT, useDedicatedHindsightWorkers... | ✅ |
+| src\workers\mcpagent\do\hindsight-model-env.ts | 59 | buildSharedHindsightModelEnv | ✅ |
+| src\workers\mcpagent\do\HindsightContainer.ts | 114 | HINDSIGHT_PING_ENDPOINT, HINDSIGHT_WORKER_PING_ENDPOINT, useDedicatedHindsightWorkers... | ✅ |
 | src\workers\mcpagent\do\identity.ts | 13 | MCP_STREAMABLE_HTTP_PREFIX, getMcpAgentObjectName, getMcpAgentObjectId | ✅ |
 | src\workers\mcpagent\do\inbound-message.ts | 37 | — | ✅ |
 | src\workers\mcpagent\do\McpAgent.ts | 149 | McpAgentDO | ✅ |

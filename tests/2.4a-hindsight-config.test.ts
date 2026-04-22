@@ -71,6 +71,10 @@ describe('2.4a Hindsight Configuration', () => {
     await configureHindsightBank('test-bank', mockEnv)
     const parsed = JSON.parse(putBody)
     expect(parsed.retain_mission).toBeDefined()
+    expect(parsed.retain_mission).toContain('career decisions and professional milestones')
+    expect(parsed.retain_mission).toContain('durable operational dependencies')
+    expect(parsed.retain_mission).toContain('ephemeral scheduling details')
+    expect(parsed.retain_extraction_mode).toBeUndefined()
     expect(parsed.observations_mission).toBeDefined()
     expect(parsed.enable_observations).toBe(true)
   })
@@ -103,12 +107,12 @@ describe('2.4a Hindsight Configuration', () => {
     await expect(createMentalModels('test-bank', mockEnv)).resolves.toBeUndefined()
   })
 
-  it('ensureHindsightBankConfigured skips when config hash already matches', async () => {
-    let fetchCalls = 0
+  it('ensureHindsightBankConfigured always refreshes bank config but skips heavier setup when config hash already matches', async () => {
+    const requests: Array<{ method: string; path: string }> = []
     const spec = buildHindsightBankProvisioningSpec('haetsalos.specialdarksystems.com', 'test-secret')
     const configVersion = computeHindsightConfigVersion(spec)
-    const mockEnv = withHindsight(async () => {
-      fetchCalls++
+    const mockEnv = withHindsight(async (request) => {
+      requests.push({ method: request.method, path: new URL(request.url).pathname })
       return new Response('', { status: 200 })
     }, {
       D1_US: {
@@ -123,6 +127,9 @@ describe('2.4a Hindsight Configuration', () => {
       HINDSIGHT_WEBHOOK_SECRET: 'test-secret',
     })
     await ensureHindsightBankConfigured('test-bank', 'tenant-a', mockEnv)
-    expect(fetchCalls).toBe(0)
+    expect(requests).toEqual([{
+      method: 'PUT',
+      path: '/v1/default/banks/test-bank',
+    }])
   })
 })

@@ -1,9 +1,10 @@
 import type {
   CompiledArtifactFormat,
-  CompiledContradictionStatus,
   CompiledDocumentAudience,
   CompiledDocumentFamily,
 } from './compiled-synthesis-records'
+
+export type * from './compiled-synthesis-output-inputs'
 
 export interface CompiledDocumentUpsertInput {
   tenantId: string
@@ -71,34 +72,6 @@ export interface CompiledRelationshipUpsertInput {
   objectEntityId?: string | null
   relationshipType: string
   summary?: string | null
-  compiledAt: number
-  updatedAt: number
-}
-
-export interface CompiledContradictionUpsertInput {
-  tenantId: string
-  compiledDocumentId: string
-  stableKey: string
-  scope: string
-  leftFactId?: string | null
-  rightFactId?: string | null
-  title?: string | null
-  summary: string
-  status: CompiledContradictionStatus
-  compiledAt: number
-  updatedAt: number
-}
-
-export interface CompiledContextPackUpsertInput {
-  tenantId: string
-  compiledDocumentId: string
-  stableKey: string
-  scope: string
-  packKind: string
-  title: string
-  summary?: string | null
-  agentUsable: boolean
-  humanUsable: boolean
   compiledAt: number
   updatedAt: number
 }

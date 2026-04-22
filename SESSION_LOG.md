@@ -5,6 +5,33 @@
 
 ---
 
+## Session 11.1 - 2026-04-22
+
+**Spec:** Dossier And Context Pack Schema Refinement
+**Built:**
+- `sql/postgres/2003_compiled_synthesis_schema_refinement.sql` - added the forward compiled-synthesis refinement migration for dossier rows, richer contradiction columns, explicit context-pack sections, and decision/change compiled views
+- `src/services/compiled-synthesis-*.ts` - refined the compiled-synthesis contract into explicit dossier/context-pack/change-view families, richer contradiction storage, additive audience semantics, typed section contracts, and family-specific read helpers while keeping `compiled_documents` as the stable identity spine
+- `tests/11.1-dossier-and-context-pack-schema-refinement.test.ts` - added dedicated 11.1 coverage for dossier section semantics, context-pack agent sections, contradiction object storage/retrieval, decision/change views, regeneration-safe identity, and canonical/R2 linkage
+- `specs/active/11.1-dossier-and-context-pack-schema-refinement.md`, `MANIFEST.md` - completed the 11.1 As-Built record and regenerated the manifest against the final split file layout
+**Decisions:**
+- **Dossiers are now first-class compiled outputs.** We introduced `family = 'dossier'` plus `compiled_dossiers` with explicit subject identity and named sections instead of leaving dossier semantics implicit in generic compiled documents.
+- **Context packs remain compact but are no longer structurally vague.** `compiled_context_packs` now stores `situation`, `critical_facts`, `recent_changes`, `decisions`, `contradictions`, `recommended_actions`, and `source_refs` explicitly for agent reuse.
+- **Contradictions are preserved as tension, not flattened away.** The compiled contradiction model now captures conflict kind/scope, severity, freshness, structured left/right claims, and optional resolution guidance while preserving stable identity and status.
+- **Decision and change views are explicit compiled families.** We added `family = 'decision_log' | 'what_changed'` plus `compiled_change_views` so future compiler jobs can target real decision/change objects instead of generic summaries.
+- **Audience semantics stay additive.** Existing `human|agent|hybrid` callers still work, while refined compiled outputs can now mark `human_readable`, `agent_reusable`, `chief_of_staff`, or `specialist_agent`.
+- **No compatibility shim was required.** The existing production memory path was left untouched; the only compatibility behavior added was safe defaulting for newly added contradiction metadata so 11.0-style compiled writes still succeed.
+**Verification:**
+- `npx vitest run tests/11.1-dossier-and-context-pack-schema-refinement.test.ts` - passed
+- `npx vitest run tests/11.1-dossier-and-context-pack-schema-refinement.test.ts tests/11.0-haetsal-compiled-synthesis-foundation.test.ts tests/canonical-postgres-repository.test.ts tests/6.1-canonical-open-brain-foundation.test.ts tests/6.3-canonical-capture-pipeline.test.ts tests/9.4-brain-memory-external-client-rollout.test.ts tests/10.0-canonical-postgres-source-of-truth-cutover.test.ts tests/10.1-retire-canonical-d1-compat-mirror.test.ts` - passed
+- `npm test` - passed (`404 passed`, `1 skipped`)
+- `npm run postflight` - passed
+- `npm run manifest` - passed
+**Hindsight Pin:** unchanged
+**Blockers:** None for 11.1; the remaining work is compiler/population and Chief of Staff read-path adoption, not schema/readback stability
+**Next:** Use 11.2 to generate these refined compiled objects automatically, then 11.3 to decide how the Chief of Staff and other read paths prefer dossiers/context packs/change views at runtime
+
+---
+
 ## Session 11.0 - 2026-04-22
 
 **Spec:** HAETSAL Compiled Synthesis Foundation

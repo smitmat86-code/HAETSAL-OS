@@ -1,18 +1,7 @@
-import type {
-  CompiledArtifactFormat,
-  CompiledContradictionStatus,
-  CompiledDocumentAudience,
-  CompiledDocumentFamily,
-  CompiledSynthesisBundle,
-} from './compiled-synthesis-schema'
+import type { CompiledArtifactFormat, CompiledChangeViewKind, CompiledContradictionFreshness, CompiledContradictionSeverity, CompiledContradictionStatus, CompiledDocumentAudience, CompiledDocumentFamily, CompiledDossierKind } from './compiled-synthesis-taxonomy'
+import type { CompiledContradictionClaim, CompiledContradictionSectionRef, CompiledDecisionItem, CompiledFactSectionItem, CompiledOpenQuestionItem, CompiledRecommendedActionItem, CompiledRecommendedReadingItem, CompiledRecentChangeItem, CompiledRelationshipSectionItem, CompiledSourceRefItem } from './compiled-synthesis-section-types'
 
-export interface PersistCompiledEntityInput {
-  stableKey: string
-  scope: string
-  entityType: string
-  name: string
-  summary?: string | null
-}
+export interface PersistCompiledEntityInput { stableKey: string; scope: string; entityType: string; name: string; summary?: string | null }
 
 export interface PersistCompiledFactInput {
   stableKey: string
@@ -38,8 +27,35 @@ export interface PersistCompiledContradictionInput {
   leftFactStableKey?: string | null
   rightFactStableKey?: string | null
   title?: string | null
+  contradictionKind?: string
+  conflictScope?: string | null
+  severity?: CompiledContradictionSeverity
+  freshness?: CompiledContradictionFreshness
   summary: string
   status: CompiledContradictionStatus
+  leftClaim?: CompiledContradictionClaim
+  rightClaim?: CompiledContradictionClaim
+  suggestedResolution?: string | null
+  resolutionSummary?: string | null
+}
+
+export interface PersistCompiledDossierInput {
+  stableKey: string
+  scope: string
+  dossierKind: CompiledDossierKind
+  subjectType: string
+  subjectStableKey: string
+  subjectName: string
+  whyItMatters?: string | null
+  currentState?: string | null
+  keyFacts?: CompiledFactSectionItem[]
+  keyRelationships?: CompiledRelationshipSectionItem[]
+  recentUpdates?: CompiledRecentChangeItem[]
+  openQuestions?: CompiledOpenQuestionItem[]
+  contradictions?: CompiledContradictionSectionRef[]
+  recommendedActions?: CompiledRecommendedActionItem[]
+  recommendedNextReading?: CompiledRecommendedReadingItem[]
+  sourceRefs?: CompiledSourceRefItem[]
 }
 
 export interface PersistCompiledContextPackInput {
@@ -50,15 +66,29 @@ export interface PersistCompiledContextPackInput {
   summary?: string | null
   agentUsable: boolean
   humanUsable: boolean
+  situation?: string | null
+  criticalFacts?: CompiledFactSectionItem[]
+  recentChanges?: CompiledRecentChangeItem[]
+  decisions?: CompiledDecisionItem[]
+  contradictions?: CompiledContradictionSectionRef[]
+  recommendedActions?: CompiledRecommendedActionItem[]
+  sourceRefs?: CompiledSourceRefItem[]
 }
 
-export interface PersistCompiledArtifactInput {
-  artifactRole: string
-  format: CompiledArtifactFormat
-  version: string
-  mediaType?: string | null
-  contentEncrypted: string
+export interface PersistCompiledChangeViewInput {
+  stableKey: string
+  scope: string
+  viewKind: CompiledChangeViewKind
+  title: string
+  summary?: string | null
+  decisions?: CompiledDecisionItem[]
+  changes?: CompiledRecentChangeItem[]
+  contradictions?: CompiledContradictionSectionRef[]
+  recommendedActions?: CompiledRecommendedActionItem[]
+  sourceRefs?: CompiledSourceRefItem[]
 }
+
+export interface PersistCompiledArtifactInput { artifactRole: string; format: CompiledArtifactFormat; version: string; mediaType?: string | null; contentEncrypted: string }
 
 export interface PersistCompiledSynthesisInput {
   tenantId: string
@@ -75,7 +105,9 @@ export interface PersistCompiledSynthesisInput {
   facts?: PersistCompiledFactInput[]
   relationships?: PersistCompiledRelationshipInput[]
   contradictions?: PersistCompiledContradictionInput[]
+  dossier?: PersistCompiledDossierInput | null
   contextPack?: PersistCompiledContextPackInput | null
+  changeView?: PersistCompiledChangeViewInput | null
   artifacts?: PersistCompiledArtifactInput[]
   compiledAt?: number
 }
@@ -88,7 +120,7 @@ export interface PersistCompiledSynthesisResult {
   factIds: string[]
   relationshipIds: string[]
   contradictionIds: string[]
+  dossierId: string | null
   contextPackId: string | null
+  changeViewId: string | null
 }
-
-export type { CompiledSynthesisBundle }

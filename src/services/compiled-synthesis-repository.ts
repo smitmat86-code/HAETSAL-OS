@@ -1,7 +1,8 @@
 import { neon } from '@neondatabase/serverless'
 import {
   COMPILED_SYNTHESIS_SCHEMA,
-  type CompiledArtifactFormat,
+  type CompiledChangeViewRecord,
+  type CompiledChangeViewUpsertInput,
   type CompiledContextPackRecord,
   type CompiledContextPackUpsertInput,
   type CompiledContradictionRecord,
@@ -12,6 +13,8 @@ import {
   type CompiledDocumentSourceInput,
   type CompiledDocumentSourceRecord,
   type CompiledDocumentUpsertInput,
+  type CompiledDossierRecord,
+  type CompiledDossierUpsertInput,
   type CompiledEntityRecord,
   type CompiledEntityUpsertInput,
   type CompiledFactRecord,
@@ -42,7 +45,9 @@ export interface CompiledSynthesisStore {
   upsertCompiledFact(input: CompiledFactUpsertInput): Promise<CompiledFactRecord>
   upsertCompiledRelationship(input: CompiledRelationshipUpsertInput): Promise<CompiledRelationshipRecord>
   upsertCompiledContradiction(input: CompiledContradictionUpsertInput): Promise<CompiledContradictionRecord>
+  upsertCompiledDossier(input: CompiledDossierUpsertInput): Promise<CompiledDossierRecord>
   upsertCompiledContextPack(input: CompiledContextPackUpsertInput): Promise<CompiledContextPackRecord>
+  upsertCompiledChangeView(input: CompiledChangeViewUpsertInput): Promise<CompiledChangeViewRecord>
   getCompiledDocumentByStableKey(
     tenantId: string,
     stableKey: string,
@@ -130,8 +135,12 @@ export class InMemoryCompiledSynthesisStore implements CompiledSynthesisStore {
   private readonly relationshipByStableKey = new Map<string, string>()
   private readonly contradictions = new Map<string, CompiledContradictionRecord>()
   private readonly contradictionByStableKey = new Map<string, string>()
+  private readonly dossiers = new Map<string, CompiledDossierRecord>()
+  private readonly dossierByStableKey = new Map<string, string>()
   private readonly contextPacks = new Map<string, CompiledContextPackRecord>()
   private readonly contextPackByStableKey = new Map<string, string>()
+  private readonly changeViews = new Map<string, CompiledChangeViewRecord>()
+  private readonly changeViewByStableKey = new Map<string, string>()
 
   async upsertCompiledDocument(input: CompiledDocumentUpsertInput): Promise<CompiledDocumentRecord> {
     const key = tenantScoped(input.tenantId, input.stableKey)
@@ -345,8 +354,16 @@ export class InMemoryCompiledSynthesisStore implements CompiledSynthesisStore {
         left_fact_id: input.leftFactId ?? null,
         right_fact_id: input.rightFactId ?? null,
         title: input.title?.trim() || null,
+        contradiction_kind: input.contradictionKind,
+        conflict_scope: input.conflictScope?.trim() || null,
+        severity: input.severity,
+        freshness: input.freshness,
         summary: input.summary,
         status: input.status,
+        left_claim_json: input.leftClaimJson,
+        right_claim_json: input.rightClaimJson,
+        suggested_resolution: input.suggestedResolution?.trim() || null,
+        resolution_summary: input.resolutionSummary?.trim() || null,
         compiled_at: input.compiledAt,
         updated_at: input.updatedAt,
       }
@@ -359,14 +376,77 @@ export class InMemoryCompiledSynthesisStore implements CompiledSynthesisStore {
         left_fact_id: input.leftFactId ?? null,
         right_fact_id: input.rightFactId ?? null,
         title: input.title?.trim() || null,
+        contradiction_kind: input.contradictionKind,
+        conflict_scope: input.conflictScope?.trim() || null,
+        severity: input.severity,
+        freshness: input.freshness,
         summary: input.summary,
         status: input.status,
+        left_claim_json: input.leftClaimJson,
+        right_claim_json: input.rightClaimJson,
+        suggested_resolution: input.suggestedResolution?.trim() || null,
+        resolution_summary: input.resolutionSummary?.trim() || null,
         compiled_at: input.compiledAt,
         created_at: input.updatedAt,
         updated_at: input.updatedAt,
       }
     this.contradictions.set(row.id, row)
     this.contradictionByStableKey.set(key, row.id)
+    return { ...row }
+  }
+
+  async upsertCompiledDossier(input: CompiledDossierUpsertInput): Promise<CompiledDossierRecord> {
+    const key = tenantScoped(input.tenantId, input.stableKey)
+    const existingId = this.dossierByStableKey.get(key)
+    const existing = existingId ? this.dossiers.get(existingId) : null
+    const row: CompiledDossierRecord = existing
+      ? {
+        ...existing,
+        compiled_document_id: input.compiledDocumentId,
+        scope: input.scope,
+        dossier_kind: input.dossierKind,
+        subject_type: input.subjectType,
+        subject_stable_key: input.subjectStableKey,
+        subject_name: input.subjectName,
+        why_it_matters: input.whyItMatters?.trim() || null,
+        current_state: input.currentState?.trim() || null,
+        key_facts_json: input.keyFactsJson,
+        key_relationships_json: input.keyRelationshipsJson,
+        recent_updates_json: input.recentUpdatesJson,
+        open_questions_json: input.openQuestionsJson,
+        contradiction_refs_json: input.contradictionRefsJson,
+        recommended_actions_json: input.recommendedActionsJson,
+        recommended_reading_json: input.recommendedReadingJson,
+        source_refs_json: input.sourceRefsJson,
+        compiled_at: input.compiledAt,
+        updated_at: input.updatedAt,
+      }
+      : {
+        id: crypto.randomUUID(),
+        tenant_id: input.tenantId,
+        compiled_document_id: input.compiledDocumentId,
+        stable_key: input.stableKey,
+        scope: input.scope,
+        dossier_kind: input.dossierKind,
+        subject_type: input.subjectType,
+        subject_stable_key: input.subjectStableKey,
+        subject_name: input.subjectName,
+        why_it_matters: input.whyItMatters?.trim() || null,
+        current_state: input.currentState?.trim() || null,
+        key_facts_json: input.keyFactsJson,
+        key_relationships_json: input.keyRelationshipsJson,
+        recent_updates_json: input.recentUpdatesJson,
+        open_questions_json: input.openQuestionsJson,
+        contradiction_refs_json: input.contradictionRefsJson,
+        recommended_actions_json: input.recommendedActionsJson,
+        recommended_reading_json: input.recommendedReadingJson,
+        source_refs_json: input.sourceRefsJson,
+        compiled_at: input.compiledAt,
+        created_at: input.updatedAt,
+        updated_at: input.updatedAt,
+      }
+    this.dossiers.set(row.id, row)
+    this.dossierByStableKey.set(key, row.id)
     return { ...row }
   }
 
@@ -384,6 +464,13 @@ export class InMemoryCompiledSynthesisStore implements CompiledSynthesisStore {
         summary: input.summary?.trim() || null,
         agent_usable: input.agentUsable,
         human_usable: input.humanUsable,
+        situation: input.situation?.trim() || null,
+        critical_facts_json: input.criticalFactsJson,
+        recent_changes_json: input.recentChangesJson,
+        decisions_json: input.decisionsJson,
+        contradictions_json: input.contradictionsJson,
+        recommended_actions_json: input.recommendedActionsJson,
+        source_refs_json: input.sourceRefsJson,
         compiled_at: input.compiledAt,
         updated_at: input.updatedAt,
       }
@@ -398,12 +485,62 @@ export class InMemoryCompiledSynthesisStore implements CompiledSynthesisStore {
         summary: input.summary?.trim() || null,
         agent_usable: input.agentUsable,
         human_usable: input.humanUsable,
+        situation: input.situation?.trim() || null,
+        critical_facts_json: input.criticalFactsJson,
+        recent_changes_json: input.recentChangesJson,
+        decisions_json: input.decisionsJson,
+        contradictions_json: input.contradictionsJson,
+        recommended_actions_json: input.recommendedActionsJson,
+        source_refs_json: input.sourceRefsJson,
         compiled_at: input.compiledAt,
         created_at: input.updatedAt,
         updated_at: input.updatedAt,
       }
     this.contextPacks.set(row.id, row)
     this.contextPackByStableKey.set(key, row.id)
+    return { ...row }
+  }
+
+  async upsertCompiledChangeView(input: CompiledChangeViewUpsertInput): Promise<CompiledChangeViewRecord> {
+    const key = tenantScoped(input.tenantId, input.stableKey)
+    const existingId = this.changeViewByStableKey.get(key)
+    const existing = existingId ? this.changeViews.get(existingId) : null
+    const row: CompiledChangeViewRecord = existing
+      ? {
+        ...existing,
+        compiled_document_id: input.compiledDocumentId,
+        scope: input.scope,
+        view_kind: input.viewKind,
+        title: input.title,
+        summary: input.summary?.trim() || null,
+        decisions_json: input.decisionsJson,
+        changes_json: input.changesJson,
+        contradictions_json: input.contradictionsJson,
+        recommended_actions_json: input.recommendedActionsJson,
+        source_refs_json: input.sourceRefsJson,
+        compiled_at: input.compiledAt,
+        updated_at: input.updatedAt,
+      }
+      : {
+        id: crypto.randomUUID(),
+        tenant_id: input.tenantId,
+        compiled_document_id: input.compiledDocumentId,
+        stable_key: input.stableKey,
+        scope: input.scope,
+        view_kind: input.viewKind,
+        title: input.title,
+        summary: input.summary?.trim() || null,
+        decisions_json: input.decisionsJson,
+        changes_json: input.changesJson,
+        contradictions_json: input.contradictionsJson,
+        recommended_actions_json: input.recommendedActionsJson,
+        source_refs_json: input.sourceRefsJson,
+        compiled_at: input.compiledAt,
+        created_at: input.updatedAt,
+        updated_at: input.updatedAt,
+      }
+    this.changeViews.set(row.id, row)
+    this.changeViewByStableKey.set(key, row.id)
     return { ...row }
   }
 
@@ -447,7 +584,11 @@ export class InMemoryCompiledSynthesisStore implements CompiledSynthesisStore {
         [...this.contradictions.values()]
           .filter((row) => row.tenant_id === tenantId && row.compiled_document_id === document.id),
       ).map((row) => ({ ...row })),
+      dossier: [...this.dossiers.values()]
+        .find((row) => row.tenant_id === tenantId && row.compiled_document_id === document.id) ?? null,
       contextPack: [...this.contextPacks.values()]
+        .find((row) => row.tenant_id === tenantId && row.compiled_document_id === document.id) ?? null,
+      changeView: [...this.changeViews.values()]
         .find((row) => row.tenant_id === tenantId && row.compiled_document_id === document.id) ?? null,
     }
   }
@@ -576,14 +717,64 @@ export class NeonCompiledSynthesisStore implements CompiledSynthesisStore {
         left_fact_id TEXT REFERENCES ${COMPILED_SYNTHESIS_SCHEMA}.compiled_facts(id) ON DELETE SET NULL,
         right_fact_id TEXT REFERENCES ${COMPILED_SYNTHESIS_SCHEMA}.compiled_facts(id) ON DELETE SET NULL,
         title TEXT,
+        contradiction_kind TEXT NOT NULL DEFAULT 'claim_conflict',
+        conflict_scope TEXT,
+        severity TEXT NOT NULL DEFAULT 'medium',
+        freshness TEXT NOT NULL DEFAULT 'recent',
         summary TEXT NOT NULL,
         status TEXT NOT NULL,
+        left_claim_json TEXT NOT NULL DEFAULT '{}',
+        right_claim_json TEXT NOT NULL DEFAULT '{}',
+        suggested_resolution TEXT,
+        resolution_summary TEXT,
         compiled_at BIGINT NOT NULL,
         created_at BIGINT NOT NULL,
         updated_at BIGINT NOT NULL
       )`,
+      `ALTER TABLE ${COMPILED_SYNTHESIS_SCHEMA}.compiled_contradictions
+        ADD COLUMN IF NOT EXISTS contradiction_kind TEXT NOT NULL DEFAULT 'claim_conflict'`,
+      `ALTER TABLE ${COMPILED_SYNTHESIS_SCHEMA}.compiled_contradictions
+        ADD COLUMN IF NOT EXISTS conflict_scope TEXT`,
+      `ALTER TABLE ${COMPILED_SYNTHESIS_SCHEMA}.compiled_contradictions
+        ADD COLUMN IF NOT EXISTS severity TEXT NOT NULL DEFAULT 'medium'`,
+      `ALTER TABLE ${COMPILED_SYNTHESIS_SCHEMA}.compiled_contradictions
+        ADD COLUMN IF NOT EXISTS freshness TEXT NOT NULL DEFAULT 'recent'`,
+      `ALTER TABLE ${COMPILED_SYNTHESIS_SCHEMA}.compiled_contradictions
+        ADD COLUMN IF NOT EXISTS left_claim_json TEXT NOT NULL DEFAULT '{}'`,
+      `ALTER TABLE ${COMPILED_SYNTHESIS_SCHEMA}.compiled_contradictions
+        ADD COLUMN IF NOT EXISTS right_claim_json TEXT NOT NULL DEFAULT '{}'`,
+      `ALTER TABLE ${COMPILED_SYNTHESIS_SCHEMA}.compiled_contradictions
+        ADD COLUMN IF NOT EXISTS suggested_resolution TEXT`,
+      `ALTER TABLE ${COMPILED_SYNTHESIS_SCHEMA}.compiled_contradictions
+        ADD COLUMN IF NOT EXISTS resolution_summary TEXT`,
       `CREATE UNIQUE INDEX IF NOT EXISTS idx_pg_compiled_contradictions_tenant_stable
         ON ${COMPILED_SYNTHESIS_SCHEMA}.compiled_contradictions(tenant_id, stable_key)`,
+      `CREATE TABLE IF NOT EXISTS ${COMPILED_SYNTHESIS_SCHEMA}.compiled_dossiers (
+        id TEXT PRIMARY KEY,
+        tenant_id TEXT NOT NULL,
+        compiled_document_id TEXT NOT NULL REFERENCES ${COMPILED_SYNTHESIS_SCHEMA}.compiled_documents(id) ON DELETE CASCADE,
+        stable_key TEXT NOT NULL,
+        scope TEXT NOT NULL,
+        dossier_kind TEXT NOT NULL,
+        subject_type TEXT NOT NULL,
+        subject_stable_key TEXT NOT NULL,
+        subject_name TEXT NOT NULL,
+        why_it_matters TEXT,
+        current_state TEXT,
+        key_facts_json TEXT NOT NULL DEFAULT '[]',
+        key_relationships_json TEXT NOT NULL DEFAULT '[]',
+        recent_updates_json TEXT NOT NULL DEFAULT '[]',
+        open_questions_json TEXT NOT NULL DEFAULT '[]',
+        contradiction_refs_json TEXT NOT NULL DEFAULT '[]',
+        recommended_actions_json TEXT NOT NULL DEFAULT '[]',
+        recommended_reading_json TEXT NOT NULL DEFAULT '[]',
+        source_refs_json TEXT NOT NULL DEFAULT '[]',
+        compiled_at BIGINT NOT NULL,
+        created_at BIGINT NOT NULL,
+        updated_at BIGINT NOT NULL
+      )`,
+      `CREATE UNIQUE INDEX IF NOT EXISTS idx_pg_compiled_dossiers_tenant_stable
+        ON ${COMPILED_SYNTHESIS_SCHEMA}.compiled_dossiers(tenant_id, stable_key)`,
       `CREATE TABLE IF NOT EXISTS ${COMPILED_SYNTHESIS_SCHEMA}.compiled_context_packs (
         id TEXT PRIMARY KEY,
         tenant_id TEXT NOT NULL,
@@ -595,12 +786,53 @@ export class NeonCompiledSynthesisStore implements CompiledSynthesisStore {
         summary TEXT,
         agent_usable BOOLEAN NOT NULL,
         human_usable BOOLEAN NOT NULL,
+        situation TEXT,
+        critical_facts_json TEXT NOT NULL DEFAULT '[]',
+        recent_changes_json TEXT NOT NULL DEFAULT '[]',
+        decisions_json TEXT NOT NULL DEFAULT '[]',
+        contradictions_json TEXT NOT NULL DEFAULT '[]',
+        recommended_actions_json TEXT NOT NULL DEFAULT '[]',
+        source_refs_json TEXT NOT NULL DEFAULT '[]',
         compiled_at BIGINT NOT NULL,
         created_at BIGINT NOT NULL,
         updated_at BIGINT NOT NULL
       )`,
+      `ALTER TABLE ${COMPILED_SYNTHESIS_SCHEMA}.compiled_context_packs
+        ADD COLUMN IF NOT EXISTS situation TEXT`,
+      `ALTER TABLE ${COMPILED_SYNTHESIS_SCHEMA}.compiled_context_packs
+        ADD COLUMN IF NOT EXISTS critical_facts_json TEXT NOT NULL DEFAULT '[]'`,
+      `ALTER TABLE ${COMPILED_SYNTHESIS_SCHEMA}.compiled_context_packs
+        ADD COLUMN IF NOT EXISTS recent_changes_json TEXT NOT NULL DEFAULT '[]'`,
+      `ALTER TABLE ${COMPILED_SYNTHESIS_SCHEMA}.compiled_context_packs
+        ADD COLUMN IF NOT EXISTS decisions_json TEXT NOT NULL DEFAULT '[]'`,
+      `ALTER TABLE ${COMPILED_SYNTHESIS_SCHEMA}.compiled_context_packs
+        ADD COLUMN IF NOT EXISTS contradictions_json TEXT NOT NULL DEFAULT '[]'`,
+      `ALTER TABLE ${COMPILED_SYNTHESIS_SCHEMA}.compiled_context_packs
+        ADD COLUMN IF NOT EXISTS recommended_actions_json TEXT NOT NULL DEFAULT '[]'`,
+      `ALTER TABLE ${COMPILED_SYNTHESIS_SCHEMA}.compiled_context_packs
+        ADD COLUMN IF NOT EXISTS source_refs_json TEXT NOT NULL DEFAULT '[]'`,
       `CREATE UNIQUE INDEX IF NOT EXISTS idx_pg_compiled_context_packs_tenant_stable
         ON ${COMPILED_SYNTHESIS_SCHEMA}.compiled_context_packs(tenant_id, stable_key)`,
+      `CREATE TABLE IF NOT EXISTS ${COMPILED_SYNTHESIS_SCHEMA}.compiled_change_views (
+        id TEXT PRIMARY KEY,
+        tenant_id TEXT NOT NULL,
+        compiled_document_id TEXT NOT NULL REFERENCES ${COMPILED_SYNTHESIS_SCHEMA}.compiled_documents(id) ON DELETE CASCADE,
+        stable_key TEXT NOT NULL,
+        scope TEXT NOT NULL,
+        view_kind TEXT NOT NULL,
+        title TEXT NOT NULL,
+        summary TEXT,
+        decisions_json TEXT NOT NULL DEFAULT '[]',
+        changes_json TEXT NOT NULL DEFAULT '[]',
+        contradictions_json TEXT NOT NULL DEFAULT '[]',
+        recommended_actions_json TEXT NOT NULL DEFAULT '[]',
+        source_refs_json TEXT NOT NULL DEFAULT '[]',
+        compiled_at BIGINT NOT NULL,
+        created_at BIGINT NOT NULL,
+        updated_at BIGINT NOT NULL
+      )`,
+      `CREATE UNIQUE INDEX IF NOT EXISTS idx_pg_compiled_change_views_tenant_stable
+        ON ${COMPILED_SYNTHESIS_SCHEMA}.compiled_change_views(tenant_id, stable_key)`,
     ]
     for (const statement of statements) {
       await q.query(statement)
@@ -752,32 +984,91 @@ export class NeonCompiledSynthesisStore implements CompiledSynthesisStore {
   async upsertCompiledContradiction(input: CompiledContradictionUpsertInput): Promise<CompiledContradictionRecord> {
     return this.first<CompiledContradictionRecord>(this.sql`
       INSERT INTO haetsal_canonical.compiled_contradictions
-        (id, tenant_id, compiled_document_id, stable_key, scope, left_fact_id, right_fact_id, title, summary, status, compiled_at, created_at, updated_at)
+        (id, tenant_id, compiled_document_id, stable_key, scope, left_fact_id, right_fact_id, title,
+         contradiction_kind, conflict_scope, severity, freshness, summary, status, left_claim_json,
+         right_claim_json, suggested_resolution, resolution_summary, compiled_at, created_at, updated_at)
       VALUES (${crypto.randomUUID()}, ${input.tenantId}, ${input.compiledDocumentId}, ${input.stableKey},
               ${input.scope}, ${input.leftFactId ?? null}, ${input.rightFactId ?? null}, ${input.title?.trim() || null},
-              ${input.summary}, ${input.status}, ${input.compiledAt}, ${input.updatedAt}, ${input.updatedAt})
+              ${input.contradictionKind}, ${input.conflictScope?.trim() || null}, ${input.severity}, ${input.freshness},
+              ${input.summary}, ${input.status}, ${input.leftClaimJson}, ${input.rightClaimJson},
+              ${input.suggestedResolution?.trim() || null}, ${input.resolutionSummary?.trim() || null},
+              ${input.compiledAt}, ${input.updatedAt}, ${input.updatedAt})
       ON CONFLICT (tenant_id, stable_key)
       DO UPDATE SET compiled_document_id = EXCLUDED.compiled_document_id,
                     scope = EXCLUDED.scope,
                     left_fact_id = EXCLUDED.left_fact_id,
                     right_fact_id = EXCLUDED.right_fact_id,
                     title = EXCLUDED.title,
+                    contradiction_kind = EXCLUDED.contradiction_kind,
+                    conflict_scope = EXCLUDED.conflict_scope,
+                    severity = EXCLUDED.severity,
+                    freshness = EXCLUDED.freshness,
                     summary = EXCLUDED.summary,
                     status = EXCLUDED.status,
+                    left_claim_json = EXCLUDED.left_claim_json,
+                    right_claim_json = EXCLUDED.right_claim_json,
+                    suggested_resolution = EXCLUDED.suggested_resolution,
+                    resolution_summary = EXCLUDED.resolution_summary,
                     compiled_at = EXCLUDED.compiled_at,
                     updated_at = EXCLUDED.updated_at
-      RETURNING id, tenant_id, compiled_document_id, stable_key, scope, left_fact_id, right_fact_id,
-                title, summary, status, compiled_at, created_at, updated_at
+      RETURNING id, tenant_id, compiled_document_id, stable_key, scope, left_fact_id, right_fact_id, title,
+                contradiction_kind, conflict_scope, severity, freshness, summary, status, left_claim_json,
+                right_claim_json, suggested_resolution, resolution_summary, compiled_at, created_at, updated_at
     `) as Promise<CompiledContradictionRecord>
+  }
+
+  async upsertCompiledDossier(input: CompiledDossierUpsertInput): Promise<CompiledDossierRecord> {
+    return this.first<CompiledDossierRecord>(this.sql`
+      INSERT INTO haetsal_canonical.compiled_dossiers
+        (id, tenant_id, compiled_document_id, stable_key, scope, dossier_kind, subject_type, subject_stable_key,
+         subject_name, why_it_matters, current_state, key_facts_json, key_relationships_json, recent_updates_json,
+         open_questions_json, contradiction_refs_json, recommended_actions_json, recommended_reading_json,
+         source_refs_json, compiled_at, created_at, updated_at)
+      VALUES (${crypto.randomUUID()}, ${input.tenantId}, ${input.compiledDocumentId}, ${input.stableKey},
+              ${input.scope}, ${input.dossierKind}, ${input.subjectType}, ${input.subjectStableKey},
+              ${input.subjectName}, ${input.whyItMatters?.trim() || null}, ${input.currentState?.trim() || null},
+              ${input.keyFactsJson}, ${input.keyRelationshipsJson}, ${input.recentUpdatesJson},
+              ${input.openQuestionsJson}, ${input.contradictionRefsJson}, ${input.recommendedActionsJson},
+              ${input.recommendedReadingJson}, ${input.sourceRefsJson}, ${input.compiledAt},
+              ${input.updatedAt}, ${input.updatedAt})
+      ON CONFLICT (tenant_id, stable_key)
+      DO UPDATE SET compiled_document_id = EXCLUDED.compiled_document_id,
+                    scope = EXCLUDED.scope,
+                    dossier_kind = EXCLUDED.dossier_kind,
+                    subject_type = EXCLUDED.subject_type,
+                    subject_stable_key = EXCLUDED.subject_stable_key,
+                    subject_name = EXCLUDED.subject_name,
+                    why_it_matters = EXCLUDED.why_it_matters,
+                    current_state = EXCLUDED.current_state,
+                    key_facts_json = EXCLUDED.key_facts_json,
+                    key_relationships_json = EXCLUDED.key_relationships_json,
+                    recent_updates_json = EXCLUDED.recent_updates_json,
+                    open_questions_json = EXCLUDED.open_questions_json,
+                    contradiction_refs_json = EXCLUDED.contradiction_refs_json,
+                    recommended_actions_json = EXCLUDED.recommended_actions_json,
+                    recommended_reading_json = EXCLUDED.recommended_reading_json,
+                    source_refs_json = EXCLUDED.source_refs_json,
+                    compiled_at = EXCLUDED.compiled_at,
+                    updated_at = EXCLUDED.updated_at
+      RETURNING id, tenant_id, compiled_document_id, stable_key, scope, dossier_kind, subject_type, subject_stable_key,
+                subject_name, why_it_matters, current_state, key_facts_json, key_relationships_json, recent_updates_json,
+                open_questions_json, contradiction_refs_json, recommended_actions_json, recommended_reading_json,
+                source_refs_json, compiled_at, created_at, updated_at
+    `) as Promise<CompiledDossierRecord>
   }
 
   async upsertCompiledContextPack(input: CompiledContextPackUpsertInput): Promise<CompiledContextPackRecord> {
     return this.first<CompiledContextPackRecord>(this.sql`
       INSERT INTO haetsal_canonical.compiled_context_packs
-        (id, tenant_id, compiled_document_id, stable_key, scope, pack_kind, title, summary, agent_usable, human_usable, compiled_at, created_at, updated_at)
+        (id, tenant_id, compiled_document_id, stable_key, scope, pack_kind, title, summary, agent_usable,
+         human_usable, situation, critical_facts_json, recent_changes_json, decisions_json, contradictions_json,
+         recommended_actions_json, source_refs_json, compiled_at, created_at, updated_at)
       VALUES (${crypto.randomUUID()}, ${input.tenantId}, ${input.compiledDocumentId}, ${input.stableKey},
               ${input.scope}, ${input.packKind}, ${input.title}, ${input.summary?.trim() || null},
-              ${input.agentUsable}, ${input.humanUsable}, ${input.compiledAt}, ${input.updatedAt}, ${input.updatedAt})
+              ${input.agentUsable}, ${input.humanUsable}, ${input.situation?.trim() || null}, ${input.criticalFactsJson},
+              ${input.recentChangesJson}, ${input.decisionsJson}, ${input.contradictionsJson},
+              ${input.recommendedActionsJson}, ${input.sourceRefsJson}, ${input.compiledAt}, ${input.updatedAt},
+              ${input.updatedAt})
       ON CONFLICT (tenant_id, stable_key)
       DO UPDATE SET compiled_document_id = EXCLUDED.compiled_document_id,
                     scope = EXCLUDED.scope,
@@ -786,11 +1077,46 @@ export class NeonCompiledSynthesisStore implements CompiledSynthesisStore {
                     summary = EXCLUDED.summary,
                     agent_usable = EXCLUDED.agent_usable,
                     human_usable = EXCLUDED.human_usable,
+                    situation = EXCLUDED.situation,
+                    critical_facts_json = EXCLUDED.critical_facts_json,
+                    recent_changes_json = EXCLUDED.recent_changes_json,
+                    decisions_json = EXCLUDED.decisions_json,
+                    contradictions_json = EXCLUDED.contradictions_json,
+                    recommended_actions_json = EXCLUDED.recommended_actions_json,
+                    source_refs_json = EXCLUDED.source_refs_json,
                     compiled_at = EXCLUDED.compiled_at,
                     updated_at = EXCLUDED.updated_at
-      RETURNING id, tenant_id, compiled_document_id, stable_key, scope, pack_kind, title, summary,
-                agent_usable, human_usable, compiled_at, created_at, updated_at
+      RETURNING id, tenant_id, compiled_document_id, stable_key, scope, pack_kind, title, summary, agent_usable,
+                human_usable, situation, critical_facts_json, recent_changes_json, decisions_json, contradictions_json,
+                recommended_actions_json, source_refs_json, compiled_at, created_at, updated_at
     `) as Promise<CompiledContextPackRecord>
+  }
+
+  async upsertCompiledChangeView(input: CompiledChangeViewUpsertInput): Promise<CompiledChangeViewRecord> {
+    return this.first<CompiledChangeViewRecord>(this.sql`
+      INSERT INTO haetsal_canonical.compiled_change_views
+        (id, tenant_id, compiled_document_id, stable_key, scope, view_kind, title, summary, decisions_json,
+         changes_json, contradictions_json, recommended_actions_json, source_refs_json, compiled_at, created_at, updated_at)
+      VALUES (${crypto.randomUUID()}, ${input.tenantId}, ${input.compiledDocumentId}, ${input.stableKey},
+              ${input.scope}, ${input.viewKind}, ${input.title}, ${input.summary?.trim() || null}, ${input.decisionsJson},
+              ${input.changesJson}, ${input.contradictionsJson}, ${input.recommendedActionsJson}, ${input.sourceRefsJson},
+              ${input.compiledAt}, ${input.updatedAt}, ${input.updatedAt})
+      ON CONFLICT (tenant_id, stable_key)
+      DO UPDATE SET compiled_document_id = EXCLUDED.compiled_document_id,
+                    scope = EXCLUDED.scope,
+                    view_kind = EXCLUDED.view_kind,
+                    title = EXCLUDED.title,
+                    summary = EXCLUDED.summary,
+                    decisions_json = EXCLUDED.decisions_json,
+                    changes_json = EXCLUDED.changes_json,
+                    contradictions_json = EXCLUDED.contradictions_json,
+                    recommended_actions_json = EXCLUDED.recommended_actions_json,
+                    source_refs_json = EXCLUDED.source_refs_json,
+                    compiled_at = EXCLUDED.compiled_at,
+                    updated_at = EXCLUDED.updated_at
+      RETURNING id, tenant_id, compiled_document_id, stable_key, scope, view_kind, title, summary, decisions_json,
+                changes_json, contradictions_json, recommended_actions_json, source_refs_json, compiled_at, created_at, updated_at
+    `) as Promise<CompiledChangeViewRecord>
   }
 
   async getCompiledDocumentByStableKey(
@@ -818,7 +1144,9 @@ export class NeonCompiledSynthesisStore implements CompiledSynthesisStore {
       facts,
       relationships,
       contradictions,
+      dossier,
       contextPack,
+      changeView,
     ] = await Promise.all([
       this.rows<CompiledDocumentSourceRecord>(this.sql`
         SELECT id, tenant_id, compiled_document_id, source_role, canonical_capture_id, canonical_document_id,
@@ -856,16 +1184,36 @@ export class NeonCompiledSynthesisStore implements CompiledSynthesisStore {
         ORDER BY stable_key ASC
       `),
       this.rows<CompiledContradictionRecord>(this.sql`
-        SELECT id, tenant_id, compiled_document_id, stable_key, scope, left_fact_id, right_fact_id,
-               title, summary, status, compiled_at, created_at, updated_at
+        SELECT id, tenant_id, compiled_document_id, stable_key, scope, left_fact_id, right_fact_id, title,
+               contradiction_kind, conflict_scope, severity, freshness, summary, status, left_claim_json,
+               right_claim_json, suggested_resolution, resolution_summary, compiled_at, created_at, updated_at
         FROM haetsal_canonical.compiled_contradictions
         WHERE tenant_id = ${tenantId} AND compiled_document_id = ${document.id}
         ORDER BY stable_key ASC
       `),
+      this.first<CompiledDossierRecord>(this.sql`
+        SELECT id, tenant_id, compiled_document_id, stable_key, scope, dossier_kind, subject_type, subject_stable_key,
+               subject_name, why_it_matters, current_state, key_facts_json, key_relationships_json, recent_updates_json,
+               open_questions_json, contradiction_refs_json, recommended_actions_json, recommended_reading_json,
+               source_refs_json, compiled_at, created_at, updated_at
+        FROM haetsal_canonical.compiled_dossiers
+        WHERE tenant_id = ${tenantId} AND compiled_document_id = ${document.id}
+        ORDER BY updated_at DESC
+        LIMIT 1
+      `),
       this.first<CompiledContextPackRecord>(this.sql`
-        SELECT id, tenant_id, compiled_document_id, stable_key, scope, pack_kind, title, summary,
-               agent_usable, human_usable, compiled_at, created_at, updated_at
+        SELECT id, tenant_id, compiled_document_id, stable_key, scope, pack_kind, title, summary, agent_usable,
+               human_usable, situation, critical_facts_json, recent_changes_json, decisions_json, contradictions_json,
+               recommended_actions_json, source_refs_json, compiled_at, created_at, updated_at
         FROM haetsal_canonical.compiled_context_packs
+        WHERE tenant_id = ${tenantId} AND compiled_document_id = ${document.id}
+        ORDER BY updated_at DESC
+        LIMIT 1
+      `),
+      this.first<CompiledChangeViewRecord>(this.sql`
+        SELECT id, tenant_id, compiled_document_id, stable_key, scope, view_kind, title, summary, decisions_json,
+               changes_json, contradictions_json, recommended_actions_json, source_refs_json, compiled_at, created_at, updated_at
+        FROM haetsal_canonical.compiled_change_views
         WHERE tenant_id = ${tenantId} AND compiled_document_id = ${document.id}
         ORDER BY updated_at DESC
         LIMIT 1
@@ -880,7 +1228,9 @@ export class NeonCompiledSynthesisStore implements CompiledSynthesisStore {
       facts,
       relationships,
       contradictions,
+      dossier,
       contextPack,
+      changeView,
     }
   }
 }

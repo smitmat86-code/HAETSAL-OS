@@ -1,13 +1,11 @@
-export type CompiledDocumentFamily =
-  | 'entity'
-  | 'fact'
-  | 'relationship'
-  | 'contradiction'
-  | 'context_pack'
+import type {
+  CompiledArtifactFormat,
+  CompiledDocumentAudience,
+  CompiledDocumentFamily,
+} from './compiled-synthesis-taxonomy'
 
-export type CompiledDocumentAudience = 'human' | 'agent' | 'hybrid'
-export type CompiledArtifactFormat = 'markdown' | 'json' | 'html'
-export type CompiledContradictionStatus = 'open' | 'noted' | 'resolved'
+export type * from './compiled-synthesis-output-records'
+export type * from './compiled-synthesis-taxonomy'
 
 export interface CompiledDocumentRecord {
   id: string
@@ -88,38 +86,6 @@ export interface CompiledRelationshipRecord {
   object_entity_id: string | null
   relationship_type: string
   summary: string | null
-  compiled_at: number
-  created_at: number
-  updated_at: number
-}
-
-export interface CompiledContradictionRecord {
-  id: string
-  tenant_id: string
-  compiled_document_id: string
-  stable_key: string
-  scope: string
-  left_fact_id: string | null
-  right_fact_id: string | null
-  title: string | null
-  summary: string
-  status: CompiledContradictionStatus
-  compiled_at: number
-  created_at: number
-  updated_at: number
-}
-
-export interface CompiledContextPackRecord {
-  id: string
-  tenant_id: string
-  compiled_document_id: string
-  stable_key: string
-  scope: string
-  pack_kind: string
-  title: string
-  summary: string | null
-  agent_usable: boolean
-  human_usable: boolean
   compiled_at: number
   created_at: number
   updated_at: number

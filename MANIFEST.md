@@ -102,16 +102,24 @@ Last updated: 2026-04-18 | Session: 7.1 (Hindsight Projection Adapter)
 | src\services\canonical-source-attribution.ts | 66 | buildCanonicalSourceAttribution, applyCanonicalRoute | ✅ |
 | src\services\chief-of-staff-context.ts | 112 | — | ✅ |
 | src\services\compiled-synthesis-artifacts.ts | 72 | CompiledArtifactPayloadInput, PersistedCompiledArtifactPayload, buildCompiledArtifactR2Key | ✅ |
-| src\services\compiled-synthesis-inputs.ts | 105 | CompiledDocumentUpsertInput, CompiledDocumentSourceInput, CompiledDocumentArtifactInput... | ✅ |
-| src\services\compiled-synthesis-persist.ts | 148 | — | ✅ |
+| src\services\compiled-synthesis-inputs.ts | 78 | CompiledDocumentUpsertInput, CompiledDocumentSourceInput, CompiledDocumentArtifactInput... | ✅ |
+| src\services\compiled-synthesis-models.ts | 119 | CompiledDossierView, CompiledContextPackView, CompiledChangeView... | ✅ |
+| src\services\compiled-synthesis-output-inputs.ts | 91 | CompiledContradictionUpsertInput, CompiledDossierUpsertInput, CompiledContextPackUpsertInput... | ✅ |
+| src\services\compiled-synthesis-output-records.ts | 99 | CompiledContradictionRecord, CompiledDossierRecord, CompiledContextPackRecord... | ✅ |
+| src\services\compiled-synthesis-persist-outputs.ts | 82 | — | ✅ |
+| src\services\compiled-synthesis-persist-supporting.ts | 111 | PersistSupportingRowsResult | ✅ |
+| src\services\compiled-synthesis-persist.ts | 84 | — | ✅ |
 | src\services\compiled-synthesis-postgres.ts | 46 | installCompiledSynthesisStore, installCompiledSynthesisTestStore, getCompiledSynthesisStore | ✅ |
-| src\services\compiled-synthesis-read.ts | 12 | — | ✅ |
-| src\services\compiled-synthesis-records.ts | 127 | CompiledDocumentFamily, CompiledDocumentAudience, CompiledArtifactFormat... | ✅ |
-| src\services\compiled-synthesis-repository.ts | 887 | CompiledSynthesisStore, InMemoryCompiledSynthesisStore, NeonCompiledSynthesisStore | ⚠️ OVER LIMIT |
-| src\services\compiled-synthesis-schema.ts | 18 | COMPILED_SYNTHESIS_SCHEMA, CompiledSynthesisBundle | ✅ |
-| src\services\compiled-synthesis-service-types.ts | 95 | PersistCompiledEntityInput, PersistCompiledFactInput, PersistCompiledRelationshipInput... | ✅ |
+| src\services\compiled-synthesis-read-models.ts | 128 | buildCompiledSynthesisView | ✅ |
+| src\services\compiled-synthesis-read.ts | 90 | — | ✅ |
+| src\services\compiled-synthesis-records.ts | 93 | CompiledDocumentRecord, CompiledDocumentSourceRecord, CompiledDocumentArtifactRecord... | ✅ |
+| src\services\compiled-synthesis-repository.ts | 1237 | CompiledSynthesisStore, InMemoryCompiledSynthesisStore, NeonCompiledSynthesisStore | ⚠️ OVER LIMIT |
+| src\services\compiled-synthesis-schema.ts | 22 | COMPILED_SYNTHESIS_SCHEMA, CompiledSynthesisBundle | ✅ |
+| src\services\compiled-synthesis-section-types.ts | 75 | CompiledFactSectionItem, CompiledRelationshipSectionItem, CompiledRecentChangeItem... | ✅ |
+| src\services\compiled-synthesis-service-types.ts | 127 | PersistCompiledEntityInput, PersistCompiledFactInput, PersistCompiledRelationshipInput... | ✅ |
+| src\services\compiled-synthesis-taxonomy.ts | 25 | CompiledDocumentFamily, CompiledDocumentAudience, CompiledArtifactFormat... | ✅ |
 | src\services\compiled-synthesis-utils.ts | 10 | trimRequired, normalizeJson | ✅ |
-| src\services\compiled-synthesis.ts | 4 | — | ✅ |
+| src\services\compiled-synthesis.ts | 13 | — | ✅ |
 | src\services\delivery\obsidian-write.ts | 52 | — | ✅ |
 | src\services\delivery\sms.ts | 35 | — | ✅ |
 | src\services\delivery\telegram.ts | 31 | — | ✅ |

@@ -12,7 +12,7 @@ Last updated: 2026-04-18 | Session: 7.1 (Hindsight Projection Adapter)
 
 <!-- AUTO-GENERATED MODULE REGISTRY - DO NOT EDIT -->
 
-*Auto-generated: 2026-04-22*
+*Auto-generated: 2026-04-23*
 
 ### src/
 
@@ -102,6 +102,10 @@ Last updated: 2026-04-18 | Session: 7.1 (Hindsight Projection Adapter)
 | src\services\canonical-source-attribution.ts | 66 | buildCanonicalSourceAttribution, applyCanonicalRoute | ✅ |
 | src\services\chief-of-staff-context.ts | 112 | — | ✅ |
 | src\services\compiled-synthesis-artifacts.ts | 72 | CompiledArtifactPayloadInput, PersistedCompiledArtifactPayload, buildCompiledArtifactR2Key | ✅ |
+| src\services\compiled-synthesis-assemble-support.ts | 139 | buildFactInputs, buildRelationshipInputs, buildContradictionInputs | ✅ |
+| src\services\compiled-synthesis-assemble.ts | 131 | assembleProjectCompiledSynthesis | ✅ |
+| src\services\compiled-synthesis-compile.ts | 128 | — | ✅ |
+| src\services\compiled-synthesis-compiler-types.ts | 128 | ProjectCompilationSubject, CompileProjectSynthesisFromCanonicalTruthInput, SelectedCanonicalCompilationSource... | ✅ |
 | src\services\compiled-synthesis-inputs.ts | 78 | CompiledDocumentUpsertInput, CompiledDocumentSourceInput, CompiledDocumentArtifactInput... | ✅ |
 | src\services\compiled-synthesis-models.ts | 119 | CompiledDossierView, CompiledContextPackView, CompiledChangeView... | ✅ |
 | src\services\compiled-synthesis-output-inputs.ts | 91 | CompiledContradictionUpsertInput, CompiledDossierUpsertInput, CompiledContextPackUpsertInput... | ✅ |
@@ -113,13 +117,19 @@ Last updated: 2026-04-18 | Session: 7.1 (Hindsight Projection Adapter)
 | src\services\compiled-synthesis-read-models.ts | 128 | buildCompiledSynthesisView | ✅ |
 | src\services\compiled-synthesis-read.ts | 90 | — | ✅ |
 | src\services\compiled-synthesis-records.ts | 93 | CompiledDocumentRecord, CompiledDocumentSourceRecord, CompiledDocumentArtifactRecord... | ✅ |
+| src\services\compiled-synthesis-render-markdown.ts | 71 | renderProjectDossierMarkdown, renderProjectContextPackMarkdown, renderWhatChangedMarkdown | ✅ |
+| src\services\compiled-synthesis-render.ts | 95 | renderProjectCompiledArtifacts | ✅ |
 | src\services\compiled-synthesis-repository.ts | 1237 | CompiledSynthesisStore, InMemoryCompiledSynthesisStore, NeonCompiledSynthesisStore | ⚠️ OVER LIMIT |
 | src\services\compiled-synthesis-schema.ts | 22 | COMPILED_SYNTHESIS_SCHEMA, CompiledSynthesisBundle | ✅ |
 | src\services\compiled-synthesis-section-types.ts | 75 | CompiledFactSectionItem, CompiledRelationshipSectionItem, CompiledRecentChangeItem... | ✅ |
 | src\services\compiled-synthesis-service-types.ts | 127 | PersistCompiledEntityInput, PersistCompiledFactInput, PersistCompiledRelationshipInput... | ✅ |
+| src\services\compiled-synthesis-signal-line-parsers.ts | 114 | normalizeLine, maybeSection, pushStructuredSignal | ✅ |
+| src\services\compiled-synthesis-signal-parser.ts | 90 | collectSelectionSignals, summarizeRecentChanges | ✅ |
+| src\services\compiled-synthesis-signal-types.ts | 50 | ParsedFactSignal, ParsedRelationshipSignal, ParsedChangeSignal... | ✅ |
+| src\services\compiled-synthesis-source-truth.ts | 128 | — | ✅ |
 | src\services\compiled-synthesis-taxonomy.ts | 25 | CompiledDocumentFamily, CompiledDocumentAudience, CompiledArtifactFormat... | ✅ |
-| src\services\compiled-synthesis-utils.ts | 10 | trimRequired, normalizeJson | ✅ |
-| src\services\compiled-synthesis.ts | 13 | — | ✅ |
+| src\services\compiled-synthesis-utils.ts | 27 | trimRequired, normalizeJson, slugifyStableSegment... | ✅ |
+| src\services\compiled-synthesis.ts | 15 | — | ✅ |
 | src\services\delivery\obsidian-write.ts | 52 | — | ✅ |
 | src\services\delivery\sms.ts | 35 | — | ✅ |
 | src\services\delivery\telegram.ts | 31 | — | ✅ |

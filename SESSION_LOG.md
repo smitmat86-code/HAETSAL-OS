@@ -5,6 +5,33 @@
 
 ---
 
+## Session 11.2 - 2026-04-22
+
+**Spec:** Compilation Pipeline
+**Built:**
+- `src/services/compiled-synthesis-compile.ts`, `src/services/compiled-synthesis-source-truth.ts`, `src/services/compiled-synthesis-compiler-types.ts` - added the first internal HAETSAL compiler trigger plus typed canonical-source selection that reads canonical truth from Postgres/R2, scores relevant project inputs, and derives deterministic source fingerprints for regeneration-safe artifact versioning
+- `src/services/compiled-synthesis-assemble*.ts`, `src/services/compiled-synthesis-signal-*.ts` - added the first project-scoped assembly pipeline that parses explicit facts, relationships, recent changes, decisions, open questions, actions, and contradictions from canonical source bodies and converts them into typed dossier/context-pack/change-view payloads plus supporting compiled entities/facts/relationships/contradictions
+- `src/services/compiled-synthesis-render*.ts`, `src/services/compiled-synthesis.ts`, `src/services/compiled-synthesis-utils.ts` - added stable Markdown/JSON rendering for the initial compiled families and exported the new compiler through the existing compiled-synthesis surface without changing the production read path
+- `tests/11.2-compilation-pipeline.test.ts` - added dedicated end-to-end 11.2 coverage for dossier/context-pack/change-view compilation from canonical truth, Postgres persistence, R2 artifact output, source linkage, and regeneration-safe identity across repeated runs
+- `specs/active/11.2-compilation-pipeline.md` - completed the As-Built record for the delivered 11.2 pipeline
+**Decisions:**
+- **11.2 ships a deliberately small first compiler.** The initial end-to-end families are `project_dossier`, `project_context_pack`, and `what_changed`, rather than trying to compile every dossier or context-pack family at once.
+- **Canonical Postgres + R2 remain the source truth.** The compiler reads canonical records from the existing Postgres seam and hydrates canonical bodies from R2 through the existing encrypted-body path instead of introducing a parallel substrate.
+- **Regeneration-safe identity is stable while artifacts still version.** Compiled document stable keys remain conceptual identity, while artifact versions derive from a deterministic fingerprint of the selected canonical source set.
+- **The production memory path stays untouched.** This session adds a new internal compiler lane and reuses the 11.0 / 11.1 compiled-synthesis persistence/read seams instead of cutting over the Chief of Staff or broader read path early.
+- **No compatibility shim was required.** The additive compiler path fit the existing compiled-synthesis and canonical memory layers directly.
+**Verification:**
+- `npx vitest run tests/11.2-compilation-pipeline.test.ts` - passed
+- `npx vitest run tests/11.2-compilation-pipeline.test.ts tests/11.1-dossier-and-context-pack-schema-refinement.test.ts tests/11.0-haetsal-compiled-synthesis-foundation.test.ts tests/canonical-postgres-repository.test.ts tests/6.1-canonical-open-brain-foundation.test.ts tests/6.3-canonical-capture-pipeline.test.ts tests/9.4-brain-memory-external-client-rollout.test.ts tests/10.0-canonical-postgres-source-of-truth-cutover.test.ts tests/10.1-retire-canonical-d1-compat-mirror.test.ts` - passed
+- `npm test` - passed (`406 passed`, `1 skipped`)
+- `npm run postflight` - passed
+- `npm run manifest` - passed
+**Hindsight Pin:** unchanged
+**Blockers:** None for 11.2; the remaining work is Chief of Staff compiled read-path adoption and broader trigger/runtime wiring, not compiler correctness for the first delivered families
+**Next:** Use 11.3 to make the Chief of Staff read path prefer these compiled outputs at runtime, then add queue/Workflow-triggered compilation on top of the same internal compiler seam
+
+---
+
 ## Session 11.1 - 2026-04-22
 
 **Spec:** Dossier And Context Pack Schema Refinement

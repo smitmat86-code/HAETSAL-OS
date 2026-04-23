@@ -70,7 +70,7 @@ export async function retainContent(
     salienceSurpriseScore: salience.surpriseScore,
     hindsightAsync: options?.hindsightAsync ?? false,
     eagerProjectionDispatch: options?.eagerProjectionDispatch ?? false,
-  }, env, tenantId, ctx)
+  }, env, tenantId, ctx, tmk)
 
   console.log('RETAIN_CONTENT_CANONICAL_PIPELINE_DONE', {
     tenantId,

@@ -5,6 +5,33 @@
 
 ---
 
+## Session 11.4 - 2026-04-22
+
+**Spec:** Connector-Driven Compilation Triggers
+**Built:**
+- `src/services/compiled-synthesis-trigger*.ts`, `src/services/canonical-compiled-refresh-trigger.ts` - added a small 11.4 trigger layer that extracts compact canonical change events, plans explicit project-scoped compiled refresh targets, and dispatches those targets through the existing 11.2 project compiler seam
+- `src/services/canonical-capture-pipeline.ts`, `src/services/ingestion/retain.ts`, `src/services/canonical-memory.ts`, `src/types/canonical-memory.ts` - wired targeted compiled refresh into the canonical capture path only when TMK is available, preserved the existing production path, and surfaced `artifactId` in canonical capture results so change events carry fuller canonical linkage
+- `src/services/compiled-synthesis.ts` - exported the trigger helpers through the existing compiled-synthesis internal surface
+- `tests/11.4-connector-driven-compilation-triggers.test.ts` - added dedicated 11.4 coverage for change-event extraction, target planning, dispatch invocation, canonical-write-triggered dossier/context-pack/change-view refresh, stable identity across repeated changes, and no-TMK production-path preservation
+- `specs/active/11.4-connector-driven-compilation-triggers.md`, `MANIFEST.md` - completed the 11.4 As-Built record and regenerated the manifest
+**Decisions:**
+- **11.4 ships an explicit project-first planner, not a broad fuzzy invalidation engine.** The v1 heuristics only plan refreshes for project-scoped canonical changes and deliberately emit no targets rather than falling back to "recompile everything."
+- **Targeted dispatch reuses the existing project compiler.** One planned project dispatch refreshes the existing trio of compiled outputs together: `project_dossier`, `project_context_pack`, and project `what_changed`.
+- **TMK remains the structural gate for compiled refresh.** Because compiled source selection decrypts canonical bodies from R2, targeted compilation only runs when the write path already has TMK access; otherwise the canonical write still succeeds and refresh is skipped truthfully.
+- **The production memory path stayed additive.** Trigger wiring was placed after the existing canonical capture + projection + compatibility work, and uses `waitUntil()` when available instead of restructuring the write path around compilation.
+- **No compatibility shim was required.** The new trigger layer fit the existing canonical and compiled seams directly.
+**Verification:**
+- `npx vitest run tests/11.4-connector-driven-compilation-triggers.test.ts` - passed
+- `npx vitest run tests/11.4-connector-driven-compilation-triggers.test.ts tests/11.3-chief-of-staff-compiled-read-path.test.ts tests/11.2-compilation-pipeline.test.ts tests/11.1-dossier-and-context-pack-schema-refinement.test.ts tests/11.0-haetsal-compiled-synthesis-foundation.test.ts tests/canonical-postgres-repository.test.ts tests/6.1-canonical-open-brain-foundation.test.ts tests/6.3-canonical-capture-pipeline.test.ts tests/10.0-canonical-postgres-source-of-truth-cutover.test.ts tests/10.1-retire-canonical-d1-compat-mirror.test.ts tests/9.4-brain-memory-external-client-rollout.test.ts` - passed
+- `npm test` - passed (`416 passed`, `1 skipped`)
+- `npm run postflight` - passed
+- `npm run manifest` - passed
+**Hindsight Pin:** unchanged
+**Blockers:** None for 11.4; the main remaining work is broadening subject normalization and connector-specific canonical writes, not the target-planning seam itself
+**Next:** The first post-11.4 connector ingestion session should be a project-scoped connector lane, preferably Google Drive / Obsidian project-note ingestion through the canonical path, so real connector writes can reuse the new project subject hints and immediately refresh project dossiers/context packs/change views
+
+---
+
 ## Session 11.2 - 2026-04-22
 
 **Spec:** Compilation Pipeline

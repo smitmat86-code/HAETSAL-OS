@@ -64,7 +64,8 @@ Last updated: 2026-04-18 | Session: 7.1 (Hindsight Projection Adapter)
 | src\services\canonical-broker-trace-view.ts | 139 | CanonicalBrokerTraceRow, BROKER_TRACE_SELECT, viewFromRow... | ✅ |
 | src\services\canonical-broker-trace.ts | 63 | — | ✅ |
 | src\services\canonical-capture-compat.ts | 45 | — | ✅ |
-| src\services\canonical-capture-pipeline.ts | 98 | — | ✅ |
+| src\services\canonical-capture-pipeline.ts | 114 | — | ✅ |
+| src\services\canonical-compiled-refresh-trigger.ts | 54 | — | ✅ |
 | src\services\canonical-composed-graph-context.ts | 78 | — | ✅ |
 | src\services\canonical-graph-body-facts.ts | 101 | BodyRelationCandidate, buildCanonicalGraphEntityKey, buildCanonicalGraphEdgeKey... | ✅ |
 | src\services\canonical-graph-projection-design.ts | 141 | GRAPHITI_DEPLOYMENT_POSTURE, GRAPHITI_RECONCILIATION_RULES, buildCanonicalGraphProjectionPlan... | ✅ |
@@ -92,7 +93,7 @@ Last updated: 2026-04-18 | Session: 7.1 (Hindsight Projection Adapter)
 | src\services\canonical-memory-stats.ts | 39 | — | ✅ |
 | src\services\canonical-memory-status.ts | 134 | — | ✅ |
 | src\services\canonical-memory-types.ts | 52 | CanonicalChunkPlan, CanonicalArtifactPlan, NormalizedCanonicalCapture... | ✅ |
-| src\services\canonical-memory.ts | 159 | — | ⚠️ OVER LIMIT |
+| src\services\canonical-memory.ts | 160 | — | ⚠️ OVER LIMIT |
 | src\services\canonical-postgres-repository.ts | 1130 | CanonicalMemoryStore, InMemoryCanonicalMemoryStore, NeonCanonicalMemoryStore | ⚠️ OVER LIMIT |
 | src\services\canonical-postgres-schema.ts | 268 | CANONICAL_POSTGRES_SCHEMA, CanonicalProjectionKind, CanonicalProjectionStatus... | ⚠️ OVER LIMIT |
 | src\services\canonical-postgres.ts | 42 | installCanonicalMemoryStore, installCanonicalMemoryTestStore, getCanonicalMemoryStore | ✅ |
@@ -135,8 +136,13 @@ Last updated: 2026-04-18 | Session: 7.1 (Hindsight Projection Adapter)
 | src\services\compiled-synthesis-signal-types.ts | 50 | ParsedFactSignal, ParsedRelationshipSignal, ParsedChangeSignal... | ✅ |
 | src\services\compiled-synthesis-source-truth.ts | 128 | — | ✅ |
 | src\services\compiled-synthesis-taxonomy.ts | 25 | CompiledDocumentFamily, CompiledDocumentAudience, CompiledArtifactFormat... | ✅ |
+| src\services\compiled-synthesis-trigger-dispatch.ts | 65 | — | ✅ |
+| src\services\compiled-synthesis-trigger-extract.ts | 121 | buildCanonicalCompiledChangeEvent | ✅ |
+| src\services\compiled-synthesis-trigger-plan.ts | 68 | planTargetedCompiledRefresh | ✅ |
+| src\services\compiled-synthesis-trigger-types.ts | 84 | CanonicalCompiledChangeType, CanonicalCompiledChangedRecords, CanonicalCompiledSubjectHint... | ✅ |
+| src\services\compiled-synthesis-trigger.ts | 46 | — | ✅ |
 | src\services\compiled-synthesis-utils.ts | 27 | trimRequired, normalizeJson, slugifyStableSegment... | ✅ |
-| src\services\compiled-synthesis.ts | 15 | — | ✅ |
+| src\services\compiled-synthesis.ts | 22 | — | ✅ |
 | src\services\delivery\obsidian-write.ts | 52 | — | ✅ |
 | src\services\delivery\sms.ts | 35 | — | ✅ |
 | src\services\delivery\telegram.ts | 31 | — | ✅ |
@@ -196,7 +202,7 @@ Last updated: 2026-04-18 | Session: 7.1 (Hindsight Projection Adapter)
 | src\types\canonical-graph-query.ts | 67 | TraceRelationshipInput, EntityTimelineInput, CanonicalProjectionProvenance... | ✅ |
 | src\types\canonical-memory-broker.ts | 106 | CanonicalBrokerBranchStatus, CanonicalBrokerOverlap, CanonicalBrokerDetailStatus... | ✅ |
 | src\types\canonical-memory-query.ts | 103 | MemoryQueryMode, MemoryQueryModePreference, CanonicalMemoryRouteDecision... | ✅ |
-| src\types\canonical-memory.ts | 34 | CanonicalProjectionKind, CanonicalArtifactMode, CanonicalArtifactRef... | ✅ |
+| src\types\canonical-memory.ts | 35 | CanonicalProjectionKind, CanonicalArtifactMode, CanonicalArtifactRef... | ✅ |
 | src\types\chief-of-staff-context.ts | 81 | ContextBundleIntent, ContextConfidenceLevel, PrepareContextForAgentInput... | ✅ |
 | src\types\env.ts | 69 | Env | ✅ |
 | src\types\external-brain.ts | 89 | BrainSurfaceId, BrainSurfaceStatus, BrainRiskLevel... | ✅ |

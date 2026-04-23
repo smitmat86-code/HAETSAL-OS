@@ -135,6 +135,7 @@ export async function captureCanonicalMemory(
   return {
     captureId: capture.captureId,
     documentId: capture.documentId,
+    artifactId: capture.artifact?.id ?? null,
     chunkIds: chunks.map(chunk => chunk.id),
     operationId: capture.operationId,
     projectionJobIds: projectionJobs.map(job => job.id),

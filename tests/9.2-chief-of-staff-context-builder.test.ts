@@ -81,7 +81,7 @@ async function captureAndProject(args: { fixture: CanonicalPipelineCaptureInput;
 }
 
 function expectPublicBundleShape(bundle: AgentContextBundle): void {
-  expect(Object.keys(bundle).sort()).toEqual(['agent', 'confidence', 'evidence', 'followUpQuestions', 'gaps', 'highlights', 'intent', 'openLoops', 'recentChanges', 'relationships', 'risks', 'scope', 'sources', 'summary', 'target', 'timeline'].sort())
+  expect(Object.keys(bundle).sort()).toEqual(['agent', 'compiled', 'confidence', 'evidence', 'followUpQuestions', 'gaps', 'highlights', 'intent', 'openLoops', 'recentChanges', 'relationships', 'risks', 'scope', 'sources', 'summary', 'target', 'timeline'].sort())
   expect(JSON.stringify(bundle)).not.toContain('engineDocumentId')
   expect(JSON.stringify(bundle)).not.toContain('engineOperationId')
 }
@@ -106,6 +106,8 @@ describe('9.2 chief-of-staff context builder', () => {
     expect(bundle.openLoops[0]).toContain('checklist')
     expect(bundle.sources.some((source) => source.mode === 'semantic' && source.documentId === seeded.documentId)).toBe(true)
     expect(bundle.evidence.some((block) => block.mode === 'composed')).toBe(true)
+    expect(bundle.compiled?.mode).toBe('runtime_fallback')
+    expect(bundle.compiled?.fallbackUsed).toBe(true)
     expectPublicBundleShape(bundle)
   })
 
@@ -129,6 +131,8 @@ describe('9.2 chief-of-staff context builder', () => {
     expect(bundle.timeline.length).toBeGreaterThan(0)
     expect(bundle.evidence.some((block) => block.mode === 'graph' && block.items.length > 0)).toBe(true)
     expect(bundle.sources.some((source) => source.projectionRef || source.graphRef)).toBe(true)
+    expect(bundle.compiled?.mode).toBe('runtime_fallback')
+    expect(bundle.compiled?.fallbackUsed).toBe(true)
     expectPublicBundleShape(bundle)
   })
 
@@ -147,6 +151,8 @@ describe('9.2 chief-of-staff context builder', () => {
     expect(bundle.gaps.some((gap) => gap.mode === 'graph' && gap.kind === 'missing')).toBe(true)
     expect(bundle.followUpQuestions[0]).toContain('relationship history')
     expect(bundle.sources.some((source) => source.mode === 'raw')).toBe(true)
+    expect(bundle.compiled?.mode).toBe('runtime_fallback')
+    expect(bundle.compiled?.fallbackUsed).toBe(true)
     expectPublicBundleShape(bundle)
   })
 })

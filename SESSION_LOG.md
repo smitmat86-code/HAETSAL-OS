@@ -1493,3 +1493,37 @@
 **Next:** Checkpoint this restore-to-green tranche cleanly, then return to the canonical Postgres / D1 cleanup roadmap with Hindsight, Graphiti, broker, and tenant trace all green again.
 
 ---
+
+## Session 11.3 - 2026-04-22
+
+**Spec:** Chief of Staff Compiled Read Path
+**Built:**
+- `src/services/chief-of-staff-context.ts`, `src/services/chief-of-staff-context-runtime.ts`, `src/services/chief-of-staff-context-shared.ts` - split the prior runtime-only context builder into a small orchestration entrypoint plus preserved runtime assembly/shared helpers so the production path stayed intact while a compiled-first lane was added
+- `src/services/chief-of-staff-compiled-context.ts`, `src/services/chief-of-staff-compiled-context-support.ts`, `src/services/chief-of-staff-compiled-context-bundle.ts`, `src/services/chief-of-staff-compiled-context-provenance.ts`, `src/services/chief-of-staff-compiled-context-gaps.ts` - added the Chief-of-Staff compiled read path that prefers compiled context packs, augments with dossiers plus recent-change/decision views, keeps provenance/source counts truthful even when only stored document sources exist, and preserves read-error/debug gap metadata without breaking valid compiled-first bundles
+- `src/types/chief-of-staff-context.ts`, `src/tools/canonical-memory.ts` - extended the returned `prepare_context_for_agent` bundle with additive compiled metadata while preserving the existing MCP tool surface
+- `tests/9.2-chief-of-staff-context-builder.test.ts`, `tests/11.3-chief-of-staff-compiled-read-path.test.ts` - tightened runtime-fallback coverage and added dedicated 11.3 proof for compiled-first context packs, dossier augmentation, recent-change/decision use, preserved provenance/freshness metadata, and truthful fallback
+- `specs/active/11.3-chief-of-staff-compiled-read-path.md` - As-Built completed
+- `MANIFEST.md` - regenerated
+**Decisions:**
+- 11.3 stayed strictly inside the Chief-of-Staff-oriented context assembly path; no broader MCP redesign, no removal of existing memory tools, and no attempt to make Chief of Staff the monopoly reader/writer of the brain.
+- Compiled context packs are the primary gate for compiled-first behavior. If the primary pack is missing, stale, incomplete, or storage is unavailable, the system falls back truthfully to the existing runtime composition path instead of pretending compiled coverage exists.
+- Dossiers, `what_changed`, and `decision_log` stay additive augments. Fresh complete versions enrich the returned bundle; stale or partial versions are skipped and surfaced through preserved gap/asset metadata rather than failing the request.
+- The freshness policy is explicit and explainable: prefer source-linked agent-usable compiled context packs younger than 7 days, and only use compiled augments when they are likewise fresh and complete.
+- `asset.used` now means "actually contributed to the returned bundle", not merely "would have been eligible if the primary compiled path had stayed active".
+- Per-asset compiled read failures are isolated: a non-primary dossier/change read error no longer forces the whole request back to runtime when the primary compiled context pack is still valid.
+- No compatibility shim was required. The older production memory path was preserved as code, not emulated through a translation layer.
+**Verification:**
+- `npx vitest run tests/11.3-chief-of-staff-compiled-read-path.test.ts tests/11.2-compilation-pipeline.test.ts tests/11.1-dossier-and-context-pack-schema-refinement.test.ts tests/11.0-haetsal-compiled-synthesis-foundation.test.ts tests/9.2-chief-of-staff-context-builder.test.ts` - passed
+- `npm test` - passed (`412 passed`, `1 skipped`)
+- `npm run postflight` - passed
+- `npm run manifest` - passed
+ - `npm run postflight` - passed after manifest regeneration
+**Local Proof:**
+- Chief-of-Staff project context assembled directly from compiled outputs when a fresh compiled context pack existed, with dossier relationships/open questions plus compiled change/decision signals visible in the returned bundle.
+- Fallback to the older runtime path remained green when compiled outputs were absent.
+- Existing production memory flows stayed green through the full `npm test` run.
+- Architect verification for Ralph: approved after the metadata/fallback regression fixes landed.
+**Blockers:** None
+**Next:** Move 11.3 to completed when the branch is finalized, then broaden compiled-read adoption deliberately: improve subject-key resolution beyond the first slug-based path and add queue/Workflow-driven freshness regeneration so compiled packs stay ready before more agents and product surfaces adopt them.
+
+---

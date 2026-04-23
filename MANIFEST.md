@@ -100,7 +100,14 @@ Last updated: 2026-04-18 | Session: 7.1 (Hindsight Projection Adapter)
 | src\services\canonical-semantic-linkback.ts | 108 | CanonicalSemanticLinkback, extractSemanticLookup | ✅ |
 | src\services\canonical-semantic-recall.ts | 172 | — | ⚠️ OVER LIMIT |
 | src\services\canonical-source-attribution.ts | 66 | buildCanonicalSourceAttribution, applyCanonicalRoute | ✅ |
-| src\services\chief-of-staff-context.ts | 112 | — | ✅ |
+| src\services\chief-of-staff-compiled-context-bundle.ts | 127 | buildCompiledChiefOfStaffBundle | ✅ |
+| src\services\chief-of-staff-compiled-context-gaps.ts | 33 | addSkippedAssetGap, addReadErrorGap | ✅ |
+| src\services\chief-of-staff-compiled-context-provenance.ts | 43 | linkedSourceRefs, linkedSourceCount, compiledEvidenceBlock | ✅ |
+| src\services\chief-of-staff-compiled-context-support.ts | 138 | Freshness, Completeness, CompiledAssetKind... | ✅ |
+| src\services\chief-of-staff-compiled-context.ts | 150 | — | ✅ |
+| src\services\chief-of-staff-context-runtime.ts | 75 | — | ✅ |
+| src\services\chief-of-staff-context-shared.ts | 67 | QueryPlan, AssembledContextCore, POLICY... | ✅ |
+| src\services\chief-of-staff-context.ts | 20 | — | ✅ |
 | src\services\compiled-synthesis-artifacts.ts | 72 | CompiledArtifactPayloadInput, PersistedCompiledArtifactPayload, buildCompiledArtifactR2Key | ✅ |
 | src\services\compiled-synthesis-assemble-support.ts | 139 | buildFactInputs, buildRelationshipInputs, buildContradictionInputs | ✅ |
 | src\services\compiled-synthesis-assemble.ts | 131 | assembleProjectCompiledSynthesis | ✅ |
@@ -190,7 +197,7 @@ Last updated: 2026-04-18 | Session: 7.1 (Hindsight Projection Adapter)
 | src\types\canonical-memory-broker.ts | 106 | CanonicalBrokerBranchStatus, CanonicalBrokerOverlap, CanonicalBrokerDetailStatus... | ✅ |
 | src\types\canonical-memory-query.ts | 103 | MemoryQueryMode, MemoryQueryModePreference, CanonicalMemoryRouteDecision... | ✅ |
 | src\types\canonical-memory.ts | 34 | CanonicalProjectionKind, CanonicalArtifactMode, CanonicalArtifactRef... | ✅ |
-| src\types\chief-of-staff-context.ts | 60 | ContextBundleIntent, ContextConfidenceLevel, PrepareContextForAgentInput... | ✅ |
+| src\types\chief-of-staff-context.ts | 81 | ContextBundleIntent, ContextConfidenceLevel, PrepareContextForAgentInput... | ✅ |
 | src\types\env.ts | 69 | Env | ✅ |
 | src\types\external-brain.ts | 89 | BrainSurfaceId, BrainSurfaceStatus, BrainRiskLevel... | ✅ |
 | src\types\external-client-memory.ts | 73 | ExternalClientCaptureMode, BrainMemorySurfaceProfile, ExternalClientCaptureInput... | ✅ |

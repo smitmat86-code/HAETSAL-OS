@@ -61,6 +61,15 @@ export default defineConfig(async () => {
       }),
     ],
     test: {
+      include: ['tests/**/*.test.ts', '**/*.test.ts'],
+      exclude: [
+        '**/node_modules/**',
+        '**/.git/**',
+        '**/.codegraph/**',
+        'gbrain/**',
+        'OB1/**',
+        'Second-Brain/**',
+      ],
       setupFiles: ['./tests/apply-migrations.ts'],
       fileParallelism: false,
       maxWorkers: 1,

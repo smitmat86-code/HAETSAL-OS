@@ -13,6 +13,7 @@ import { actions } from '../src/workers/mcpagent/routes/actions'
 import { approval } from '../src/workers/mcpagent/routes/approval'
 import { settings } from '../src/workers/mcpagent/routes/settings'
 import { audit } from '../src/workers/mcpagent/routes/audit'
+import { canary } from '../src/workers/mcpagent/routes/canary'
 import type { Env } from '../src/types/env'
 
 type Variables = {
@@ -37,6 +38,7 @@ app.use('*', async (c, next) => {
 
 // SMS ingest route — Law 1 exception: NOT behind CF Access
 app.route('/ingest', ingest)
+app.route('/_canary', canary)
 
 app.use('*', authMiddleware())
 app.use('*', auditMiddleware())

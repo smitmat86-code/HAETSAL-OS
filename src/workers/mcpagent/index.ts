@@ -11,6 +11,7 @@ import { actions } from './routes/actions'
 import { approval } from './routes/approval'
 import { settings } from './routes/settings'
 import { audit } from './routes/audit'
+import { canary } from './routes/canary'
 import type { Env } from '../../types/env'
 import { getMcpAgentObjectName } from './do/identity'
 import { registerPublicWebhooks } from './public-webhooks'
@@ -43,6 +44,7 @@ app.use('*', async (c, next) => {
 // SMS ingest route — Law 1 exception: NOT behind CF Access
 app.route('/ingest', ingest)
 registerPublicWebhooks(app)
+app.route('/_canary', canary)
 
 // Auth on all remaining routes — Law 1: no route bypasses JWT validation
 app.use('*', authMiddleware())

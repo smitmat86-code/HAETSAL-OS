@@ -11,6 +11,7 @@ import type {
   WorkingIdentityArtifactId,
 } from '../types/external-brain'
 import { BRAIN_MEMORY_TOOL_NAMES } from '../tools/brain-memory-surface'
+import { GOOGLE_SOURCE_READ_PROFILE } from './google-source-read-contract'
 
 const sharedByocDelivery = ['file', 'mcp-record'] as const
 
@@ -27,15 +28,15 @@ export const EXTERNAL_BRAIN_SURFACES: BrainSurfaceDefinition[] = [
   },
   {
     id: 'brain-sources-read',
-    status: 'planned',
+    status: 'live',
     riskLevel: 'medium',
     purpose: 'Read connected sources selectively and capture into the one canonical brain.',
     clients: ['Google ingestion workers', 'future trusted source connectors', 'later trusted first-party agents'],
     operations: [
-      { id: 'gmail.read_thread', actionClass: 'source-read', live: false, description: 'Read Gmail threads without mailbox mirroring.' },
-      { id: 'calendar.read_event', actionClass: 'source-read', live: false, description: 'Read calendar events while the source remains authoritative.' },
-      { id: 'drive.read_document', actionClass: 'source-read', live: false, description: 'Read explicitly included Drive or Docs content only.' },
-      { id: 'source.capture_selective', actionClass: 'source-read', live: false, description: 'Selectively capture source-derived memory into the canonical pipeline.' },
+      { id: 'gmail.read_thread', actionClass: 'source-read', live: GOOGLE_SOURCE_READ_PROFILE.canReadGmail, description: 'Read Gmail threads without mailbox mirroring.' },
+      { id: 'calendar.read_event', actionClass: 'source-read', live: GOOGLE_SOURCE_READ_PROFILE.canReadCalendar, description: 'Read calendar events while the source remains authoritative.' },
+      { id: 'drive.read_document', actionClass: 'source-read', live: GOOGLE_SOURCE_READ_PROFILE.canReadDrive, description: 'Read explicitly included Drive or Docs content only.' },
+      { id: 'source.capture_selective', actionClass: 'source-read', live: true, description: 'Selectively capture source-derived memory into the canonical pipeline.' },
     ],
   },
   {

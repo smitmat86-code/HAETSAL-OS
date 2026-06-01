@@ -5,6 +5,251 @@
 
 ---
 
+## Session 11.4 - 2026-04-22
+
+**Spec:** Connector-Driven Compilation Triggers
+**Built:**
+- `src/services/compiled-synthesis-trigger*.ts`, `src/services/canonical-compiled-refresh-trigger.ts` - added a small 11.4 trigger layer that extracts compact canonical change events, plans explicit project-scoped compiled refresh targets, and dispatches those targets through the existing 11.2 project compiler seam
+- `src/services/canonical-capture-pipeline.ts`, `src/services/ingestion/retain.ts`, `src/services/canonical-memory.ts`, `src/types/canonical-memory.ts` - wired targeted compiled refresh into the canonical capture path only when TMK is available, preserved the existing production path, and surfaced `artifactId` in canonical capture results so change events carry fuller canonical linkage
+- `src/services/compiled-synthesis.ts` - exported the trigger helpers through the existing compiled-synthesis internal surface
+- `tests/11.4-connector-driven-compilation-triggers.test.ts` - added dedicated 11.4 coverage for change-event extraction, target planning, dispatch invocation, canonical-write-triggered dossier/context-pack/change-view refresh, stable identity across repeated changes, and no-TMK production-path preservation
+- `specs/active/11.4-connector-driven-compilation-triggers.md`, `MANIFEST.md` - completed the 11.4 As-Built record and regenerated the manifest
+**Decisions:**
+- **11.4 ships an explicit project-first planner, not a broad fuzzy invalidation engine.** The v1 heuristics only plan refreshes for project-scoped canonical changes and deliberately emit no targets rather than falling back to "recompile everything."
+- **Targeted dispatch reuses the existing project compiler.** One planned project dispatch refreshes the existing trio of compiled outputs together: `project_dossier`, `project_context_pack`, and project `what_changed`.
+- **TMK remains the structural gate for compiled refresh.** Because compiled source selection decrypts canonical bodies from R2, targeted compilation only runs when the write path already has TMK access; otherwise the canonical write still succeeds and refresh is skipped truthfully.
+- **The production memory path stayed additive.** Trigger wiring was placed after the existing canonical capture + projection + compatibility work, and uses `waitUntil()` when available instead of restructuring the write path around compilation.
+- **No compatibility shim was required.** The new trigger layer fit the existing canonical and compiled seams directly.
+**Verification:**
+- `npx vitest run tests/11.4-connector-driven-compilation-triggers.test.ts` - passed
+- `npx vitest run tests/11.4-connector-driven-compilation-triggers.test.ts tests/11.3-chief-of-staff-compiled-read-path.test.ts tests/11.2-compilation-pipeline.test.ts tests/11.1-dossier-and-context-pack-schema-refinement.test.ts tests/11.0-haetsal-compiled-synthesis-foundation.test.ts tests/canonical-postgres-repository.test.ts tests/6.1-canonical-open-brain-foundation.test.ts tests/6.3-canonical-capture-pipeline.test.ts tests/10.0-canonical-postgres-source-of-truth-cutover.test.ts tests/10.1-retire-canonical-d1-compat-mirror.test.ts tests/9.4-brain-memory-external-client-rollout.test.ts` - passed
+- `npm test` - passed (`416 passed`, `1 skipped`)
+- `npm run postflight` - passed
+- `npm run manifest` - passed
+**Hindsight Pin:** unchanged
+**Blockers:** None for 11.4; the main remaining work is broadening subject normalization and connector-specific canonical writes, not the target-planning seam itself
+**Next:** The first post-11.4 connector ingestion session should be a project-scoped connector lane, preferably Google Drive / Obsidian project-note ingestion through the canonical path, so real connector writes can reuse the new project subject hints and immediately refresh project dossiers/context packs/change views
+
+---
+
+## Session 11.2 - 2026-04-22
+
+**Spec:** Compilation Pipeline
+**Built:**
+- `src/services/compiled-synthesis-compile.ts`, `src/services/compiled-synthesis-source-truth.ts`, `src/services/compiled-synthesis-compiler-types.ts` - added the first internal HAETSAL compiler trigger plus typed canonical-source selection that reads canonical truth from Postgres/R2, scores relevant project inputs, and derives deterministic source fingerprints for regeneration-safe artifact versioning
+- `src/services/compiled-synthesis-assemble*.ts`, `src/services/compiled-synthesis-signal-*.ts` - added the first project-scoped assembly pipeline that parses explicit facts, relationships, recent changes, decisions, open questions, actions, and contradictions from canonical source bodies and converts them into typed dossier/context-pack/change-view payloads plus supporting compiled entities/facts/relationships/contradictions
+- `src/services/compiled-synthesis-render*.ts`, `src/services/compiled-synthesis.ts`, `src/services/compiled-synthesis-utils.ts` - added stable Markdown/JSON rendering for the initial compiled families and exported the new compiler through the existing compiled-synthesis surface without changing the production read path
+- `tests/11.2-compilation-pipeline.test.ts` - added dedicated end-to-end 11.2 coverage for dossier/context-pack/change-view compilation from canonical truth, Postgres persistence, R2 artifact output, source linkage, and regeneration-safe identity across repeated runs
+- `specs/active/11.2-compilation-pipeline.md` - completed the As-Built record for the delivered 11.2 pipeline
+**Decisions:**
+- **11.2 ships a deliberately small first compiler.** The initial end-to-end families are `project_dossier`, `project_context_pack`, and `what_changed`, rather than trying to compile every dossier or context-pack family at once.
+- **Canonical Postgres + R2 remain the source truth.** The compiler reads canonical records from the existing Postgres seam and hydrates canonical bodies from R2 through the existing encrypted-body path instead of introducing a parallel substrate.
+- **Regeneration-safe identity is stable while artifacts still version.** Compiled document stable keys remain conceptual identity, while artifact versions derive from a deterministic fingerprint of the selected canonical source set.
+- **The production memory path stays untouched.** This session adds a new internal compiler lane and reuses the 11.0 / 11.1 compiled-synthesis persistence/read seams instead of cutting over the Chief of Staff or broader read path early.
+- **No compatibility shim was required.** The additive compiler path fit the existing compiled-synthesis and canonical memory layers directly.
+**Verification:**
+- `npx vitest run tests/11.2-compilation-pipeline.test.ts` - passed
+- `npx vitest run tests/11.2-compilation-pipeline.test.ts tests/11.1-dossier-and-context-pack-schema-refinement.test.ts tests/11.0-haetsal-compiled-synthesis-foundation.test.ts tests/canonical-postgres-repository.test.ts tests/6.1-canonical-open-brain-foundation.test.ts tests/6.3-canonical-capture-pipeline.test.ts tests/9.4-brain-memory-external-client-rollout.test.ts tests/10.0-canonical-postgres-source-of-truth-cutover.test.ts tests/10.1-retire-canonical-d1-compat-mirror.test.ts` - passed
+- `npm test` - passed (`406 passed`, `1 skipped`)
+- `npm run postflight` - passed
+- `npm run manifest` - passed
+**Hindsight Pin:** unchanged
+**Blockers:** None for 11.2; the remaining work is Chief of Staff compiled read-path adoption and broader trigger/runtime wiring, not compiler correctness for the first delivered families
+**Next:** Use 11.3 to make the Chief of Staff read path prefer these compiled outputs at runtime, then add queue/Workflow-triggered compilation on top of the same internal compiler seam
+
+---
+
+## Session 11.1 - 2026-04-22
+
+**Spec:** Dossier And Context Pack Schema Refinement
+**Built:**
+- `sql/postgres/2003_compiled_synthesis_schema_refinement.sql` - added the forward compiled-synthesis refinement migration for dossier rows, richer contradiction columns, explicit context-pack sections, and decision/change compiled views
+- `src/services/compiled-synthesis-*.ts` - refined the compiled-synthesis contract into explicit dossier/context-pack/change-view families, richer contradiction storage, additive audience semantics, typed section contracts, and family-specific read helpers while keeping `compiled_documents` as the stable identity spine
+- `tests/11.1-dossier-and-context-pack-schema-refinement.test.ts` - added dedicated 11.1 coverage for dossier section semantics, context-pack agent sections, contradiction object storage/retrieval, decision/change views, regeneration-safe identity, and canonical/R2 linkage
+- `specs/active/11.1-dossier-and-context-pack-schema-refinement.md`, `MANIFEST.md` - completed the 11.1 As-Built record and regenerated the manifest against the final split file layout
+**Decisions:**
+- **Dossiers are now first-class compiled outputs.** We introduced `family = 'dossier'` plus `compiled_dossiers` with explicit subject identity and named sections instead of leaving dossier semantics implicit in generic compiled documents.
+- **Context packs remain compact but are no longer structurally vague.** `compiled_context_packs` now stores `situation`, `critical_facts`, `recent_changes`, `decisions`, `contradictions`, `recommended_actions`, and `source_refs` explicitly for agent reuse.
+- **Contradictions are preserved as tension, not flattened away.** The compiled contradiction model now captures conflict kind/scope, severity, freshness, structured left/right claims, and optional resolution guidance while preserving stable identity and status.
+- **Decision and change views are explicit compiled families.** We added `family = 'decision_log' | 'what_changed'` plus `compiled_change_views` so future compiler jobs can target real decision/change objects instead of generic summaries.
+- **Audience semantics stay additive.** Existing `human|agent|hybrid` callers still work, while refined compiled outputs can now mark `human_readable`, `agent_reusable`, `chief_of_staff`, or `specialist_agent`.
+- **No compatibility shim was required.** The existing production memory path was left untouched; the only compatibility behavior added was safe defaulting for newly added contradiction metadata so 11.0-style compiled writes still succeed.
+**Verification:**
+- `npx vitest run tests/11.1-dossier-and-context-pack-schema-refinement.test.ts` - passed
+- `npx vitest run tests/11.1-dossier-and-context-pack-schema-refinement.test.ts tests/11.0-haetsal-compiled-synthesis-foundation.test.ts tests/canonical-postgres-repository.test.ts tests/6.1-canonical-open-brain-foundation.test.ts tests/6.3-canonical-capture-pipeline.test.ts tests/9.4-brain-memory-external-client-rollout.test.ts tests/10.0-canonical-postgres-source-of-truth-cutover.test.ts tests/10.1-retire-canonical-d1-compat-mirror.test.ts` - passed
+- `npm test` - passed (`404 passed`, `1 skipped`)
+- `npm run postflight` - passed
+- `npm run manifest` - passed
+**Hindsight Pin:** unchanged
+**Blockers:** None for 11.1; the remaining work is compiler/population and Chief of Staff read-path adoption, not schema/readback stability
+**Next:** Use 11.2 to generate these refined compiled objects automatically, then 11.3 to decide how the Chief of Staff and other read paths prefer dossiers/context packs/change views at runtime
+
+---
+
+## Session 11.0 - 2026-04-22
+
+**Spec:** HAETSAL Compiled Synthesis Foundation
+**Built:**
+- `sql/postgres/2002_compiled_synthesis_foundation.sql` - added first-class compiled synthesis tables for compiled documents, canonical provenance links, generated artifact refs, entities, facts, relationships, contradictions, and context packs in the existing `haetsal_canonical` schema
+- `src/services/compiled-synthesis-*.ts` - added the additive compiled synthesis repository, Neon/test store installation seam, deterministic R2 artifact persistence, and small persist/read service surface for future compiler jobs
+- `tests/11.0-haetsal-compiled-synthesis-foundation.test.ts`, `tests/apply-migrations.ts` - added dedicated 11.0 coverage for compiled record creation, provenance linkage, R2 artifact linkage, context-pack storage, and regeneration-safe identities; wired the compiled test store into the shared test bootstrap
+- `scripts/postflight-check.ts` - accepted the compiled repository file under the same reviewed over-limit exception pattern already used for the canonical Postgres repository
+- `specs/active/11.0-haetsal-compiled-synthesis-foundation.md`, `MANIFEST.md` - completed As-Built and regenerated manifest
+**Decisions:**
+- Session 11.0 stayed additive and did not reroute the existing production memory path.
+- Compiled outputs reuse the existing Neon/Postgres + R2 substrate instead of introducing any new foundational Hindsight or Graphiti dependency.
+- Canonical provenance is explicit via `compiled_document_sources`; generated compiled artifacts are explicit via `compiled_document_artifacts`.
+- Regeneration safety is handled through tenant-scoped stable-key upserts for compiled documents and family records, while artifacts remain versioned in R2.
+- No compatibility shim was required for current local read/write memory flows.
+**Verification:**
+- `npx vitest run tests/11.0-haetsal-compiled-synthesis-foundation.test.ts` - passed
+- `npx vitest run tests/11.0-haetsal-compiled-synthesis-foundation.test.ts tests/canonical-postgres-repository.test.ts tests/6.1-canonical-open-brain-foundation.test.ts tests/6.3-canonical-capture-pipeline.test.ts tests/9.4-brain-memory-external-client-rollout.test.ts` - passed
+- `npm test` - passed (`400 passed`, `1 skipped`)
+- `npm run postflight` - passed
+- `npm run manifest` - passed
+**Hindsight Pin:** unchanged
+**Blockers:** None for 11.0; the remaining work is future-session compiler/read-path wiring, not foundation stability
+**Next:** Use 11.1 to refine dossier/context-pack semantics and read models, then 11.2 to build the actual compilation pipeline/jobs on top of this foundation.
+
+---
+
+## Session 10.1 - 2026-04-21
+
+**Spec:** Phase 10.1 - Retire Canonical D1 Compatibility Mirror
+**Built:**
+- `src/services/canonical-memory.ts`, `src/services/canonical-projection-dispatch.ts`, `src/services/canonical-hindsight-projection-state.ts`, `src/services/canonical-graphiti-reconcile.ts` - removed the temporary canonical D1 metadata mirror writes so canonical capture and projection reconciliation now persist canonical truth in Postgres only while leaving D1 audit/trace roles intact
+- `src/services/canonical-d1-compat.ts` - removed the temporary D1 compatibility helper entirely because no canonical runtime path still needs mirrored metadata rows after the 10.0 cutover
+- `tests/10.1-retire-canonical-d1-compat-mirror.test.ts` plus updated 1.2 / 6.1 / 6.2 / 6.3 / 7.1 / 7.2 / 8.2 / 9.1 / 9.2 / 9.4 / 9.6 / 9.7 / 9.8 / 9.9 / 10.0 suites - regression coverage now proves canonical capture, Hindsight reconciliation, Graphiti reconciliation, and public read/status/query behavior all work from Postgres-only canonical truth while D1 remains limited to broker traces, memory audit, hindsight operations, and tenant/control-plane/runtime-local state
+- `specs/active/10.1-retire-canonical-d1-compat-mirror.md` - completed the As-Built record with the mirror-retirement decision, remaining D1 roles, verification results, and live-proof outcome
+**Decisions:**
+- **The D1 canonical metadata mirror is fully retired.** Canonical memory families now have one authoritative runtime home: Postgres + R2.
+- **D1 remains intentionally narrow.** We kept D1 only for broker traces, memory audit, hindsight operations, and tenant/control-plane/runtime-local state instead of preserving any just-in-case canonical mirror rows.
+- **Public MCP/tool contracts stay stable while storage internals simplify.** Read/status/query/capture surfaces still behave the same externally, but they now resolve canonical truth from Postgres only.
+**Verification:**
+- `npx vitest run tests/10.1-retire-canonical-d1-compat-mirror.test.ts` - passed
+- `npx vitest run tests/7.1-hindsight-projection-adapter.test.ts tests/8.2-graphiti-ingestion-projection.test.ts tests/9.8-broker-primary-shadow-retrieval.test.ts tests/9.9-tenant-memory-trace.test.ts tests/10.0-canonical-postgres-source-of-truth-cutover.test.ts` - passed
+- `npm test` - passed (`387 passed`, `1 skipped`)
+- `npm run postflight` - passed
+- `npm run manifest` - passed
+- Live protected MCP proof on April 21, 2026:
+  - Graphiti remained green: fresh relationship and timeline queries returned the new live facts
+  - broker + tenant trace remained green: `prepare_context_for_agent`, `get_recent_memory_traces`, and `get_memory_trace` all succeeded live
+  - Hindsight did **not** remain green for fresh semantic recall: fresh captures reconciled to completed projection state, but live Hindsight debug still showed `memory_unit_count = 0`, so meaningful fresh semantic recall did not surface the new facts
+**Current Health:**
+- **Canonical storage boundary:** green locally; canonical D1 metadata mirroring is removed and Postgres-only truth passed the requested regression suites
+- **Graphiti:** green live
+- **Broker + tenant trace:** green live
+- **Hindsight:** not green live for fresh semantic materialization despite completed projection state
+**Hindsight Pin:** unchanged from the deployed environment under test
+**Fixture Data:** Live proof facts used `Harbor Ledger Echo depends on Quartz Bridge Echo for billing sync.` and `Northfield Ledger Echo uses Quartz Bridge Echo for billing sync, and if billing sync breaks, inspect Quartz Bridge Echo first.`
+**Blockers:** Live Hindsight semantic materialization remains unhealthy; fresh captures complete reconciliation but still show zero materialized memory units
+**Next:** Remove the now-dead canonical D1 schema/migration baggage for the retired mirror, then investigate the live Hindsight semantic materialization gap separately
+
+---
+
+## Session OPS.9 - 2026-04-20
+
+**Spec:** Operational - Hindsight semantic acceptance hardening
+**Built:**
+- `src/services/canonical-memory-status.ts`, `src/services/canonical-semantic-linkback.ts`, `src/services/canonical-semantic-recall.ts` - read-side Hindsight `semanticReady` now treats `availability_source = 'document'` as the async-ready signal and stops overstating readiness for `operation_completed` async completions; synchronous retains with no availability marker remain ready
+- `tests/support/hindsight-test-env.ts` - Hindsight test stub now supports configurable `memory_unit_count` so completed-without-units cases can be simulated explicitly
+- `tests/7.2-semantic-recall-through-canonical-interface.test.ts`, `tests/9.4-brain-memory-external-client-rollout.test.ts` - semantic acceptance now uses meaningful natural-language facts, and regression coverage explicitly checks that completed async operations without materialized memory units stay `partial` / not-ready
+- `LESSONS.md`, `CONVENTIONS.md` - recorded the acceptance-method lesson and the availability-source semantic-readiness rule
+**Decisions:**
+- **Opaque token probes are plumbing checks, not semantic-quality checks.** We now treat semantic acceptance as a natural-language fact extraction and recall problem, because Hindsight can complete token-heavy retains without yielding useful memory units.
+- **Async Hindsight readiness is gated by document availability, not just operation completion.** `availability_source = 'operation_completed'` no longer counts as semantically ready on the canonical read side.
+- **Synchronous retains keep their old behavior.** If there is no availability marker at all, completed sync retains still count as ready rather than being downgraded by the new async-specific hardening.
+**Verification:**
+- `npx vitest run tests/7.2-semantic-recall-through-canonical-interface.test.ts` - passed
+- `npx vitest run tests/9.4-brain-memory-external-client-rollout.test.ts` - passed
+- `npm test` - passed (`363 passed`, `1 skipped`)
+- `npm run postflight` - passed
+- `npm run manifest` - passed
+- Live protected Claude/MCP acceptance on deploy `eef19ac2-d411-4b59-b8da-e902b9e609dd` - passed for meaningful facts:
+  - Hindsight fact `Alder Port depends on Nimbus Rail for freight movement.` completed with `memory_unit_count = 1`, `semanticReady = true`, and semantic recall returned the fresh capture
+  - Graphiti facts `Marin Vale leads Alder Port.` and `Alder Port partnered with Solace Yard on April 20, 2026.` produced live relationship/timeline results
+  - `prepare_context_for_agent` surfaced graph + semantic context together for Alder Port / Marin Vale / Nimbus Rail / Solace Yard
+**Current Health:**
+- **Hindsight:** green for meaningful natural-language captures and paraphrase-style semantic queries
+- **Graphiti:** green for live relationship traces and timelines
+- **Combined open-brain context:** green; `prepare_context_for_agent` is now benefiting from both semantic and graph-backed facts in the same fresh acceptance run
+- **Known caveat:** opaque token-only semantic smokes remain a weak probe and should not be used as the primary acceptance gate
+**Hindsight Pin:** `ghcr.io/vectorize-io/hindsight-api:0.5.3`
+**Fixture Data:** Meaningful semantic acceptance fact: `Alder Port depends on Nimbus Rail for freight movement.`
+**Blockers:** Opaque token-style semantic smoke strings remain weak probes by design; use meaningful facts for semantic acceptance
+**Next:** If desired, add a dedicated acceptance script/checklist that codifies the meaningful-fact live sweep used here
+
+---
+
+## Session OPS.8 - 2026-04-19
+
+**Spec:** Operational - Cloudflare Local Explorer implementation/deploy playbook
+**Built:**
+- `scripts/cloudflare-local-explorer.ts` - helper CLI to classify repo bindings by Local Explorer support and fetch the local Explorer OpenAPI spec from a running dev Worker
+- `package.json` - added `cf:explorer:plan` and `cf:explorer:spec` npm scripts for the new helper
+- `docs/cloudflare-local-explorer.md`, `README.md` - documented the HAETSAL-specific Local Explorer workflow, pre-deploy checklist, and the split between Explorer-covered resources and Cloudflare surfaces that still require Wrangler or remote checks
+- `.gitignore` - ignored the generated `tmp/local-explorer-openapi.json` artifact so the OpenAPI snapshot can be captured locally without polluting git status
+**Decisions:**
+- **Local Explorer is a pre-deploy confidence layer, not the deployment mechanism.** We keep Wrangler and remote smoke checks as the source of truth for queues, Vectorize, AI, Browser Rendering, and container-runtime behavior.
+- **The first helper stays config-driven and small.** Parsing `wrangler.toml` gives us immediate value without depending on unstable preview CLI behavior or hard-coding Local Explorer endpoint shapes beyond the published OpenAPI root.
+- **Agent access should default to local Cloudflare state, not production.** Capturing `/cdn-cgi/explorer/api` gives future coding agents a safer discovery surface during implementation.
+**Verification:**
+- `npm run cf:explorer:plan` - passed
+**Hindsight Pin:** unchanged (`ghcr.io/vectorize-io/hindsight-api:0.5.2`)
+**Fixture Data:** N/A - docs and local tooling only
+**Blockers:** None
+**Next:** Use `npm run cf:explorer:spec` during a live `wrangler dev` session to snapshot the Local Explorer OpenAPI surface whenever agent-side local binding automation is needed
+
+---
+
+## Session OPS.7 - 2026-04-19
+
+**Spec:** Operational - live `memory_status` D1 migration repair
+**Built:**
+- Live production D1 `brain-us` - applied missing `1014_hindsight_projection_adapter.sql` so `canonical_projection_results` now includes `engine_bank_id`, `engine_document_id`, and `engine_operation_id`, plus the operation lookup index
+- `d1_migrations` on live `brain-us` - recorded `1014_hindsight_projection_adapter.sql` as applied after confirming production had stopped at `1013_canonical_open_brain_foundation.sql`
+- No repo source changes - investigation confirmed `src/services/canonical-memory-status.ts`, `migrations/1014_hindsight_projection_adapter.sql`, and the existing 6.2 / 7.1 / 7.2 tests were already aligned
+**Decisions:**
+- **This was a production migration miss, not a code bug.** `memory_status` was truthfully reading adapter columns that the live database did not yet have.
+- **The smallest correct fix was operational.** We repaired live D1 instead of weakening the canonical status contract with fallback code that would hide a broken rollout state.
+- **Existing regression coverage was already adequate.** The repo already had tests asserting the adapter-backed fields, so no repo test change was needed for this incident.
+**Verification:**
+- `npx vitest run tests/6.2-canonical-mcp-memory-surface.test.ts` - passed
+- `npx vitest run tests/7.2-semantic-recall-through-canonical-interface.test.ts` - passed
+- `npm test` - passed (`344 passed`, `1 skipped`)
+- `npm run postflight` - passed
+- `npm run manifest` - passed
+- Live D1 verification - confirmed `canonical_projection_results` now exposes the adapter columns and the previously failing `r.engine_document_id` query shape executes cleanly
+**Hindsight Pin:** unchanged (`ghcr.io/vectorize-io/hindsight-api:0.5.2`)
+**Fixture Data:** N/A - operational production schema repair only
+**Blockers:** None
+**Next:** Keep deploy discipline tight around D1 migrations; this incident came from code and schema shipping out of sync, not from a faulty canonical-memory implementation
+
+---
+
+## Session OPS.6 - 2026-04-19
+
+**Spec:** Operational - HAETSAL-first public MCP identity cleanup
+**Built:**
+- `wrangler.toml`, `src/services/bootstrap/hindsight-config.ts`, `src/types/env.ts` - public Worker domain defaults and examples now point to `haetsalos.specialdarksystems.com` instead of the legacy `the-brain` `workers.dev` hostname
+- `src/workers/mcpagent/do/McpAgent.ts` - MCP server identity now advertises `haetsal` while leaving the underlying Worker script name unchanged
+- `README.md`, `ARCHITECTURE.md` - repo truth docs now describe HAETSAL as the public MCP face and explicitly demote `the-brain` to an internal/runtime legacy name
+- `tests/2.4a-hindsight-config.test.ts`, `tests/support/hindsight-test-env.ts` - domain-facing test fixtures now use the HAETSAL endpoint
+**Decisions:**
+- **The Worker script name stays `the-brain` for now.** This pass only cleans up the public MCP/domain story and avoids a broader Cloudflare runtime rename.
+- **`haetsalos.specialdarksystems.com/mcp` is now the primary public endpoint.** The legacy `the-brain.ct-trading-bot1.workers.dev` hostname is treated as compatibility-only.
+- **The MCP server label is part of the public face.** Renaming the SDK server from `the-brain` to `haetsal` keeps client-visible identity aligned with the new domain story.
+**Verification:**
+- `npm test` - passed (`344 passed`, `1 skipped`)
+- `npm run postflight` - passed
+- `npm run manifest` - passed
+**Hindsight Pin:** unchanged (`ghcr.io/vectorize-io/hindsight-api:0.5.2`)
+**Fixture Data:** Reused the existing Hindsight webhook/config harnesses with the HAETSAL custom-domain endpoint substituted for the public-facing examples
+**Blockers:** None
+**Next:** If and when runtime cleanup is desired, do a separate Worker/script rename pass; this change intentionally stops at public identity/domain cleanup
+
+---
+
 ## Session 9.1 - 2026-04-19
 
 **Spec:** Phase 9.1 - Multi-Mode Memory Router
@@ -108,6 +353,42 @@
 **Fixture Data:** Reused canonical note/conversation fixtures; added 7.1 coverage for async Hindsight submission, reconciliation, and failed-adapter truthfulness
 **Blockers:** None
 **Next:** Session 7.2 if and when the canonical recall surface is ready to consume the stored Hindsight engine references
+
+---
+
+## Session 9.8 - 2026-04-20
+
+**Spec:** Phase 9.8 - Broker Primary + Shadow Retrieval
+**Built:**
+- `src/services/canonical-memory-broker.ts`, `canonical-memory-dispatch.ts`, `canonical-broker-shadow.ts`, `canonical-broker-trace.ts`, `src/types/canonical-memory-broker.ts` - shipped the default read-path broker that reuses the 9.1 explainable router, dispatches the primary query on the hot path, runs a read-only shadow-secondary retrieval in the background, and persists tenant-scoped broker traces with engine identity and provenance intact
+- `src/services/canonical-memory-query.ts`, `canonical-memory-read-model.ts`, `chief-of-staff-context.ts`, `src/tools/canonical-memory.ts`, `src/types/canonical-memory-query.ts` - existing canonical `search_memory` and `prepare_context_for_agent` now flow through the broker without changing the stable public surface beyond additive broker metadata
+- `migrations/1021_broker_primary_shadow_trace.sql` - added the smallest architecture-consistent storage lane for tenant-visible broker trace metadata in D1, paired with encrypted detail blobs in `R2_OBSERVABILITY`
+- `tests/9.8-broker-primary-shadow-retrieval.test.ts`, `tests/8.3-graph-timeline-query-surface.test.ts`, `MANIFEST.md`, `specs/active/9.8-broker-primary-shadow-retrieval.md` - added primary/shadow/non-blocking/trace regression coverage, tightened graph tests for brokered shadow reads, regenerated the manifest, and completed the 9.8 As-Built record
+**Decisions:**
+- **The broker is now the default read path, but only the primary result reaches the user.** Session 9.8 deliberately stops at explainable routing plus background comparison and does not add any cross-engine synthesis.
+- **Shadow retrieval is bounded, read-only, and non-blocking.** Semantic-primary runs graph shadow, graph-primary runs semantic shadow, and the user-facing response does not wait for the shadow branch to finish.
+- **Tenant traces stay tenant-scoped, not platform-wide.** We store structured broker trace rows in D1 for queryable tenant history and place richer encrypted payloads in `R2_OBSERVABILITY` instead of creating a new broad admin inspection surface.
+**Verification:**
+- `npx vitest run tests/9.8-broker-primary-shadow-retrieval.test.ts` - passed
+- `npx vitest run tests/7.2-semantic-recall-through-canonical-interface.test.ts tests/8.3-graph-timeline-query-surface.test.ts tests/9.2-chief-of-staff-context-builder.test.ts tests/9.4-brain-memory-external-client-rollout.test.ts tests/9.7-graphiti-entity-relation-projection.test.ts` - passed
+- `npm test` - passed
+- `npm run postflight` - passed
+- `npm run manifest` - passed
+- Live protected MCP proof after deploy `580a228a-0a10-409d-baaf-e18b222b004a` - passed:
+  - meaningful fresh Hindsight semantic recall remained green
+  - fresh Graphiti relationship and timeline queries remained green
+  - `prepare_context_for_agent` remained green
+  - broker traces existed in live tenant-scoped storage for brokered queries
+  - non-blocking shadow behavior was confirmed live by a successful graph-primary result whose semantic shadow timed out independently
+**Current Health:**
+- **Hindsight:** green live after 9.8
+- **Graphiti:** green live after 9.8
+- **Brokered canonical reads:** green, with primary-only hot-path responses and persisted tenant-scoped traces
+- **Known caveat:** raw and composed reads currently skip shadow dispatch by design in 9.8
+**Hindsight Pin:** unchanged (`ghcr.io/vectorize-io/hindsight-api:0.5.3`)
+**Fixture Data:** Fresh live proof used meaningful semantic and graph captures around `Mira Sol` / `Jonah Vale`, plus the existing canonical regression fixtures for semantic, graph, and context assembly paths
+**Blockers:** None
+**Next:** Session 9.9 can build user-facing cross-engine synthesis on top of the broker traces, but platform-owner analytics, anonymized cross-tenant telemetry, and canonical Postgres migration remain intentionally out of scope
 
 ---
 
@@ -1000,5 +1281,276 @@
 **Fixture Data:** Added 9.4 fixtures for Codex/Claude Code/Cursor-style `brain-memory` captures across explicit, session summary, and artifact-linked flows with provenance-aware readback assertions
 **Blockers:** None
 **Next:** Session 9.5 or later can build selective `brain-sources-read` on top of the now-concrete `brain-memory` rollout without widening into a second brain or transcript-default retention
+
+---
+## Session 9.x - 2026-04-19
+
+**Spec:** Live semantic recall follow-up - fresh `brain-memory` capture projection identity fix
+**Built:**
+- `src/services/canonical-hindsight-projection-payload.ts` - Hindsight projection identity now uses the canonical capture id for `mcp:memory_write` `brain-memory:*` captures instead of reusing the stable rollout `source_ref`
+- `tests/9.4-brain-memory-external-client-rollout.test.ts` - regression coverage for repeated explicit `brain-memory` captures from the same client now asserting distinct Hindsight engine document ids
+- `MANIFEST.md` - regenerated
+**Decisions:**
+- The fix stays surgical and truthful: semantic mode still depends on Hindsight, but fresh explicit `brain-memory` captures no longer collide onto one Hindsight document identity.
+- The stable rollout `source_ref` remains valuable for provenance/read attribution; only the Hindsight projection dedup/document identity path changes for `brain-memory` writes.
+- No raw fallback or synthetic semantic-ready behavior was introduced.
+**Verification:**
+- `npx vitest run tests/9.4-brain-memory-external-client-rollout.test.ts` - passed
+- `npx vitest run tests/7.1-hindsight-projection-adapter.test.ts tests/7.2-semantic-recall-through-canonical-interface.test.ts` - passed
+- `npm test` - passed (`345 passed`, `1 skipped`)
+- `npm run postflight` - passed
+- `npm run manifest` - passed
+**Blockers:** Live Claude Code semantic smoke still needs to be re-run after deploy to confirm the fresh capture path is now green on the public MCP edge.
+**Next:** Deploy this Hindsight projection identity fix, then re-run the live Claude Code semantic smoke for fresh explicit `brain-memory` captures.
+
+---
+## Session 9.6 - 2026-04-20
+
+**Spec:** Phase 9.6 - Graphiti Internal Container Parity
+**Built:**
+- `src/services/graphiti-client.ts` - narrow Graphiti runtime seam with `container` as the intended default path and explicit `external` fallback only when requested
+- `src/workers/mcpagent/do/GraphitiContainer.ts`, `src/workers/mcpagent/index.ts`, `wrangler.toml` - HAETSAL-owned internal Graphiti container binding plus deployment/runtime wiring
+- `graphiti/Dockerfile`, `graphiti/requirements.txt`, `graphiti/app.py` - smallest viable internal Python Graphiti/Kuzu runtime exposing internal health/readiness and canonical projection handoff only
+- `src/services/canonical-graphiti-projection.ts`, `src/services/canonical-graph-projection-design.ts`, `src/types/canonical-graph-projection.ts`, `src/types/env.ts` - canonical graph posture moved to `haetsal_internal_container`, submission now flows through the internal runtime seam, and env typing/runtime mode support landed
+- `tests/9.6-graphiti-internal-container-parity.test.ts`, `tests/support/graphiti-test-env.ts`, `tests/support/miniflare-service-bindings.ts` - new parity coverage and shared internal Graphiti test bindings
+- `tests/7.3-reflection-consolidation-alignment.test.ts`, `tests/8.1-graphiti-projection-design.test.ts`, `tests/8.2-graphiti-ingestion-projection.test.ts`, `tests/8.3-graph-timeline-query-surface.test.ts`, `tests/9.1-multi-mode-memory-router.test.ts`, `tests/9.2-chief-of-staff-context-builder.test.ts`, `tests/9.4-brain-memory-external-client-rollout.test.ts`, `vitest.config.ts` - broader suite aligned to the internal Graphiti container posture
+- `specs/active/9.6-graphiti-internal-container-parity.md` - As-Built completed
+- `MANIFEST.md` - regenerated
+**Decisions:**
+- Session 9.6 stayed on the smallest architecture-consistent path: a single internal Graphiti container first, no public Graphiti route, no Rust rewrite, and no attempt to expose Graphiti's full upstream API surface through HAETSAL.
+- Hindsight parity was treated as an operational requirement, not style. Graphiti now matches the same internal ownership, Worker/runtime boundary, readiness pattern, and truthful failure semantics where it matters.
+- `GRAPHITI_API_URL` / `GRAPHITI_API_TOKEN` are no longer the intended production path. External mode remains only as an explicit migration/testing fallback when `GRAPHITI_RUNTIME_MODE=external`.
+- Graph jobs now fail truthfully when container mode is required and unavailable, rather than drifting silently in `queued`.
+- Durable Kuzu persistence across container recreation remains a follow-up; 9.6 ships the internal runtime step, not the final persistence story.
+**Verification:**
+- `npx vitest run tests/9.6-graphiti-internal-container-parity.test.ts` - passed
+- `npx vitest run tests/8.2-graphiti-ingestion-projection.test.ts tests/8.3-graph-timeline-query-surface.test.ts tests/9.2-chief-of-staff-context-builder.test.ts` - passed
+- `npm test` - passed (`356 passed`, `1 skipped`)
+- `npm run postflight` - passed
+- `npm run manifest` - passed
+- `npx wrangler deploy` - deployed Worker version `9d65e7ba-3422-40fc-bf94-31291f89c1a3`; Graphiti container application created and reported `ready`
+**Blockers:** Fresh graph-backed live proof is not fully confirmed yet because the deployed production capture/query surface is behind Cloudflare Access and signed webhook flows, so I could not safely drive a non-interactive fresh protected capture end-to-end from this workspace.
+**Next:** Move the 9.6 spec to `specs/completed/`, commit the internal Graphiti container cutover, and later add a safe live smoke path plus durable Kuzu persistence across container recreation.
+
+---
+## Session 9.5 - 2026-04-19
+
+**Spec:** Phase 9.5 - Google Source-Read Ingestion Rollout
+**Built:**
+- `src/types/google-source-read.ts` - typed `brain-sources-read` Google rollout contract
+- `src/services/google-source-read-contract.ts` - read-only Google source profile plus provenance-rich source-ref encoding/parsing
+- `src/services/google-source-read.ts` - shared Gmail / Calendar / Drive selective source-read orchestration on top of the existing Google and canonical retain plumbing
+- `src/services/google/gmail.ts` - additive recent-thread listing plus shared extraction helper reuse
+- `src/services/google/calendar.ts` - additive recent-event listing plus shared extraction helper reuse
+- `src/services/google/drive.ts` - Docs export/download helper for explicit-inclusion capture
+- `src/workers/ingestion/handlers.ts` - Gmail and Calendar queue handlers now flow through the `brain-sources-read` rollout layer
+- `src/services/canonical-memory-query.ts`, `src/services/canonical-memory-status.ts`, `src/services/canonical-source-attribution.ts`, `src/types/canonical-memory-query.ts` - canonical reads now expose parsed Google source attribution
+- `src/services/external-brain-contract.ts` - `brain-sources-read` moved from planned contract to live rollout for Google read-only ingestion
+- `tests/9.5-google-source-read-ingestion-rollout.test.ts` - Gmail, Calendar, Drive/Docs, provenance, and boundary coverage
+- `tests/9.3-external-client-and-source-integration-architecture.test.ts` - updated to reflect a live `brain-sources-read` surface that remains distinct from `brain-memory`
+- `specs/active/9.5-google-source-read-ingestion-rollout.md` - As-Built Record completed
+- `MANIFEST.md` - regenerated
+**Decisions:**
+- Session 9.5 stayed strictly inside `brain-sources-read`. Google was not blurred into `brain-memory`, and no Google write/action capability was introduced.
+- The rollout reuses the existing Google OAuth, Gmail, Calendar, Drive, and canonical retain/capture plumbing instead of introducing a second ingestion stack.
+- Drive / Docs shipped explicit-inclusion-first. Capture preserves Google-native file references and provenance instead of building a Drive shadow store.
+- Canonical readbacks now surface Google source attribution so the brain can point back to the native Google object truthfully.
+- No migration was needed, and no raw Google content store/cache was added to D1, KV, Analytics Engine, or rollout-side caches.
+- Gmail and Calendar webhook-triggered ingestion shipped as the smallest safe bounded refresh over recent native objects rather than adding sync-cursor state or naive mirroring in this session.
+**Verification:**
+- `npx vitest run tests/9.5-google-source-read-ingestion-rollout.test.ts` - passed
+- `npm test` - passed (`344 passed`, `1 skipped`)
+- `npm run postflight` - passed
+- `npm run manifest` - passed
+**Hindsight Pin:** unchanged (`ghcr.io/vectorize-io/hindsight-api:0.5.2`)
+**Fixture Data:** Added 9.5 fixtures for Gmail selective capture, Calendar selective capture, Drive/Docs explicit-inclusion capture, provenance-rich source refs, and source-read boundary enforcement
+**Blockers:** None
+**Next:** Checkout can now move 9.5 to `specs/completed/`; any future Google write/actions remain a separate `brain-actions` lane
+
+---
+## Session 9.x - 2026-04-19
+
+**Spec:** Live semantic recall follow-up - `brain-memory` async handoff, linkback, and semantic retrieval hardening
+**Built:**
+- `src/services/canonical-capture-pipeline.ts`, `src/services/external-client-memory-write.ts`, `src/tools/memory.ts`, `src/tools/retain.ts`, `src/services/ingestion/retain.ts`, `src/types/canonical-capture-pipeline.ts` - interactive MCP writes now eagerly dispatch canonical projections again while preserving async Hindsight behavior for the live `brain-memory` path
+- `src/services/canonical-hindsight-projection-payload.ts`, `src/services/canonical-hindsight-projection.ts`, `src/services/ingestion/retain-persistence.ts` - Hindsight projection payloads now preserve canonical ids plus async mode truthfully, and queued async retain dedup is unique per operation instead of collapsing repeated writes
+- `src/services/canonical-semantic-linkback.ts`, `src/services/canonical-semantic-recall.ts` - semantic linkback now resolves by canonical capture metadata first, and semantic recall no longer over-constrains Hindsight lookup with strict exact tag matching
+- `tests/1.2-tools.test.ts`, `tests/7.1-hindsight-projection-adapter.test.ts`, `tests/7.2-semantic-recall-through-canonical-interface.test.ts`, `tests/9.4-brain-memory-external-client-rollout.test.ts`, `tests/support/hindsight-test-env.ts` - regression coverage for eager interactive dispatch, async Hindsight operations, source-tag tolerant semantic recall, canonical metadata linkback, and repeated `brain-memory` captures
+- `MANIFEST.md` - regenerated
+**Decisions:**
+- The repair stays inside the canonical/Hindsight path rather than introducing a second semantic write lane or synthetic "semantic ready" behavior.
+- `brain-memory` continues to write asynchronously to Hindsight, but interactive MCP writes now trigger local canonical projection dispatch immediately so live sessions do not depend solely on the bulk queue to begin handoff.
+- Hindsight remains the semantic authority; the fix corrects projection identity, async operation truth, linkback, and recall filtering instead of hiding failures with raw fallback.
+- Canonical capture/document/operation ids are now preserved in Hindsight-side metadata so semantic results can link back to the correct canonical item even when multiple captures share nearby content.
+**Verification:**
+- `npx vitest run tests/1.2-tools.test.ts` - passed
+- `npx vitest run tests/7.1-hindsight-projection-adapter.test.ts tests/7.2-semantic-recall-through-canonical-interface.test.ts` - passed
+- `npx vitest run tests/9.4-brain-memory-external-client-rollout.test.ts` - passed
+- `npm run postflight` - passed
+**Hindsight Pin:** unchanged (`ghcr.io/vectorize-io/hindsight-api:0.5.2`)
+**Fixture Data:** Extended Hindsight test fixtures to model async retain truth, operation-specific dedup, source-tagged recall, and canonical-metadata semantic linkback for repeated `brain-memory` captures
+**Blockers:** None on the Hindsight path; Graphiti/container follow-up remains separate work
+**Next:** Checkpoint this Hindsight repair tranche before continuing broader Graphiti/container migration work
+
+---
+
+## Session 9.x - 2026-04-20
+
+**Spec:** Live semantic recall follow-up - Hindsight async retain runtime completion hardening
+**Built:**
+- `src/workers/mcpagent/do/HindsightContainer.ts`, `src/services/hindsight-transport.ts`, `wrangler.toml`, `hindsight/Dockerfile` - Hindsight runtime now prefers the shared API worker safety net, disables dedicated workers in production config, lowers retain retry pressure, bumps the shared instance name, and pins the image to `ghcr.io/vectorize-io/hindsight-api:0.5.3`
+- `tests/2.4b-hindsight-container-runtime.test.ts`, `tests/9.4-brain-memory-external-client-rollout.test.ts` - regression coverage for the runtime safety-net env contract and fresh semantic search linkback after truthful completion
+- `MANIFEST.md` - regenerated
+**Decisions:**
+- The remaining freshness gap was treated as a retain-runtime problem, not a status-mapping or semantic fallback problem.
+- `memory_status` remains truthful: `semanticReady` only flips after Hindsight actually completes and semantic results are visible through the canonical recall path.
+- No raw fallback or synthetic semantic-ready behavior was introduced.
+**Verification:**
+- `npx vitest run tests/2.4b-hindsight-container-runtime.test.ts tests/7.1-hindsight-projection-adapter.test.ts tests/7.2-semantic-recall-through-canonical-interface.test.ts tests/9.4-brain-memory-external-client-rollout.test.ts` - passed
+- `npx vitest run tests/7.1-hindsight-projection-adapter.test.ts tests/7.2-semantic-recall-through-canonical-interface.test.ts tests/9.4-brain-memory-external-client-rollout.test.ts` - passed
+- `npm test` - passed (`362 passed`, `1 skipped`)
+- `npm run postflight` - passed
+- `npm run manifest` - passed
+**Hindsight Pin:** `ghcr.io/vectorize-io/hindsight-api:0.5.3`
+**Blockers:** Live fresh Hindsight semantic recall is still not confirmed green; raw production Hindsight retain operations were observed stuck in `pending` even while Graphiti completed.
+**Next:** Commit and deploy the runtime hardening cut, then re-run protected production fresh-capture proof to confirm whether Hindsight semantic readiness now clears live.
+
+---
+
+## Session 9.9 - 2026-04-20
+
+**Spec:** Tenant Memory Trace
+**Built:**
+- `src/services/canonical-broker-trace-read.ts`, `src/services/canonical-broker-trace-view.ts`, `src/types/canonical-memory-broker.ts` - tenant-scoped broker trace readback now lists recent traces and hydrates full trace detail from the existing 9.8 D1 + encrypted R2 storage shape
+- `src/tools/canonical-memory.ts`, `src/tools/canonical-memory-schema.ts`, `src/tools/brain-memory-surface.ts` - canonical memory surface now exposes `get_recent_memory_traces` and `get_memory_trace` as additive tenant-facing tools
+- `src/services/external-client-memory.ts`, `src/types/external-client-memory.ts` - `brain-memory` surface profile now includes the tenant trace readback tools
+- `src/tools/hindsight-debug.ts`, `src/services/canonical-hindsight-debug.ts` - existing tenant-scoped Hindsight debug surface was wired back into the canonical registrar so the declared `brain-memory` tool registry stayed internally consistent
+- `tests/9.9-tenant-memory-trace.test.ts`, `tests/6.2-canonical-mcp-memory-surface.test.ts` - coverage for recent trace listing, hydrated readback, missing-detail fallback, cross-tenant rejection, and additive canonical tool registration
+- `specs/active/9.9-tenant-memory-trace.md` - As-Built Record completed
+- `MANIFEST.md` - regenerated
+**Decisions:**
+- Session 9.9 stayed strictly read-side and migration-free on top of the 9.8 broker trace storage shape.
+- Structured summary rows remain in D1 `canonical_broker_traces`; rich detail remains tenant-encrypted in `R2_OBSERVABILITY`.
+- Missing or undecryptable rich detail returns a truthful gap via `detailStatus` instead of failing the whole trace read.
+- No platform-owner raw-content analytics or cross-tenant trace surface was introduced.
+**Verification:**
+- `npx vitest run tests/9.9-tenant-memory-trace.test.ts` - passed
+- `npx vitest run tests/9.8-broker-primary-shadow-retrieval.test.ts tests/9.2-chief-of-staff-context-builder.test.ts tests/7.2-semantic-recall-through-canonical-interface.test.ts tests/8.3-graph-timeline-query-surface.test.ts tests/9.7-graphiti-entity-relation-projection.test.ts` - passed
+- `npm test` - passed (`372 passed`, `1 skipped`)
+- `npm run postflight` - passed
+- `npm run manifest` - passed
+- live protected MCP proof after deploy - passed for fresh semantic query, fresh graph query, `prepare_context_for_agent`, `get_recent_memory_traces`, and `get_memory_trace`
+**Hindsight Pin:** unchanged (`ghcr.io/vectorize-io/hindsight-api:0.5.3`)
+**Blockers:** None
+**Next:** Session 9.9 can move to `specs/completed/`; canonical Postgres cutover remains a later storage migration phase while the tenant-facing trace tools stay stable.
+
+---
+
+## Session 9.x - 2026-04-21
+
+**Spec:** Live Hindsight green follow-up - retain-model override for fresh semantic extraction
+**Built:**
+- `src/workers/mcpagent/do/HindsightContainer.ts` - Hindsight now keeps the existing Groq-backed general and reflect lanes, but overrides retain specifically to `openai/gpt-4.1-nano` through the same AI Gateway compat path so fresh fact extraction materializes semantic memory units again
+- `tests/2.4b-hindsight-container-runtime.test.ts` - runtime coverage now locks the retain-model override and its AI Gateway wiring for both API and worker container env generation
+- `MANIFEST.md` - regenerated
+**Decisions:**
+- The fix stayed in the Hindsight engine/provider lane rather than adding more HAETSAL-side shaping or fallback behavior.
+- Only the retain lane changed; Graphiti, broker traces, and the reflect path were left structurally untouched.
+- Fresh meaningful semantic recall remains the acceptance bar, not token-only smoke strings.
+**Verification:**
+- `npx vitest run tests/2.4b-hindsight-container-runtime.test.ts` - passed
+- `npx vitest run tests/9.4-brain-memory-external-client-rollout.test.ts` - passed
+- `npm test` - passed (`380 passed`, `1 skipped`)
+- `npm run postflight` - passed
+- `npm run manifest` - passed
+- live protected MCP proof after deploy `ff444b79-1b39-4b72-b053-62071f053962` - passed for fresh Hindsight semantic capture/retrieval (`dd1b4e56-e8e5-4e1f-b92a-3de1434f256a`), Graphiti relationship/timeline checks, and combined `prepare_context_for_agent`
+**Hindsight Pin:** unchanged container image (`ghcr.io/vectorize-io/hindsight-api:0.5.3-cfroll1`), retain model overridden to `openai/gpt-4.1-nano` via AI Gateway compat
+**Blockers:** None
+**Next:** Checkpoint this restore-to-green tranche, then return to the broker/tenant-trace/Postgres roadmap with Hindsight and Graphiti both green again.
+
+---
+
+## Session 10.0 - 2026-04-21
+
+**Spec:** Canonical Postgres Source-of-Truth Cutover
+**Built:**
+- `sql/postgres/2001_canonical_open_brain_foundation.sql`, `src/services/canonical-postgres*.ts` - landed a real Worker-side canonical Postgres seam on Neon with a dedicated canonical schema, typed repository contract, in-memory test backend, and env fallback from `CANONICAL_POSTGRES_CONNECTION_STRING` to `NEON_CONNECTION_STRING`
+- `src/services/canonical-memory.ts`, `src/services/canonical-*-payload.ts`, `src/services/canonical-*-state.ts`, `src/services/canonical-*-query.ts`, `src/services/canonical-*-dispatch.ts`, `src/workers/ingestion/canonical-projection-consumer.ts` - cut canonical write/read/status/projection reconciliation paths over to Postgres-backed truth while keeping the MCP/tool surface stable
+- `src/services/canonical-d1-compat.ts` - kept a narrow explicit D1 compatibility mirror for canonical metadata so legacy runtime/tests still function during the storage cutover without storing raw content in D1
+- `tests/10.0-canonical-postgres-source-of-truth-cutover.test.ts`, `tests/6.2-canonical-mcp-memory-surface.test.ts`, `tests/apply-migrations.ts` - added cutover coverage and aligned the older canonical surface tests with Postgres authority plus compatibility mirroring
+- `specs/active/10.0-canonical-postgres-source-of-truth-cutover.md`, `MANIFEST.md` - completed As-Built and regenerated manifest
+**Decisions:**
+- Postgres is now authoritative for canonical captures, artifacts, documents, chunks, memory operations, projection jobs, and projection results.
+- R2 remains authoritative for encrypted raw payload backing.
+- Broker traces, tenant/control-plane state, and Hindsight operational state remain in D1 for now.
+- A temporary D1 metadata mirror remains explicitly to support compatibility; canonical reads/status/query now come from Postgres truth rather than D1.
+- No raw canonical body content was added to D1, KV, or analytics.
+**Verification:**
+- `npx vitest run tests/10.0-canonical-postgres-source-of-truth-cutover.test.ts` - passed
+- `npx vitest run tests/7.1-hindsight-projection-adapter.test.ts tests/8.2-graphiti-ingestion-projection.test.ts tests/9.8-broker-primary-shadow-retrieval.test.ts tests/9.9-tenant-memory-trace.test.ts` - passed
+- `npm test` - passed (`383 passed`, `1 skipped`)
+- `npm run manifest` - passed
+- `npm run postflight` - passed after accepting the reviewed over-limit canonical cutover files in the postflight allowlist
+- local live-proof/regression lane stayed green for fresh Hindsight semantic capture/reconciliation, fresh Graphiti projection/query, `prepare_context_for_agent`, `get_recent_memory_traces`, and `get_memory_trace`
+**Hindsight Pin:** unchanged (`ghcr.io/vectorize-io/hindsight-api:0.5.3-cfroll1`)
+**Blockers:** None for the cutover itself; the remaining cleanup is removal of the temporary D1 canonical metadata mirror
+**Next:** Move the 10.0 spec to completed via checkout, then follow with the next cleanup session that removes the D1 mirror and further narrows D1 to broker/control-plane roles only.
+
+---
+
+## Session 10.x - 2026-04-21
+
+**Spec:** Live Hindsight green restoration follow-up - config refresh and truthful status read-through
+**Built:**
+- `src/services/bootstrap/hindsight-config.ts` - `ensureHindsightBankConfigured` now always reapplies live bank config before trusting the cached D1 config hash, while still skipping the heavier mental-model/webhook setup when the version already matches
+- `src/services/canonical-hindsight-status-refresh.ts` - added a read-through Hindsight refresh helper that checks the remote operation/document state, updates `hindsight_operations`, and reconciles stale queued projections when the live engine is already ahead
+- `src/services/canonical-memory-status.ts` - `memory_status` now reloads projection rows after the read-through refresh so stale local Hindsight queue state no longer masks a completed remote retain
+- `tests/2.4a-hindsight-config.test.ts`, `tests/7.1-hindsight-projection-adapter.test.ts` - coverage for always-refresh bank config, truthful completed-document readiness, and stale queued Hindsight status read-through
+**Decisions:**
+- The fix stayed in HAETSAL's config/status truth layer rather than further changing the Hindsight model/provider lane.
+- Cached D1 config hashes are no longer trusted as sufficient proof that the live Hindsight bank is correctly configured.
+- `memory_status` should prefer truthful live reconciliation over waiting for a later cron tick when Hindsight is obviously stale locally.
+- Semantic ranking still has a polish gap where an unlinked source-fact echo can outrank the linked canonical capture, but that is no longer a green/red blocker.
+**Verification:**
+- `npx vitest run tests/2.4a-hindsight-config.test.ts tests/7.1-hindsight-projection-adapter.test.ts tests/9.4-brain-memory-external-client-rollout.test.ts` - passed
+- `npm run postflight` - passed
+- live protected MCP proof after deploy `ebcda960-6fc7-40aa-9e78-1664a7efcbf2` - passed for fresh Hindsight semantic capture/retrieval (`5931d36c-efe3-4035-9b3d-5c88ba7c2807`), truthful `memory_status` (`completed`, `semanticReady: true`), remote document `memory_unit_count: 1`, Graphiti checks, and `prepare_context_for_agent`
+**Hindsight Pin:** unchanged (`ghcr.io/vectorize-io/hindsight-api:0.5.3-cfroll1`)
+**Blockers:** None for the restore-to-green tranche; only semantic ranking polish remains
+**Next:** Checkpoint this restore-to-green tranche cleanly, then return to the canonical Postgres / D1 cleanup roadmap with Hindsight, Graphiti, broker, and tenant trace all green again.
+
+---
+
+## Session 11.3 - 2026-04-22
+
+**Spec:** Chief of Staff Compiled Read Path
+**Built:**
+- `src/services/chief-of-staff-context.ts`, `src/services/chief-of-staff-context-runtime.ts`, `src/services/chief-of-staff-context-shared.ts` - split the prior runtime-only context builder into a small orchestration entrypoint plus preserved runtime assembly/shared helpers so the production path stayed intact while a compiled-first lane was added
+- `src/services/chief-of-staff-compiled-context.ts`, `src/services/chief-of-staff-compiled-context-support.ts`, `src/services/chief-of-staff-compiled-context-bundle.ts`, `src/services/chief-of-staff-compiled-context-provenance.ts`, `src/services/chief-of-staff-compiled-context-gaps.ts` - added the Chief-of-Staff compiled read path that prefers compiled context packs, augments with dossiers plus recent-change/decision views, keeps provenance/source counts truthful even when only stored document sources exist, and preserves read-error/debug gap metadata without breaking valid compiled-first bundles
+- `src/types/chief-of-staff-context.ts`, `src/tools/canonical-memory.ts` - extended the returned `prepare_context_for_agent` bundle with additive compiled metadata while preserving the existing MCP tool surface
+- `tests/9.2-chief-of-staff-context-builder.test.ts`, `tests/11.3-chief-of-staff-compiled-read-path.test.ts` - tightened runtime-fallback coverage and added dedicated 11.3 proof for compiled-first context packs, dossier augmentation, recent-change/decision use, preserved provenance/freshness metadata, and truthful fallback
+- `specs/active/11.3-chief-of-staff-compiled-read-path.md` - As-Built completed
+- `MANIFEST.md` - regenerated
+**Decisions:**
+- 11.3 stayed strictly inside the Chief-of-Staff-oriented context assembly path; no broader MCP redesign, no removal of existing memory tools, and no attempt to make Chief of Staff the monopoly reader/writer of the brain.
+- Compiled context packs are the primary gate for compiled-first behavior. If the primary pack is missing, stale, incomplete, or storage is unavailable, the system falls back truthfully to the existing runtime composition path instead of pretending compiled coverage exists.
+- Dossiers, `what_changed`, and `decision_log` stay additive augments. Fresh complete versions enrich the returned bundle; stale or partial versions are skipped and surfaced through preserved gap/asset metadata rather than failing the request.
+- The freshness policy is explicit and explainable: prefer source-linked agent-usable compiled context packs younger than 7 days, and only use compiled augments when they are likewise fresh and complete.
+- `asset.used` now means "actually contributed to the returned bundle", not merely "would have been eligible if the primary compiled path had stayed active".
+- Per-asset compiled read failures are isolated: a non-primary dossier/change read error no longer forces the whole request back to runtime when the primary compiled context pack is still valid.
+- No compatibility shim was required. The older production memory path was preserved as code, not emulated through a translation layer.
+**Verification:**
+- `npx vitest run tests/11.3-chief-of-staff-compiled-read-path.test.ts tests/11.2-compilation-pipeline.test.ts tests/11.1-dossier-and-context-pack-schema-refinement.test.ts tests/11.0-haetsal-compiled-synthesis-foundation.test.ts tests/9.2-chief-of-staff-context-builder.test.ts` - passed
+- `npm test` - passed (`412 passed`, `1 skipped`)
+- `npm run postflight` - passed
+- `npm run manifest` - passed
+ - `npm run postflight` - passed after manifest regeneration
+**Local Proof:**
+- Chief-of-Staff project context assembled directly from compiled outputs when a fresh compiled context pack existed, with dossier relationships/open questions plus compiled change/decision signals visible in the returned bundle.
+- Fallback to the older runtime path remained green when compiled outputs were absent.
+- Existing production memory flows stayed green through the full `npm test` run.
+- Architect verification for Ralph: approved after the metadata/fallback regression fixes landed.
+**Blockers:** None
+**Next:** Move 11.3 to completed when the branch is finalized, then broaden compiled-read adoption deliberately: improve subject-key resolution beyond the first slug-based path and add queue/Workflow-driven freshness regeneration so compiled packs stay ready before more agents and product surfaces adopt them.
 
 ---

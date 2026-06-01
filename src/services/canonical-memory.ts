@@ -5,6 +5,7 @@ import type {
 } from '../types/canonical-memory'
 import { buildCanonicalCaptureAcceptedAuditBatch } from './canonical-memory-audit'
 import { persistCanonicalPayloads, sha256Hex } from './canonical-memory-artifacts'
+import { getCanonicalMemoryStore } from './canonical-postgres'
 import {
   assertCanonicalIdentity,
   CANONICAL_PROJECTION_KINDS,
@@ -51,48 +52,90 @@ export async function captureCanonicalMemory(
   const artifactStorageKind = capture.artifact
     ? (capture.artifact.ref.contentEncrypted?.trim() ? 'r2' : 'reference')
     : null
+  const store = getCanonicalMemoryStore(env)
 
-  await env.D1_US.batch([
-    env.D1_US.prepare(
-      `INSERT INTO canonical_captures
-       (id, tenant_id, source_system, source_ref, scope, title, body_r2_key, body_sha256, artifact_id, captured_at, created_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-    ).bind(capture.captureId, tenantId, capture.sourceSystem, capture.sourceRef, capture.scope, capture.title, payloads.documentR2Key, payloads.documentSha256, capture.artifact?.id ?? null, capture.capturedAt, createdAt),
-    ...(capture.artifact ? [env.D1_US.prepare(
-      `INSERT INTO canonical_artifacts
-       (id, tenant_id, capture_id, storage_kind, r2_key, media_type, filename, byte_length, sha256, created_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-    ).bind(capture.artifact.id, tenantId, capture.captureId, artifactStorageKind, payloads.artifactR2Key, capture.artifact.ref.mediaType ?? null, capture.artifact.ref.filename ?? null, capture.artifact.ref.byteLength ?? null, payloads.artifactSha256, createdAt)] : []),
-    env.D1_US.prepare(
-      `INSERT INTO canonical_documents
-       (id, tenant_id, capture_id, artifact_id, title, body_r2_key, body_sha256, chunk_count, created_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-    ).bind(capture.documentId, tenantId, capture.captureId, capture.artifact?.id ?? null, capture.title, payloads.documentR2Key, payloads.documentSha256, chunks.length, createdAt),
-    ...await Promise.all(chunks.map(async chunk => env.D1_US.prepare(
-      `INSERT INTO canonical_chunks
-       (id, tenant_id, document_id, ordinal, start_offset, end_offset, chunk_sha256, created_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-    ).bind(chunk.id, tenantId, capture.documentId, chunk.ordinal, chunk.startOffset, chunk.endOffset, await sha256Hex(chunk.text), createdAt))),
-    env.D1_US.prepare(
-      `INSERT INTO canonical_memory_operations
-       (id, tenant_id, capture_id, operation_type, status, created_at, updated_at)
-       VALUES (?, ?, ?, 'capture.accepted', 'accepted', ?, ?)`,
-    ).bind(capture.operationId, tenantId, capture.captureId, createdAt, createdAt),
-    ...projectionJobs.map(job => env.D1_US.prepare(
-      `INSERT INTO canonical_projection_jobs
-       (id, tenant_id, operation_id, capture_id, document_id, projection_kind, status, created_at, enqueued_at)
-       VALUES (?, ?, ?, ?, ?, ?, 'accepted', ?, ?)`,
-    ).bind(job.id, tenantId, capture.operationId, capture.captureId, capture.documentId, job.kind, createdAt, createdAt)),
-    ...buildCanonicalCaptureAcceptedAuditBatch(env.D1_US, {
+  const write = {
+    capture: {
+      id: capture.captureId,
+      tenant_id: tenantId,
+      source_system: capture.sourceSystem,
+      source_ref: capture.sourceRef,
+      scope: capture.scope,
+      title: capture.title,
+      body_r2_key: payloads.documentR2Key,
+      body_sha256: payloads.documentSha256,
+      artifact_id: capture.artifact?.id ?? null,
+      captured_at: capture.capturedAt,
+      created_at: createdAt,
+    },
+    artifact: capture.artifact
+      ? {
+        id: capture.artifact.id,
+        tenant_id: tenantId,
+        capture_id: capture.captureId,
+        storage_kind: artifactStorageKind ?? 'reference',
+        r2_key: payloads.artifactR2Key,
+        media_type: capture.artifact.ref.mediaType ?? null,
+        filename: capture.artifact.ref.filename ?? null,
+        byte_length: capture.artifact.ref.byteLength ?? null,
+        sha256: payloads.artifactSha256,
+        created_at: createdAt,
+      }
+      : null,
+    document: {
+      id: capture.documentId,
+      tenant_id: tenantId,
+      capture_id: capture.captureId,
+      artifact_id: capture.artifact?.id ?? null,
+      title: capture.title,
+      body_r2_key: payloads.documentR2Key,
+      body_sha256: payloads.documentSha256,
+      chunk_count: chunks.length,
+      created_at: createdAt,
+    },
+    chunks: await Promise.all(chunks.map(async (chunk) => ({
+      id: chunk.id,
+      tenant_id: tenantId,
+      document_id: capture.documentId,
+      ordinal: chunk.ordinal,
+      start_offset: chunk.startOffset,
+      end_offset: chunk.endOffset,
+      chunk_sha256: await sha256Hex(chunk.text),
+      created_at: createdAt,
+    }))),
+    operation: {
+      id: capture.operationId,
+      tenant_id: tenantId,
+      capture_id: capture.captureId,
+      operation_type: 'capture.accepted',
+      status: 'accepted',
+      created_at: createdAt,
+      updated_at: createdAt,
+    },
+    projectionJobs: projectionJobs.map((job) => ({
+      id: job.id,
+      tenant_id: tenantId,
+      operation_id: capture.operationId,
+      capture_id: capture.captureId,
+      document_id: capture.documentId,
+      projection_kind: job.kind,
+      status: 'accepted',
+      created_at: createdAt,
+      enqueued_at: createdAt,
+    })),
+  }
+  await store.writeCapture(write)
+
+  await env.D1_US.batch(buildCanonicalCaptureAcceptedAuditBatch(env.D1_US, {
       tenantId,
       captureId: capture.captureId,
       createdAt,
-    }),
-  ])
+    }))
 
   return {
     captureId: capture.captureId,
     documentId: capture.documentId,
+    artifactId: capture.artifact?.id ?? null,
     chunkIds: chunks.map(chunk => chunk.id),
     operationId: capture.operationId,
     projectionJobIds: projectionJobs.map(job => job.id),

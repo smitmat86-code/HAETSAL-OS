@@ -21,6 +21,8 @@ export const BRAIN_MEMORY_SURFACE_PROFILE: BrainMemorySurfaceProfile = {
     'trace_relationship',
     'get_entity_timeline',
     'prepare_context_for_agent',
+    'get_recent_memory_traces',
+    'get_memory_trace',
     'get_recent_memories',
     'get_document',
     'memory_status',
@@ -33,6 +35,12 @@ export const EXTERNAL_CLIENT_CAPTURE_PATTERNS: ExternalClientCapturePattern[] = 
   { id: 'session_summary', label: 'session-close summary', durableValue: 'Preferred default compounding path for what changed, decisions, open loops, and next steps.' },
   { id: 'artifact', label: 'artifact-linked capture', durableValue: 'Durable meaning plus provenance for a spec, plan, doc, or review artifact.' },
 ]
+
+export function resolveBrainMemoryType(
+  input: Pick<ExternalClientCaptureInput, 'capture_mode' | 'memory_type'>,
+): 'episodic' | 'semantic' | 'world' {
+  return input.memory_type ?? 'episodic'
+}
 
 const SURFACE_PREFIX = 'brain-memory'
 

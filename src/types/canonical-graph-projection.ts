@@ -1,12 +1,15 @@
 import type { CanonicalArtifactRef } from './canonical-memory'
 
-export type GraphitiDeploymentPostureId = 'staged_external_first'
+export type GraphitiDeploymentPostureId = 'staged_external_first' | 'haetsal_internal_container'
 export type GraphProjectionEpisodeKind = 'note' | 'conversation' | 'artifact' | 'event'
 export type GraphProjectionEntityKind =
   | 'scope'
   | 'source'
   | 'speaker'
   | 'topic'
+  | 'person'
+  | 'organization'
+  | 'project'
   | 'document'
   | 'artifact'
 export type GraphProjectionIdentityStrategy =
@@ -17,7 +20,7 @@ export type GraphProjectionTemporalMode = 'snapshot' | 'append_valid_time'
 
 export interface GraphitiDeploymentPosture {
   id: GraphitiDeploymentPostureId
-  initialRuntime: 'external_graphiti_service'
+  initialRuntime: 'external_graphiti_service' | 'internal_graphiti_container'
   orchestrationShell: 'cloudflare_worker_queue_shell'
   futureRuntime: 'cloudflare_containers'
   rationale: string

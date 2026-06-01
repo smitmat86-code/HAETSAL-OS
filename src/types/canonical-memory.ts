@@ -27,6 +27,7 @@ export interface CanonicalCaptureInput {
 export interface CanonicalCaptureResult {
   captureId: string
   documentId: string
+  artifactId: string | null
   chunkIds: string[]
   operationId: string
   projectionJobIds: string[]

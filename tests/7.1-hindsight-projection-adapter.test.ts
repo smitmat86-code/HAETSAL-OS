@@ -2,8 +2,13 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { env } from 'cloudflare:test'
 import { captureThroughCanonicalPipeline } from '../src/services/canonical-capture-pipeline'
 import { getCanonicalMemoryStatus } from '../src/services/canonical-memory-status'
+import { getCanonicalMemoryStore } from '../src/services/canonical-postgres'
 import { encryptContentForArchive } from '../src/services/ingestion/encryption'
 import { processCanonicalProjectionDispatch } from '../src/workers/ingestion/canonical-projection-consumer'
+import {
+  handleHindsightOperationsTick,
+  reconcileHindsightOperation,
+} from '../src/cron/hindsight-operations'
 import type { CanonicalPipelineCaptureInput } from '../src/types/canonical-capture-pipeline'
 import { createHindsightTestEnv } from './support/hindsight-test-env'
 import conversationFixture from './fixtures/canonical-memory/conversation-capture.json'
@@ -83,6 +88,13 @@ async function processDispatch(
   await Promise.allSettled(pending)
 }
 
+async function processDispatchWithoutWaitUntil(
+  message: { tenantId: string; payload: Record<string, unknown> },
+  testEnv: typeof env,
+): Promise<void> {
+  await processCanonicalProjectionDispatch(message.tenantId, message.payload, testEnv)
+}
+
 async function waitForResultRow<T>(
   query: () => Promise<T | null>,
   predicate: (row: T | null) => boolean,
@@ -146,25 +158,14 @@ describe('7.1 hindsight projection adapter', () => {
       ...input,
       memoryType: 'semantic',
       compatibilityMode: 'current_hindsight',
+      hindsightAsync: true,
     }, testEnv, tenantId)
     const message = sendSpy.mock.calls[0]?.[0] as { tenantId: string; payload: Record<string, unknown> }
     await processDispatch(message, testEnv)
 
+    const store = getCanonicalMemoryStore(testEnv)
     const latest = await waitForResultRow(
-      () => testEnv.D1_US.prepare(
-        `SELECT r.status, r.target_ref, r.engine_bank_id, r.engine_document_id, r.engine_operation_id
-         FROM canonical_projection_results r
-         INNER JOIN canonical_projection_jobs j ON j.id = r.projection_job_id
-         WHERE j.tenant_id = ? AND j.operation_id = ? AND j.projection_kind = 'hindsight'
-         ORDER BY r.updated_at DESC, r.created_at DESC, r.id DESC
-         LIMIT 1`,
-      ).bind(tenantId, result.capture.operationId).first<{
-        status: string
-        target_ref: string | null
-        engine_bank_id: string | null
-        engine_document_id: string | null
-        engine_operation_id: string | null
-      }>(),
+      () => store.getLatestProjectionResultForOperation(tenantId, result.capture.operationId, 'hindsight'),
       row => row?.status === 'completed' && row.engine_operation_id != null,
     )
     const status = await getCanonicalMemoryStatus(
@@ -174,12 +175,150 @@ describe('7.1 hindsight projection adapter', () => {
     )
 
     expect(capture.retainCount).toBe(1)
-    expect(latest?.status).toBe('completed')
+    expect(latest?.result_status).toBe('completed')
     expect(latest?.engine_bank_id).toBe(`hindsight-${tenantId}`)
     expect(latest?.engine_document_id).toContain(`${tenantId}:`)
     expect(latest?.engine_operation_id).toContain('op-')
     expect(latest?.target_ref).toContain('/documents/')
     expect(status.projections.find(item => item.kind === 'hindsight')?.status).toBe('completed')
+    expect(status.compatibility?.status).toBe('retained')
+  })
+
+  it('keeps reconciling queued hindsight projections until the operation itself completes', async () => {
+    const tenantId = `${TENANT_PREFIX}-reconcile`
+    await ensureTenantWithKek(tenantId)
+    const capture = { retainCount: 0, operationIds: [] as string[] }
+    const testEnv = createHindsightTestEnv({
+      capture,
+      operationStatuses: ['pending', 'completed'],
+    })
+    const sendSpy = vi.spyOn(testEnv.QUEUE_BULK, 'send').mockResolvedValue(undefined as never)
+    const input = await encryptFixture(noteFixture as CanonicalPipelineCaptureInput, tenantId, 'reconcile')
+
+    const result = await captureThroughCanonicalPipeline({
+      ...input,
+      memoryType: 'episodic',
+      compatibilityMode: 'current_hindsight',
+      hindsightAsync: true,
+    }, testEnv, tenantId)
+    const message = sendSpy.mock.calls[0]?.[0] as { tenantId: string; payload: Record<string, unknown> }
+    await processDispatchWithoutWaitUntil(message, testEnv)
+
+    const firstOperationId = capture.operationIds[0]!
+    const firstPass = await reconcileHindsightOperation(firstOperationId, testEnv)
+    const secondPass = await reconcileHindsightOperation(firstOperationId, testEnv)
+    const status = await getCanonicalMemoryStatus(
+      { tenantId, operationId: result.capture.operationId },
+      testEnv,
+      tenantId,
+    )
+    const hindsightProjection = status.projections.find(item => item.kind === 'hindsight')
+
+    expect(firstPass).toBe('pending')
+    expect(secondPass).toBe('settled')
+    expect(hindsightProjection?.status).toBe('completed')
+    expect(hindsightProjection?.resultStatus).toBe('completed')
+    expect(hindsightProjection?.semanticReady).toBe(true)
+    expect(status.compatibility?.status).toBe('retained')
+  })
+
+  it('treats completed hindsight operations with an available document as semantically ready on read-through status checks', async () => {
+    const tenantId = `${TENANT_PREFIX}-availability`
+    await ensureTenantWithKek(tenantId)
+    const capture = { retainCount: 0, operationIds: [] as string[] }
+    const testEnv = createHindsightTestEnv({
+      capture,
+      operationStatuses: ['completed'],
+      documentMemoryUnitCounts: [0, 1],
+    })
+    const sendSpy = vi.spyOn(testEnv.QUEUE_BULK, 'send').mockResolvedValue(undefined as never)
+    const input = await encryptFixture(noteFixture as CanonicalPipelineCaptureInput, tenantId, 'availability')
+
+    const result = await captureThroughCanonicalPipeline({
+      ...input,
+      memoryType: 'episodic',
+      compatibilityMode: 'current_hindsight',
+      hindsightAsync: true,
+    }, testEnv, tenantId)
+    const message = sendSpy.mock.calls[0]?.[0] as { tenantId: string; payload: Record<string, unknown> }
+    await processDispatchWithoutWaitUntil(message, testEnv)
+
+    const firstOperationId = capture.operationIds[0]!
+    const firstPass = await reconcileHindsightOperation(firstOperationId, testEnv)
+    let status = await getCanonicalMemoryStatus(
+      { tenantId, operationId: result.capture.operationId },
+      testEnv,
+      tenantId,
+    )
+
+    expect(firstPass).toBe('settled')
+    expect(status.projections.find(item => item.kind === 'hindsight')?.semanticReady).toBe(true)
+    expect(status.compatibility?.status).toBe('retained')
+  })
+
+  it('treats hindsight as semantically ready once the document is available even if the parent operation is still pending', async () => {
+    const tenantId = `${TENANT_PREFIX}-availability-pending`
+    await ensureTenantWithKek(tenantId)
+    const capture = { retainCount: 0, operationIds: [] as string[] }
+    const testEnv = createHindsightTestEnv({
+      capture,
+      operationStatuses: ['pending'],
+      documentMemoryUnitCounts: [1],
+    })
+    const sendSpy = vi.spyOn(testEnv.QUEUE_BULK, 'send').mockResolvedValue(undefined as never)
+    const input = await encryptFixture(noteFixture as CanonicalPipelineCaptureInput, tenantId, 'availability-pending')
+
+    const result = await captureThroughCanonicalPipeline({
+      ...input,
+      memoryType: 'episodic',
+      compatibilityMode: 'current_hindsight',
+      hindsightAsync: true,
+    }, testEnv, tenantId)
+    const message = sendSpy.mock.calls[0]?.[0] as { tenantId: string; payload: Record<string, unknown> }
+    await processDispatchWithoutWaitUntil(message, testEnv)
+    await handleHindsightOperationsTick(testEnv, {} as ExecutionContext)
+
+    const status = await getCanonicalMemoryStatus(
+      { tenantId, operationId: result.capture.operationId },
+      testEnv,
+      tenantId,
+    )
+
+    expect(status.projections.find(item => item.kind === 'hindsight')?.semanticReady).toBe(true)
+    expect(status.compatibility?.status).toBe('retained')
+  })
+
+  it('refreshes stale queued hindsight status from the live engine when the remote operation already completed', async () => {
+    const tenantId = `${TENANT_PREFIX}-status-readthrough`
+    await ensureTenantWithKek(tenantId)
+    const capture = { retainCount: 0, operationIds: [] as string[] }
+    const testEnv = createHindsightTestEnv({
+      capture,
+      operationStatuses: ['completed'],
+      documentMemoryUnitCounts: [1],
+    })
+    const sendSpy = vi.spyOn(testEnv.QUEUE_BULK, 'send').mockResolvedValue(undefined as never)
+    const input = await encryptFixture(noteFixture as CanonicalPipelineCaptureInput, tenantId, 'status-readthrough')
+
+    const result = await captureThroughCanonicalPipeline({
+      ...input,
+      memoryType: 'episodic',
+      compatibilityMode: 'current_hindsight',
+      hindsightAsync: true,
+    }, testEnv, tenantId)
+    const message = sendSpy.mock.calls[0]?.[0] as { tenantId: string; payload: Record<string, unknown> }
+    await processDispatchWithoutWaitUntil(message, testEnv)
+
+    const status = await getCanonicalMemoryStatus(
+      { tenantId, operationId: result.capture.operationId },
+      testEnv,
+      tenantId,
+    )
+    const hindsightProjection = status.projections.find(item => item.kind === 'hindsight')
+
+    expect(hindsightProjection?.status).toBe('completed')
+    expect(hindsightProjection?.resultStatus).toBe('completed')
+    expect(hindsightProjection?.semanticReady).toBe(true)
     expect(status.compatibility?.status).toBe('retained')
   })
 
@@ -199,29 +338,22 @@ describe('7.1 hindsight projection adapter', () => {
     const message = sendSpy.mock.calls[0]?.[0] as { tenantId: string; payload: Record<string, unknown> }
     await processDispatch(message, testEnv)
 
+    const store = getCanonicalMemoryStore(testEnv)
     const latest = await waitForResultRow(
-      () => testEnv.D1_US.prepare(
-        `SELECT j.status AS job_status, r.status AS result_status, r.error_message
-         FROM canonical_projection_jobs j
-         LEFT JOIN canonical_projection_results r ON r.id = (
-           SELECT r2.id
-           FROM canonical_projection_results r2
-           WHERE r2.projection_job_id = j.id
-           ORDER BY r2.updated_at DESC, r2.created_at DESC, r2.id DESC
-           LIMIT 1
-         )
-         WHERE j.tenant_id = ? AND j.operation_id = ? AND j.projection_kind = 'hindsight'
-         LIMIT 1`,
-      ).bind(tenantId, result.capture.operationId).first<{
-        job_status: string
-        result_status: string
-        error_message: string | null
-      }>(),
+      async () => {
+        const job = (await store.listProjectionStatesForOperation(tenantId, result.capture.operationId))
+          .find((row) => row.projection_kind === 'hindsight')
+        return job
+          ? {
+            job_status: job.status,
+            result_status: job.result_status,
+            error_message: job.error_message,
+          }
+          : null
+      },
       row => row?.job_status === 'failed' && row.result_status === 'failed',
     )
-    const captureRow = await testEnv.D1_US.prepare(
-      `SELECT id FROM canonical_captures WHERE tenant_id = ? AND id = ?`,
-    ).bind(tenantId, result.capture.captureId).first<{ id: string }>()
+    const captureRow = await store.getCapture(tenantId, result.capture.captureId)
     const status = await getCanonicalMemoryStatus(
       { tenantId, operationId: result.capture.operationId },
       testEnv,

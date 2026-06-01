@@ -52,6 +52,12 @@ const LEGACY_PACKAGES: string[] = [
 const FILE_SIZE_ACCEPTED = new Set<string>([
     // PROJECT: Add accepted over-limit files with justification:
     // 'packages/worker/src/services/auth-service.ts',  // Auth flows are multi-step
+    'src/services/canonical-d1-compat.ts', // Temporary compatibility mirror during canonical Postgres cutover
+    'src/services/canonical-memory.ts', // Canonical capture orchestrator remains centralized for cutover safety
+    'src/services/canonical-postgres-repository.ts', // Canonical store implementation spans in-memory test store + Neon store
+    'src/services/canonical-postgres-schema.ts', // Canonical schema contracts collected in one place for migration clarity
+    'src/services/canonical-semantic-recall.ts', // Slightly over limit; semantic recall mapping kept intact during cutover
+    'src/services/compiled-synthesis-repository.ts', // Compiled synthesis store mirrors canonical store structure across in-memory and Neon implementations
 ]);
 
 interface Violation {

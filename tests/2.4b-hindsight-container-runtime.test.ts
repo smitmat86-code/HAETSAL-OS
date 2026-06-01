@@ -7,7 +7,7 @@ import {
 } from '../src/workers/mcpagent/do/HindsightContainer'
 
 describe('2.4b Hindsight Container Runtime', () => {
-  it('builds API-only runtime env with direct Neon + AI Gateway compat URL', () => {
+  it('builds API runtime env with the internal worker enabled on the known-good async retain lane', () => {
     const env = buildHindsightContainerEnv({
       NEON_CONNECTION_STRING: 'postgresql://neon.example/brain',
       AI_GATEWAY_ID: 'haetsal-brain-gateway',
@@ -24,10 +24,18 @@ describe('2.4b Hindsight Container Runtime', () => {
       'https://gateway.ai.cloudflare.com/v1/acct123/haetsal-brain-gateway/compat',
     )
     expect(env.HINDSIGHT_API_LLM_MODEL).toBe('groq/openai/gpt-oss-20b')
+    expect(env.HINDSIGHT_API_RETAIN_LLM_PROVIDER).toBe('openai')
+    expect(env.HINDSIGHT_API_RETAIN_LLM_API_KEY).toBe('cf-aig-token')
+    expect(env.HINDSIGHT_API_RETAIN_LLM_BASE_URL).toBe(
+      'https://gateway.ai.cloudflare.com/v1/acct123/haetsal-brain-gateway/compat',
+    )
+    expect(env.HINDSIGHT_API_RETAIN_LLM_MODEL).toBe('openai/gpt-4.1-nano')
+    expect(env.HINDSIGHT_API_LLM_MAX_RETRIES).toBe('3')
+    expect(env.HINDSIGHT_API_RETAIN_LLM_MAX_RETRIES).toBe('3')
     expect(env.HINDSIGHT_API_EMBEDDINGS_PROVIDER).toBe('local')
     expect(env.HINDSIGHT_API_RERANKER_PROVIDER).toBe('local')
     expect(env.HINDSIGHT_API_REFLECT_LLM_MODEL).toBe('groq/openai/gpt-oss-120b')
-    expect(env.HINDSIGHT_API_WORKER_ENABLED).toBe('false')
+    expect(env.HINDSIGHT_API_WORKER_ENABLED).toBe('true')
     expect(env.HINDSIGHT_API_WORKER_ID).toBe('haetsal-api-internal')
     expect(env.HINDSIGHT_API_WORKER_POLL_INTERVAL_MS).toBe('500')
     expect(env.HINDSIGHT_API_WORKER_MAX_SLOTS).toBe('4')
@@ -35,6 +43,18 @@ describe('2.4b Hindsight Container Runtime', () => {
     expect(env.HINDSIGHT_API_LOG_LEVEL).toBe('debug')
     expect(env.HINDSIGHT_API_LOG_FORMAT).toBe('json')
     expect(env.HINDSIGHT_ENABLE_CP).toBe('false')
+  })
+
+  it('keeps the API internal worker enabled when dedicated hindsight workers are disabled', () => {
+    const env = buildHindsightContainerEnv({
+      NEON_CONNECTION_STRING: 'postgresql://neon.example/brain',
+      AI_GATEWAY_ID: 'haetsal-brain-gateway',
+      AI_GATEWAY_ACCOUNT_ID: 'acct123',
+      AI_GATEWAY_TOKEN: 'cf-aig-token',
+      HINDSIGHT_DEDICATED_WORKERS_ENABLED: 'false',
+    } as any)
+
+    expect(env.HINDSIGHT_API_WORKER_ENABLED).toBe('true')
   })
 
   it('falls back to llm=none when AI gateway token is not configured yet', () => {
@@ -86,6 +106,9 @@ describe('2.4b Hindsight Container Runtime', () => {
     expect(env.HINDSIGHT_API_WORKER_ID).toBe('haetsal-worker-1')
     expect(env.HINDSIGHT_API_WORKER_HTTP_PORT).toBe('8889')
     expect(env.HINDSIGHT_API_LLM_MODEL).toBe('groq/openai/gpt-oss-20b')
+    expect(env.HINDSIGHT_API_RETAIN_LLM_MODEL).toBe('openai/gpt-4.1-nano')
+    expect(env.HINDSIGHT_API_LLM_MAX_RETRIES).toBe('3')
+    expect(env.HINDSIGHT_API_RETAIN_LLM_MAX_RETRIES).toBe('3')
     expect(HINDSIGHT_WORKER_PING_ENDPOINT).toBe('localhost/health')
   })
 })

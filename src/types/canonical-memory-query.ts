@@ -1,11 +1,18 @@
 import type { CanonicalGraphProjectionStatus } from './canonical-graph-projection'
 import type { CanonicalProjectionProvenance } from './canonical-graph-query'
 import type { BrainMemoryRolloutAttribution } from './external-client-memory'
+import type { GoogleSourceReadAttribution } from './google-source-read'
 
 export type MemoryQueryMode = 'raw' | 'semantic' | 'graph' | 'composed'
 export type MemoryQueryModePreference = MemoryQueryMode | 'lexical'
 
 export interface CanonicalMemoryRouteDecision { mode: MemoryQueryMode; reason: string; explicit: boolean; dispatchQuery: string }
+export interface CanonicalMemoryRouteMetadata {
+  queryId: string
+  primaryMode: MemoryQueryMode
+  shadowMode: MemoryQueryMode | null
+  shadowDispatch: 'scheduled' | 'skipped'
+}
 export interface CanonicalSourceAttribution {
   mode: MemoryQueryMode; sourceSystem: string | null; captureId: string | null; documentId: string | null
   canonicalOperationId: string | null; projectionKind: 'hindsight' | 'graphiti' | null
@@ -21,6 +28,7 @@ export interface CanonicalMemoryListItem {
   captureId: string | null; documentId: string | null; title: string | null; scope: string | null
   sourceSystem: string | null; sourceRef: string | null; preview: string; capturedAt: number | null
   score?: number | null; mode?: MemoryQueryMode; brainMemory?: BrainMemoryRolloutAttribution | null
+  googleSource?: GoogleSourceReadAttribution | null
   recallText?: string | null; attribution?: CanonicalSourceAttribution | null; provenance?: CanonicalProjectionProvenance | null
   semanticStatus?: {
     projectionKind: 'hindsight'
@@ -39,12 +47,20 @@ export interface CanonicalMemoryListItem {
   } | null
 }
 
-export interface CanonicalSearchResult { query: string; mode: MemoryQueryMode; status: 'ok' | 'partial' | 'unavailable'; route?: CanonicalMemoryRouteDecision | null; items: CanonicalMemoryListItem[] }
+export interface CanonicalSearchResult {
+  query: string
+  mode: MemoryQueryMode
+  status: 'ok' | 'partial' | 'unavailable'
+  route?: CanonicalMemoryRouteDecision | null
+  broker?: CanonicalMemoryRouteMetadata | null
+  items: CanonicalMemoryListItem[]
+}
 export interface CanonicalRecentResult { items: CanonicalMemoryListItem[] }
 export interface CanonicalDocumentArtifact { artifactId: string; filename: string | null; mediaType: string | null; byteLength: number | null; storageKind?: string | null; storageKey?: string | null }
 export interface CanonicalDocumentResult {
   captureId: string; documentId: string; title: string | null; scope: string; sourceSystem: string; sourceRef: string | null
-  brainMemory?: BrainMemoryRolloutAttribution | null; body: string; chunkCount: number; capturedAt: number; createdAt: number
+  brainMemory?: BrainMemoryRolloutAttribution | null; googleSource?: GoogleSourceReadAttribution | null
+  body: string; chunkCount: number; capturedAt: number; createdAt: number
   artifact: CanonicalDocumentArtifact | null
 }
 
@@ -52,6 +68,7 @@ export interface CanonicalReflectionStatus { mode: 'hindsight'; status: 'pending
 export interface CanonicalMemoryStatusResult {
   captureId: string; sourceSystem?: string | null; sourceRef?: string | null; scope?: string | null
   title?: string | null; capturedAt?: number | null; brainMemory?: BrainMemoryRolloutAttribution | null
+  googleSource?: GoogleSourceReadAttribution | null
   operation: { operationId: string; operationType: string; status: string; createdAt: number; updatedAt: number }
   projections: Array<{
     jobId: string

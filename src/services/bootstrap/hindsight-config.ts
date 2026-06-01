@@ -63,12 +63,12 @@ export async function ensureHindsightBankConfigured(
   const bankId = await resolveHindsightBankId(bankRef, env)
   const spec = defaultSpec(env)
   const configVersion = computeHindsightConfigVersion(spec)
+  await configureHindsightBank(bankId, env, spec.bankConfig)
   const existing = await env.D1_US.prepare(
     'SELECT config_version FROM hindsight_bank_config WHERE bank_id = ?',
   ).bind(bankId).first<{ config_version: string | null }>()
   if (existing?.config_version === configVersion) return
 
-  await configureHindsightBank(bankId, env, spec.bankConfig)
   await createMentalModels(bankId, env, spec.mentalModels)
   await registerConsolidationWebhook(bankId, env, spec.webhook)
 
@@ -99,7 +99,7 @@ export async function ensureHindsightBankConfigured(
 
 function defaultSpec(env: Env) {
   return buildHindsightBankProvisioningSpec(
-    env.WORKER_DOMAIN || 'the-brain.workers.dev',
+    env.WORKER_DOMAIN || 'haetsalos.specialdarksystems.com',
     env.HINDSIGHT_WEBHOOK_SECRET || '',
   )
 }

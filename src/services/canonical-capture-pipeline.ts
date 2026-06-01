@@ -3,6 +3,7 @@ import type {
   CanonicalCapturePipelineResult,
   CanonicalPipelineCaptureInput,
 } from '../types/canonical-capture-pipeline'
+import { maybeTriggerCompiledRefresh } from './canonical-compiled-refresh-trigger'
 import { materializeGraphitiProjectionPayload } from './canonical-graphiti-projection'
 import { materializeHindsightProjectionPayload } from './canonical-hindsight-projection'
 import { captureCanonicalMemory } from './canonical-memory'
@@ -12,12 +13,14 @@ import {
   markCanonicalProjectionDispatchFailed,
 } from './canonical-projection-dispatch'
 import { runCompatibilityRetainBridge } from './canonical-capture-compat'
+import { processCanonicalProjectionDispatch } from '../workers/ingestion/canonical-projection-consumer'
 
 export async function captureThroughCanonicalPipeline(
   input: CanonicalPipelineCaptureInput,
   env: Env,
   tenantId: string,
   ctx?: Pick<ExecutionContext, 'waitUntil'>,
+  tmk: CryptoKey | null = null,
 ): Promise<CanonicalCapturePipelineResult> {
   const capture = await captureCanonicalMemory({
     tenantId: input.tenantId,
@@ -66,6 +69,9 @@ export async function captureThroughCanonicalPipeline(
 
   try {
     await enqueueCanonicalProjectionDispatch(message, env)
+    if (input.eagerProjectionDispatch) {
+      await processCanonicalProjectionDispatch(message.tenantId, message.payload, env, ctx)
+    }
   } catch (error) {
     await markCanonicalProjectionDispatchFailed(message, env, error)
     throw error
@@ -77,6 +83,20 @@ export async function captureThroughCanonicalPipeline(
     canonicalDocumentId: capture.documentId,
     canonicalOperationId: capture.operationId,
   }, env, tenantId)
+
+  await maybeTriggerCompiledRefresh({
+    tenantId,
+    scope: input.scope,
+    sourceSystem: input.sourceSystem,
+    sourceRef: input.sourceRef ?? null,
+    title: input.title ?? null,
+    body: input.body,
+    captureId: capture.captureId,
+    documentId: capture.documentId,
+    artifactId: capture.artifactId,
+    operationId: capture.operationId,
+    tmk,
+  }, env, ctx)
 
   return {
     capture: {

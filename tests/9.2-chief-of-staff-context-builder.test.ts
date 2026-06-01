@@ -3,10 +3,12 @@ import { env } from 'cloudflare:test'
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { captureThroughCanonicalPipeline } from '../src/services/canonical-capture-pipeline'
 import { encryptContentForArchive } from '../src/services/ingestion/encryption'
+import { getCanonicalMemoryStore } from '../src/services/canonical-postgres'
 import { registerCanonicalMemoryTools } from '../src/tools/canonical-memory'
 import type { AgentContextBundle } from '../src/types/chief-of-staff-context'
 import type { CanonicalPipelineCaptureInput } from '../src/types/canonical-capture-pipeline'
 import { processCanonicalProjectionDispatch } from '../src/workers/ingestion/canonical-projection-consumer'
+import { createGraphitiContainerTestEnv } from './support/graphiti-test-env'
 import { createHindsightTestEnv, type HindsightCaptureState, type HindsightRecallRow } from './support/hindsight-test-env'
 import conversationFixture from './fixtures/canonical-memory/conversation-capture.json'
 
@@ -19,6 +21,7 @@ const SUITE_ID = crypto.randomUUID()
 const TENANT_ID = `test-tenant-context-92-${SUITE_ID}`
 const projectNote: CanonicalPipelineCaptureInput = { tenantId: TENANT_ID, sourceSystem: 'mcp_retain', sourceRef: 'launch-note', scope: 'general', title: 'Launch plan', body: 'Launch plan now runs through three milestones. Risk: the operations checklist still needs an owner before launch.', capturedAt: 1760280000000 }
 const projectConversation: CanonicalPipelineCaptureInput = { tenantId: TENANT_ID, sourceSystem: 'mcp_memory_write', sourceRef: 'launch-conversation', scope: 'general', title: 'Launch plan', body: 'User: We removed the optional work from the critical path.\nAssistant: Captured. Recent change: only the three launch milestones remain, and the checklist owner is still unresolved.', capturedAt: 1760366400000 }
+const projectGraphNote: CanonicalPipelineCaptureInput = { tenantId: TENANT_ID, sourceSystem: 'mcp_retain', sourceRef: 'launch-graph', scope: 'general', title: 'Launch plan', body: 'Launch Plan depends on Operations Checklist.', capturedAt: 1760323200000 }
 const sparseProject: CanonicalPipelineCaptureInput = { tenantId: TENANT_ID, sourceSystem: 'mcp_retain', sourceRef: 'quiet-project', scope: 'general', title: 'Quiet scope', body: 'Quiet scope has one clear next step and one unresolved follow-up.', capturedAt: 1760452800000 }
 
 async function deriveTestTmk(): Promise<CryptoKey> {
@@ -38,7 +41,14 @@ async function encryptFixture(fixture: CanonicalPipelineCaptureInput, suffix: st
 }
 
 function createRuntimeEnv(state: { recallResults: HindsightRecallRow[]; capture: HindsightCaptureState; graph?: boolean }): typeof env {
-  return { ...createHindsightTestEnv({ capture: state.capture, operationStatus: 'completed', recallResults: state.recallResults }), ...(state.graph === false ? {} : { GRAPHITI_API_URL: 'https://graphiti.internal', GRAPHITI_API_TOKEN: 'graphiti-test-token' }) } as typeof env
+  const { testEnv } = createGraphitiContainerTestEnv(
+    state.graph === false ? { startFails: 'graphiti container unavailable' } : undefined,
+  )
+  return {
+    ...createHindsightTestEnv({ capture: state.capture, operationStatus: 'completed', recallResults: state.recallResults }),
+    GRAPHITI_RUNTIME_MODE: testEnv.GRAPHITI_RUNTIME_MODE,
+    GRAPHITI: testEnv.GRAPHITI,
+  } as typeof env
 }
 
 function createToolRegistry(testEnv: typeof env, tmk: CryptoKey): ToolRegistry {
@@ -55,30 +65,8 @@ async function callTool<T>(registry: ToolRegistry, name: string, input: unknown)
   return JSON.parse(response?.content[0]?.text ?? 'null') as T
 }
 
-function buildCompletedGraphResponse(body: Record<string, any>) {
-  return {
-    status: 'completed',
-    targetRef: `graphiti://episodes/${body.captureId}`,
-    episodeRefs: [`graphiti://episodes/${body.captureId}`],
-    entityRefs: (body.plan.entities as Array<Record<string, unknown>>).map((_: unknown, index: number) => `graphiti://entities/${body.captureId}-${index}`),
-    edgeRefs: (body.plan.edges as Array<Record<string, unknown>>).map((_: unknown, index: number) => `graphiti://edges/${body.captureId}-${index}`),
-    mappings: [
-      { canonicalKey: body.plan.episode.canonicalKey, graphRef: `graphiti://episodes/${body.captureId}`, graphKind: 'episode' },
-      ...(body.plan.entities as Array<Record<string, unknown>>).map((entity, index: number) => ({ canonicalKey: entity.canonicalKey, graphRef: `graphiti://entities/${body.captureId}-${index}`, graphKind: 'entity' })),
-      ...(body.plan.edges as Array<Record<string, unknown>>).map((edge, index: number) => ({ canonicalKey: edge.canonicalKey, graphRef: `graphiti://edges/${body.captureId}-${index}`, graphKind: 'edge' })),
-    ],
-  }
-}
-
 async function captureAndProject(args: { fixture: CanonicalPipelineCaptureInput; suffix: string; memoryType: 'episodic' | 'semantic' | 'world'; testEnv: typeof env; tmk: CryptoKey }): Promise<SeededCapture> {
-  const originalFetch = globalThis.fetch
   const sendSpy = vi.spyOn(args.testEnv.QUEUE_BULK, 'send').mockResolvedValue(undefined as never)
-  vi.spyOn(globalThis, 'fetch').mockImplementation(async (input, init) => {
-    const url = input instanceof Request ? input.url : input instanceof URL ? input.toString() : String(input)
-    if (!url.includes('graphiti.internal')) return originalFetch(input, init)
-    const body = JSON.parse(String(init?.body ?? (input instanceof Request ? await input.clone().text() : '{}'))) as Record<string, any>
-    return new Response(JSON.stringify(buildCompletedGraphResponse(body)), { status: 200, headers: { 'Content-Type': 'application/json' } })
-  })
   const input = await encryptFixture(args.fixture, args.suffix, args.tmk)
   const result = await captureThroughCanonicalPipeline({ ...input, memoryType: args.memoryType, compatibilityMode: 'current_hindsight' }, args.testEnv, TENANT_ID)
   const pending: Promise<unknown>[] = []
@@ -87,12 +75,13 @@ async function captureAndProject(args: { fixture: CanonicalPipelineCaptureInput;
   await Promise.allSettled(pending)
   sendSpy.mockRestore()
   vi.restoreAllMocks()
-  const projection = await args.testEnv.D1_US.prepare(`SELECT r.engine_document_id FROM canonical_projection_results r INNER JOIN canonical_projection_jobs j ON j.id = r.projection_job_id WHERE j.tenant_id = ? AND j.operation_id = ? AND j.projection_kind = 'hindsight' ORDER BY r.updated_at DESC, r.created_at DESC, r.id DESC LIMIT 1`).bind(TENANT_ID, result.capture.operationId).first<{ engine_document_id: string }>()
+  const projection = await getCanonicalMemoryStore(args.testEnv)
+    .getLatestProjectionResultForOperation(TENANT_ID, result.capture.operationId, 'hindsight')
   return { captureId: result.capture.captureId, documentId: result.capture.documentId, operationId: result.capture.operationId, engineDocumentId: projection!.engine_document_id }
 }
 
 function expectPublicBundleShape(bundle: AgentContextBundle): void {
-  expect(Object.keys(bundle).sort()).toEqual(['agent', 'confidence', 'evidence', 'followUpQuestions', 'gaps', 'highlights', 'intent', 'openLoops', 'recentChanges', 'relationships', 'risks', 'scope', 'sources', 'summary', 'target', 'timeline'].sort())
+  expect(Object.keys(bundle).sort()).toEqual(['agent', 'compiled', 'confidence', 'evidence', 'followUpQuestions', 'gaps', 'highlights', 'intent', 'openLoops', 'recentChanges', 'relationships', 'risks', 'scope', 'sources', 'summary', 'target', 'timeline'].sort())
   expect(JSON.stringify(bundle)).not.toContain('engineDocumentId')
   expect(JSON.stringify(bundle)).not.toContain('engineOperationId')
 }
@@ -117,6 +106,8 @@ describe('9.2 chief-of-staff context builder', () => {
     expect(bundle.openLoops[0]).toContain('checklist')
     expect(bundle.sources.some((source) => source.mode === 'semantic' && source.documentId === seeded.documentId)).toBe(true)
     expect(bundle.evidence.some((block) => block.mode === 'composed')).toBe(true)
+    expect(bundle.compiled?.mode).toBe('runtime_fallback')
+    expect(bundle.compiled?.fallbackUsed).toBe(true)
     expectPublicBundleShape(bundle)
   })
 
@@ -125,6 +116,7 @@ describe('9.2 chief-of-staff context builder', () => {
     const recallResults: HindsightRecallRow[] = []
     const testEnv = createRuntimeEnv({ recallResults, capture: { retainCount: 0, operationIds: [] } })
     await captureAndProject({ fixture: projectNote, suffix: 'project-note', memoryType: 'episodic', testEnv, tmk })
+    await captureAndProject({ fixture: projectGraphNote, suffix: 'project-graph', memoryType: 'episodic', testEnv, tmk })
     const seeded = await captureAndProject({ fixture: projectConversation, suffix: 'project-conversation', memoryType: 'semantic', testEnv, tmk })
     recallResults.splice(0, recallResults.length, { document_id: seeded.engineDocumentId, text: 'Launch plan is down to three milestones, optional work left the critical path, and the checklist owner is still unresolved.', score: 0.95, metadata: { source: 'mcp_memory_write', domain: 'general' } })
 
@@ -137,7 +129,10 @@ describe('9.2 chief-of-staff context builder', () => {
     expect(bundle.recentChanges.some((item) => item.includes('three milestones'))).toBe(true)
     expect(bundle.risks.some((item) => item.includes('owner'))).toBe(true)
     expect(bundle.timeline.length).toBeGreaterThan(0)
+    expect(bundle.evidence.some((block) => block.mode === 'graph' && block.items.length > 0)).toBe(true)
     expect(bundle.sources.some((source) => source.projectionRef || source.graphRef)).toBe(true)
+    expect(bundle.compiled?.mode).toBe('runtime_fallback')
+    expect(bundle.compiled?.fallbackUsed).toBe(true)
     expectPublicBundleShape(bundle)
   })
 
@@ -156,6 +151,8 @@ describe('9.2 chief-of-staff context builder', () => {
     expect(bundle.gaps.some((gap) => gap.mode === 'graph' && gap.kind === 'missing')).toBe(true)
     expect(bundle.followUpQuestions[0]).toContain('relationship history')
     expect(bundle.sources.some((source) => source.mode === 'raw')).toBe(true)
+    expect(bundle.compiled?.mode).toBe('runtime_fallback')
+    expect(bundle.compiled?.fallbackUsed).toBe(true)
     expectPublicBundleShape(bundle)
   })
 })

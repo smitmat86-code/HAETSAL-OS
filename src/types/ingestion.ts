@@ -4,6 +4,7 @@ export type IngestionSource =
   | 'sms'
   | 'gmail'
   | 'calendar'
+  | 'drive'
   | 'obsidian'
   | 'file'
   | 'mcp_retain'

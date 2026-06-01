@@ -2,6 +2,7 @@ import type { Env } from '../types/env'
 
 export interface CanonicalMemoryReadOptions {
   tmk?: CryptoKey | null
+  executionContext?: Pick<ExecutionContext, 'waitUntil'> | null
 }
 
 export interface CanonicalListRow {

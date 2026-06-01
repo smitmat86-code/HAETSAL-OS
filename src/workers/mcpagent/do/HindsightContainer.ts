@@ -1,6 +1,5 @@
 // src/workers/mcpagent/do/HindsightContainer.ts
 // Cloudflare Container DO class for Hindsight memory engine.
-// Hindsight API-only image + direct Neon Postgres + AI Gateway BYOK for Groq-backed LLMs.
 // Hindsight serves its API on port 8888; use startAndWaitForPorts for cold-start safety.
 
 import { Container } from '@cloudflare/containers'
@@ -44,6 +43,12 @@ function buildSharedHindsightModelEnv(env: Env): Record<string, string> {
     HINDSIGHT_API_LLM_API_KEY: gatewayToken,
     HINDSIGHT_API_LLM_BASE_URL: buildAIGatewayCompatUrl(env),
     HINDSIGHT_API_LLM_MODEL: 'groq/openai/gpt-oss-20b',
+    HINDSIGHT_API_RETAIN_LLM_PROVIDER: 'openai',
+    HINDSIGHT_API_RETAIN_LLM_API_KEY: gatewayToken,
+    HINDSIGHT_API_RETAIN_LLM_BASE_URL: buildAIGatewayCompatUrl(env),
+    HINDSIGHT_API_RETAIN_LLM_MODEL: 'openai/gpt-4.1-nano',
+    HINDSIGHT_API_LLM_MAX_RETRIES: '3',
+    HINDSIGHT_API_RETAIN_LLM_MAX_RETRIES: '3',
     HINDSIGHT_API_EMBEDDINGS_PROVIDER: 'local',
     HINDSIGHT_API_REFLECT_LLM_PROVIDER: 'openai',
     HINDSIGHT_API_REFLECT_LLM_API_KEY: gatewayToken,
@@ -66,7 +71,7 @@ export function buildHindsightContainerEnv(env: Env): Record<string, string> {
     HINDSIGHT_API_DATABASE_URL: databaseUrl,
     HINDSIGHT_API_MIGRATION_DATABASE_URL: databaseUrl,
     HINDSIGHT_API_RUN_MIGRATIONS_ON_STARTUP: 'true',
-    HINDSIGHT_API_WORKER_ENABLED: useDedicatedHindsightWorkers(env) ? 'false' : 'true',
+    HINDSIGHT_API_WORKER_ENABLED: 'true',
     HINDSIGHT_API_WORKER_ID: 'haetsal-api-internal',
     HINDSIGHT_API_WORKER_POLL_INTERVAL_MS: '500',
     HINDSIGHT_API_WORKER_MAX_SLOTS: '4',
@@ -100,16 +105,13 @@ export function buildHindsightWorkerContainerEnv(env: Env, workerId: string): Re
     ...buildSharedHindsightModelEnv(env),
   }
 }
-
 export class HindsightContainer extends Container<Env> {
   defaultPort = 8888
   requiredPorts = [8888]
   sleepAfter = '10m'
   enableInternet = true
-  // Cloudflare's Container class health-checks this endpoint while waiting for readiness.
-  // Hindsight exposes Prometheus metrics on the API port, but not a default /ping route.
+  // Container health checks use Hindsight's metrics endpoint because the API image has no default /ping route.
   pingEndpoint = HINDSIGHT_PING_ENDPOINT
-
   constructor(ctx: DurableObjectState, env: Env) {
     super(ctx as DurableObjectState<{}>, env)
     this.envVars = buildHindsightContainerEnv(env)
@@ -131,7 +133,6 @@ export class HindsightWorkerContainer extends Container<Env> {
   enableInternet = true
   pingEndpoint = HINDSIGHT_WORKER_PING_ENDPOINT
   entrypoint = ['hindsight-worker']
-
   constructor(ctx: DurableObjectState, env: Env) {
     super(ctx as DurableObjectState<{}>, env)
     const suffix = ctx.id.toString().slice(-12)

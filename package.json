@@ -8,24 +8,28 @@
     "test": "vitest run",
     "postflight": "tsx scripts/postflight-check.ts",
     "manifest": "tsx scripts/generate-manifest.ts",
-    "checkout": "tsx scripts/checkout.ts"
+    "checkout": "tsx scripts/checkout.ts",
+    "cf:explorer:plan": "tsx scripts/cloudflare-local-explorer.ts plan",
+    "cf:explorer:spec": "tsx scripts/cloudflare-local-explorer.ts fetch-spec",
+    "cf:types": "wrangler types src/types/cloudflare-env.generated.d.ts --include-runtime false"
   },
   "dependencies": {
-    "@cloudflare/containers": "^0.3.2",
-    "@cloudflare/puppeteer": "^1.0.6",
-    "agents": "^0.7.5",
+    "@cloudflare/containers": "^0.3.5",
+    "@cloudflare/puppeteer": "^1.1.0",
+    "@neondatabase/serverless": "^1.1.0",
+    "agents": "^0.7.9",
     "ai": "^6.0.116",
     "hono": "^4.7.0",
     "zod": "^3.25.76"
   },
   "devDependencies": {
-    "@cloudflare/vitest-pool-workers": "^0.14.7",
-    "@cloudflare/workers-types": "^4.20250303.0",
+    "@cloudflare/vitest-pool-workers": "^0.16.10",
+    "@cloudflare/workers-types": "^4.20260601.1",
     "@types/node": "^22.0.0",
     "@vitest/snapshot": "^4.1.4",
     "tsx": "^4.19.0",
     "typescript": "^5.7.0",
     "vitest": "^4.1.4",
-    "wrangler": "^4.83.0"
+    "wrangler": "^4.95.0"
   }
 }

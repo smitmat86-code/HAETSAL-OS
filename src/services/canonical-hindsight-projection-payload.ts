@@ -5,6 +5,7 @@ import type {
   HindsightProjectionDispatchInput,
 } from '../types/canonical-capture-pipeline'
 import type { IngestionArtifact, IngestionSource } from '../types/ingestion'
+import { getCanonicalMemoryStore } from './canonical-postgres'
 import { buildHindsightDocumentId } from './hindsight'
 
 export interface ProjectionJobContext {
@@ -26,15 +27,18 @@ export interface HindsightProjectionPayload {
   metadata?: Record<string, unknown>
   salienceTier: 1 | 2 | 3
   salienceSurpriseScore: number
+  hindsightAsync?: boolean
 }
 
-function projectionPayloadKey(tenantId: string, captureId: string): string {
-  return `canonical/${tenantId}/projections/hindsight/${captureId}.enc`
-}
+const projectionPayloadKey = (tenantId: string, captureId: string): string =>
+  `canonical/${tenantId}/projections/hindsight/${captureId}.enc`
 
 export function resolveProjectionSourceRef(
-  row: Pick<ProjectionJobContext, 'source_ref' | 'capture_id'>,
+  row: Pick<ProjectionJobContext, 'source_system' | 'source_ref' | 'capture_id'>,
 ): string {
+  if (row.source_system === 'mcp:memory_write' && row.source_ref?.startsWith('brain-memory:')) {
+    return row.capture_id
+  }
   return row.source_ref?.trim() || row.capture_id
 }
 
@@ -44,7 +48,11 @@ export function buildExpectedHindsightDocumentId(
   sourceRef: string | null,
   captureId: string,
 ): string {
-  return buildHindsightDocumentId(tenantId, sourceSystem, sourceRef?.trim() || captureId)
+  return buildHindsightDocumentId(tenantId, sourceSystem, resolveProjectionSourceRef({
+    source_system: sourceSystem as IngestionSource,
+    source_ref: sourceRef,
+    capture_id: captureId,
+  }))
 }
 
 export function toHindsightArtifact(
@@ -60,7 +68,12 @@ export function toHindsightArtifact(
     memoryType: payload.memoryType,
     domain: row.scope,
     provenance: payload.provenance,
-    metadata: payload.metadata,
+    metadata: {
+      ...(payload.metadata ?? {}),
+      canonical_capture_id: row.capture_id,
+      canonical_document_id: row.document_id,
+      canonical_operation_id: row.operation_id,
+    },
   }
 }
 
@@ -69,14 +82,11 @@ export async function readProjectionJobContext(
   tenantId: string,
   input: HindsightProjectionDispatchInput,
 ): Promise<ProjectionJobContext> {
-  const row = await env.D1_US.prepare(
-    `SELECT j.id, j.operation_id, j.capture_id, j.document_id, c.source_system, c.source_ref,
-            c.scope, c.captured_at, c.body_r2_key
-     FROM canonical_projection_jobs j
-     INNER JOIN canonical_captures c ON c.id = j.capture_id
-     WHERE j.tenant_id = ? AND j.id = ? AND j.projection_kind = 'hindsight'
-     LIMIT 1`,
-  ).bind(tenantId, input.projectionJobId).first<ProjectionJobContext>()
+  const row = await getCanonicalMemoryStore(env).getProjectionJobContext(
+    tenantId,
+    input.projectionJobId,
+    'hindsight',
+  ) as ProjectionJobContext | null
   if (!row) throw new Error(`Missing hindsight projection job ${input.projectionJobId}`)
   return row
 }
@@ -98,17 +108,7 @@ export async function projectionAlreadySubmitted(
   tenantId: string,
   projectionJobId: string,
 ): Promise<boolean> {
-  const row = await env.D1_US.prepare(
-    `SELECT engine_bank_id, engine_operation_id, status
-     FROM canonical_projection_results
-     WHERE tenant_id = ? AND projection_job_id = ?
-     ORDER BY updated_at DESC, created_at DESC, id DESC
-     LIMIT 1`,
-  ).bind(tenantId, projectionJobId).first<{
-    engine_bank_id: string | null
-    engine_operation_id: string | null
-    status: string | null
-  }>()
+  const row = await getCanonicalMemoryStore(env).getLatestProjectionResult(tenantId, projectionJobId)
   return Boolean(
     row && row.status !== 'failed' &&
     (row.engine_bank_id || row.engine_operation_id || row.status === 'completed'),
@@ -126,9 +126,10 @@ export async function materializeHindsightProjectionPayload(
     body: input.body,
     memoryType: input.memoryType ?? 'episodic',
     provenance: input.provenance ?? input.sourceSystem,
-    metadata: input.metadata,
-    salienceTier: input.salienceTier ?? 1,
-    salienceSurpriseScore: input.salienceSurpriseScore ?? 0.5,
+      metadata: input.metadata,
+      salienceTier: input.salienceTier ?? 1,
+      salienceSurpriseScore: input.salienceSurpriseScore ?? 0.5,
+      hindsightAsync: input.hindsightAsync ?? false,
   } satisfies HindsightProjectionPayload), kek)
   await env.R2_ARTIFACTS.put(projectionPayloadKey(input.tenantId, captureId), ciphertext)
 }

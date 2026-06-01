@@ -2,14 +2,25 @@ import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import { env } from 'cloudflare:test'
 import { captureThroughCanonicalPipeline } from '../src/services/canonical-capture-pipeline'
 import { getCanonicalMemoryStatus } from '../src/services/canonical-memory-status'
+import { getCanonicalMemoryStore } from '../src/services/canonical-postgres'
 import { encryptContentForArchive } from '../src/services/ingestion/encryption'
 import { processCanonicalProjectionDispatch } from '../src/workers/ingestion/canonical-projection-consumer'
 import type { CanonicalPipelineCaptureInput } from '../src/types/canonical-capture-pipeline'
+import { createGraphitiContainerTestEnv } from './support/graphiti-test-env'
 import noteFixture from './fixtures/canonical-memory/note-capture.json'
 import conversationFixture from './fixtures/canonical-memory/conversation-capture.json'
 
 const SUITE_ID = crypto.randomUUID()
 const TENANT_A = `test-tenant-graphiti-82-${SUITE_ID}`
+const leadershipFixture: CanonicalPipelineCaptureInput = {
+  tenantId: TENANT_A,
+  sourceSystem: 'mcp_retain',
+  sourceRef: 'leadership-fixture',
+  scope: 'general',
+  title: 'Leadership fixture',
+  body: 'Ava Stone leads Project Atlas.',
+  capturedAt: Date.UTC(2026, 3, 20),
+}
 
 async function deriveTestTmk(): Promise<CryptoKey> {
   const material = await crypto.subtle.importKey(
@@ -65,41 +76,6 @@ async function encryptFixture(
   }
 }
 
-function makeGraphitiEnv() {
-  return {
-    ...env,
-    GRAPHITI_API_URL: 'https://graphiti.internal',
-    GRAPHITI_API_TOKEN: 'graphiti-test-token',
-  } as typeof env
-}
-
-function buildCompletedResponse(body: Record<string, any>) {
-  return {
-    status: 'completed',
-    targetRef: `graphiti://episodes/${body.captureId}`,
-    episodeRefs: [`graphiti://episodes/${body.captureId}`],
-    entityRefs: (body.plan.entities as Array<Record<string, unknown>>).map((_: unknown, index: number) => `graphiti://entities/${body.captureId}-${index}`),
-    edgeRefs: (body.plan.edges as Array<Record<string, unknown>>).map((_: unknown, index: number) => `graphiti://edges/${body.captureId}-${index}`),
-    mappings: [
-      {
-        canonicalKey: body.plan.episode.canonicalKey,
-        graphRef: `graphiti://episodes/${body.captureId}`,
-        graphKind: 'episode',
-      },
-      ...(body.plan.entities as Array<Record<string, unknown>>).map((entity, index: number) => ({
-        canonicalKey: entity.canonicalKey,
-        graphRef: `graphiti://entities/${body.captureId}-${index}`,
-        graphKind: 'entity',
-      })),
-      ...(body.plan.edges as Array<Record<string, unknown>>).map((edge, index: number) => ({
-        canonicalKey: edge.canonicalKey,
-        graphRef: `graphiti://edges/${body.captureId}-${index}`,
-        graphKind: 'edge',
-      })),
-    ],
-  }
-}
-
 async function processGraphitiDispatch(
   message: { tenantId: string; payload: Record<string, unknown> },
   testEnv: typeof env,
@@ -120,20 +96,8 @@ beforeEach(() => {
 
 describe('8.2 graphiti ingestion projection', () => {
   it('projects note captures through the canonical dispatch path and persists graph identity mappings', async () => {
-    const requests: Array<Record<string, any>> = []
-    const originalFetch = globalThis.fetch
-    const testEnv = makeGraphitiEnv()
+    const { requests, testEnv } = createGraphitiContainerTestEnv()
     const sendSpy = vi.spyOn(testEnv.QUEUE_BULK, 'send').mockResolvedValue(undefined as never)
-    vi.spyOn(globalThis, 'fetch').mockImplementation(async (input, init) => {
-      const url = input instanceof Request ? input.url : input instanceof URL ? input.toString() : String(input)
-      if (!url.includes('graphiti.internal')) return originalFetch(input, init)
-      const body = JSON.parse(String(init?.body ?? (input instanceof Request ? await input.clone().text() : '{}'))) as Record<string, any>
-      requests.push(body)
-      return new Response(JSON.stringify(buildCompletedResponse(body)), {
-        status: 200,
-        headers: { 'Content-Type': 'application/json' },
-      })
-    })
     const input = await encryptFixture(noteFixture as CanonicalPipelineCaptureInput, 'note')
 
     const result = await captureThroughCanonicalPipeline({
@@ -144,12 +108,7 @@ describe('8.2 graphiti ingestion projection', () => {
     const message = sendSpy.mock.calls[0]?.[0] as { tenantId: string; payload: Record<string, unknown> }
     await processGraphitiDispatch(message, testEnv)
 
-    const mappings = await testEnv.D1_US.prepare(
-      `SELECT canonical_key, graph_ref, graph_kind
-       FROM canonical_graph_identity_mappings
-       WHERE tenant_id = ?
-       ORDER BY graph_kind ASC, canonical_key ASC`,
-    ).bind(TENANT_A).all<{ canonical_key: string; graph_ref: string; graph_kind: string }>()
+    const mappings = await getCanonicalMemoryStore(testEnv).listGraphIdentityMappings(TENANT_A)
     const status = await getCanonicalMemoryStatus(
       { tenantId: TENANT_A, operationId: result.capture.operationId },
       testEnv,
@@ -160,27 +119,46 @@ describe('8.2 graphiti ingestion projection', () => {
     expect(JSON.stringify(message)).not.toContain(input.bodyEncrypted!)
     expect(requests[0]?.plan.episode.kind).toBe('note')
     expect(requests[0]?.content.body).toBe(input.body)
-    expect(mappings.results.map((row) => row.graph_kind)).toEqual(expect.arrayContaining(['edge', 'entity', 'episode']))
+    expect(mappings.map((row) => row.graph_kind)).toEqual(expect.arrayContaining(['edge', 'entity', 'episode']))
     expect(status.graph?.status).toBe('projected')
     expect(status.graph?.ready).toBe(true)
     expect(status.graph?.targetRef).toContain('graphiti://episodes/')
   })
 
-  it('projects conversation captures into conversation episodes, speaker entities, and temporal edges', async () => {
-    const requests: Array<Record<string, any>> = []
-    const originalFetch = globalThis.fetch
-    const testEnv = makeGraphitiEnv()
+  it('includes body-derived leadership entities and relations in the graph projection plan', async () => {
+    const { requests, testEnv } = createGraphitiContainerTestEnv()
     const sendSpy = vi.spyOn(testEnv.QUEUE_BULK, 'send').mockResolvedValue(undefined as never)
-    vi.spyOn(globalThis, 'fetch').mockImplementation(async (input, init) => {
-      const url = input instanceof Request ? input.url : input instanceof URL ? input.toString() : String(input)
-      if (!url.includes('graphiti.internal')) return originalFetch(input, init)
-      const body = JSON.parse(String(init?.body ?? (input instanceof Request ? await input.clone().text() : '{}'))) as Record<string, any>
-      requests.push(body)
-      return new Response(JSON.stringify(buildCompletedResponse(body)), {
-        status: 200,
-        headers: { 'Content-Type': 'application/json' },
-      })
-    })
+    const input = await encryptFixture(leadershipFixture, 'leadership')
+
+    await captureThroughCanonicalPipeline({
+      ...input,
+      compatibilityMode: 'off',
+      memoryType: 'episodic',
+    }, testEnv, TENANT_A)
+    const message = sendSpy.mock.calls[0]?.[0] as { tenantId: string; payload: Record<string, unknown> }
+    await processGraphitiDispatch(message, testEnv)
+
+    const graphProjection = requests[0]?.plan as {
+      entities: Array<{ canonicalKey: string; kind: string }>
+      edges: Array<{ relation: string; fromCanonicalKey: string; toCanonicalKey: string }>
+    }
+
+    expect(graphProjection.entities).toEqual(expect.arrayContaining([
+      expect.objectContaining({ canonicalKey: 'canonical://people/ava-stone', kind: 'person' }),
+      expect.objectContaining({ canonicalKey: 'canonical://projects/project-atlas', kind: 'project' }),
+    ]))
+    expect(graphProjection.edges).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        relation: 'leads',
+        fromCanonicalKey: 'canonical://people/ava-stone',
+        toCanonicalKey: 'canonical://projects/project-atlas',
+      }),
+    ]))
+  })
+
+  it('projects conversation captures into conversation episodes, speaker entities, and temporal edges', async () => {
+    const { requests, testEnv } = createGraphitiContainerTestEnv()
+    const sendSpy = vi.spyOn(testEnv.QUEUE_BULK, 'send').mockResolvedValue(undefined as never)
     const input = await encryptFixture(conversationFixture as CanonicalPipelineCaptureInput, 'conversation')
 
     const result = await captureThroughCanonicalPipeline({
@@ -213,25 +191,46 @@ describe('8.2 graphiti ingestion projection', () => {
   it('marks graph projection failures truthfully and allows a later retry to complete', async () => {
     vi.spyOn(console, 'error').mockImplementation(() => {})
     let attempt = 0
-    const originalFetch = globalThis.fetch
-    const testEnv = makeGraphitiEnv()
-    const sendSpy = vi.spyOn(testEnv.QUEUE_BULK, 'send').mockResolvedValue(undefined as never)
-    vi.spyOn(globalThis, 'fetch').mockImplementation(async (input, init) => {
-      const url = input instanceof Request ? input.url : input instanceof URL ? input.toString() : String(input)
-      if (!url.includes('graphiti.internal')) return originalFetch(input, init)
-      const body = JSON.parse(String(init?.body ?? (input instanceof Request ? await input.clone().text() : '{}'))) as Record<string, any>
-      attempt += 1
-      if (attempt === 1) {
-        return new Response(JSON.stringify({ detail: 'graphiti runtime unavailable' }), {
-          status: 503,
-          headers: { 'Content-Type': 'application/json' },
+    const { testEnv } = createGraphitiContainerTestEnv({
+      response: async (body) => {
+        attempt += 1
+        if (attempt === 1) {
+          return new Response(JSON.stringify({ detail: 'graphiti runtime unavailable' }), {
+            status: 503,
+            headers: { 'Content-Type': 'application/json' },
+          })
+        }
+        return Response.json({
+          status: 'completed',
+          targetRef: `graphiti://episodes/${body.captureId}`,
+          episodeRefs: [`graphiti://episodes/${body.captureId}`],
+          entityRefs: ((body.plan as { entities?: Array<Record<string, unknown>> }).entities ?? [])
+            .map((_: unknown, index: number) => `graphiti://entities/${body.captureId}-${index}`),
+          edgeRefs: ((body.plan as { edges?: Array<Record<string, unknown>> }).edges ?? [])
+            .map((_: unknown, index: number) => `graphiti://edges/${body.captureId}-${index}`),
+          mappings: [
+            {
+              canonicalKey: (body.plan as { episode: { canonicalKey: string } }).episode.canonicalKey,
+              graphRef: `graphiti://episodes/${body.captureId}`,
+              graphKind: 'episode',
+            },
+            ...(((body.plan as { entities?: Array<Record<string, unknown>> }).entities ?? [])
+              .map((entity, index) => ({
+                canonicalKey: String(entity.canonicalKey),
+                graphRef: `graphiti://entities/${body.captureId}-${index}`,
+                graphKind: 'entity',
+              }))),
+            ...(((body.plan as { edges?: Array<Record<string, unknown>> }).edges ?? [])
+              .map((edge, index) => ({
+                canonicalKey: String(edge.canonicalKey),
+                graphRef: `graphiti://edges/${body.captureId}-${index}`,
+                graphKind: 'edge',
+              }))),
+          ],
         })
-      }
-      return new Response(JSON.stringify(buildCompletedResponse(body)), {
-        status: 200,
-        headers: { 'Content-Type': 'application/json' },
-      })
+      },
     })
+    const sendSpy = vi.spyOn(testEnv.QUEUE_BULK, 'send').mockResolvedValue(undefined as never)
     const input = await encryptFixture(noteFixture as CanonicalPipelineCaptureInput, 'retry')
 
     const result = await captureThroughCanonicalPipeline({

@@ -11,6 +11,7 @@ import { encryptContentForArchive } from '../src/services/ingestion/encryption'
 import type { CanonicalPipelineCaptureInput } from '../src/types/canonical-capture-pipeline'
 import type { CanonicalMemoryStatusResult } from '../src/types/canonical-memory-query'
 import { processCanonicalProjectionDispatch } from '../src/workers/ingestion/canonical-projection-consumer'
+import { createGraphitiContainerTestEnv } from './support/graphiti-test-env'
 import noteFixture from './fixtures/canonical-memory/note-capture.json'
 
 const consolidationMocks = vi.hoisted(() => ({
@@ -92,9 +93,9 @@ async function ensureTenantWithKek(tenantId: string): Promise<void> {
 
 async function resetTenantState(tenantId: string): Promise<void> {
   await env.D1_US.exec([
-    `DELETE FROM memory_audit WHERE tenant_id = '${tenantId}'`,
     `DELETE FROM consolidation_gaps WHERE tenant_id = '${tenantId}'`,
     `DELETE FROM consolidation_runs WHERE tenant_id = '${tenantId}'`,
+    `DELETE FROM canonical_graph_identity_mappings WHERE tenant_id = '${tenantId}'`,
     `DELETE FROM canonical_projection_results WHERE tenant_id = '${tenantId}'`,
     `DELETE FROM canonical_projection_jobs WHERE tenant_id = '${tenantId}'`,
     `DELETE FROM canonical_memory_operations WHERE tenant_id = '${tenantId}'`,
@@ -104,6 +105,7 @@ async function resetTenantState(tenantId: string): Promise<void> {
     `DELETE FROM canonical_captures WHERE tenant_id = '${tenantId}'`,
     `DELETE FROM hindsight_operations WHERE tenant_id = '${tenantId}'`,
     `DELETE FROM ingestion_events WHERE tenant_id = '${tenantId}'`,
+    `DELETE FROM memory_audit WHERE tenant_id = '${tenantId}'`,
   ].join(';\n'))
 }
 
@@ -125,8 +127,11 @@ function createHindsightEnv(state: {
   operationStatus: 'pending' | 'completed' | 'failed'
   retainCount: number
 }): typeof env {
+  const { testEnv } = createGraphitiContainerTestEnv()
   return {
     ...env,
+    GRAPHITI_RUNTIME_MODE: testEnv.GRAPHITI_RUNTIME_MODE,
+    GRAPHITI: testEnv.GRAPHITI,
     HINDSIGHT_DEDICATED_WORKERS_ENABLED: 'false',
     WORKER_DOMAIN: 'brain.workers.dev',
     HINDSIGHT_WEBHOOK_SECRET: 'test-secret',
@@ -245,7 +250,7 @@ describe('7.3 reflection / consolidation alignment', () => {
 
     const before = await readStatus(testEnv, seeded.operationId)
     expect(before.reflection?.status).toBe('pending')
-    expect(before.operation.status).toBe('queued')
+    expect(before.operation.status).toBe('completed')
     expect(before.projections.find(item => item.kind === 'hindsight')?.semanticReady).toBe(true)
 
     await runConsolidationPasses(HINDSIGHT_BANK_ID, testEnv, {

@@ -1,6 +1,7 @@
 import type { Env } from '../types/env'
 import type { CanonicalGraphIdentityMapping } from '../types/canonical-graph-projection'
 import { buildCanonicalGraphitiProjectionAuditBatch } from './canonical-memory-audit'
+import { getCanonicalMemoryStore } from './canonical-postgres'
 
 interface GraphitiProjectionJobRow {
   id: string
@@ -32,13 +33,9 @@ async function readAggregateOperationStatus(
   currentJobId: string,
   nextJobStatus: 'queued' | 'completed' | 'failed',
 ): Promise<'accepted' | 'queued' | 'completed' | 'failed'> {
-  const rows = await env.D1_US.prepare(
-    `SELECT id, status
-     FROM canonical_projection_jobs
-     WHERE tenant_id = ? AND operation_id = ?`,
-  ).bind(tenantId, operationId).all<{ id: string; status: string }>()
-  const statuses = (rows.results ?? []).map((row) =>
-    row.id === currentJobId ? nextJobStatus : row.status,
+  const rows = await getCanonicalMemoryStore(env).listProjectionStatesForOperation(tenantId, operationId)
+  const statuses = rows.map((row) =>
+    row.job_id === currentJobId ? nextJobStatus : row.status,
   )
   if (statuses.includes('failed')) return 'failed'
   if (statuses.length > 0 && statuses.every((status) => status === 'completed')) return 'completed'
@@ -69,53 +66,22 @@ export async function recordGraphitiProjectionState(args: {
   )
   const mappings = dedupeMappings(args.submission.mappings)
 
-  await args.env.D1_US.batch([
-    args.env.D1_US.prepare(
-      `UPDATE canonical_memory_operations
-       SET status = ?, updated_at = ?
-       WHERE tenant_id = ? AND id = ?`,
-    ).bind(operationStatus, updatedAt, args.tenantId, args.job.operation_id),
-    args.env.D1_US.prepare(
-      `UPDATE canonical_projection_jobs
-       SET status = ?
-       WHERE tenant_id = ? AND id = ?`,
-    ).bind(args.jobStatus, args.tenantId, args.job.id),
-    args.env.D1_US.prepare(
-      `INSERT INTO canonical_projection_results
-       (id, tenant_id, projection_job_id, status, target_ref, error_message, engine_operation_id, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-    ).bind(
-      crypto.randomUUID(),
-      args.tenantId,
-      args.job.id,
-      args.resultStatus,
-      args.submission.targetRef,
-      args.errorMessage ?? null,
-      args.submission.operationRef ?? null,
-      updatedAt,
-      updatedAt,
-    ),
-    ...mappings.map((mapping) => args.env.D1_US.prepare(
-      `INSERT INTO canonical_graph_identity_mappings
-       (id, tenant_id, projection_job_id, canonical_key, graph_ref, graph_kind, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-       ON CONFLICT(projection_job_id, canonical_key, graph_kind)
-       DO UPDATE SET graph_ref = excluded.graph_ref, updated_at = excluded.updated_at`,
-    ).bind(
-      crypto.randomUUID(),
-      args.tenantId,
-      args.job.id,
-      mapping.canonicalKey,
-      mapping.graphRef,
-      mapping.graphKind,
-      updatedAt,
-      updatedAt,
-    )),
-    ...buildCanonicalGraphitiProjectionAuditBatch(args.env.D1_US, {
+  await getCanonicalMemoryStore(args.env).recordProjectionState({
+    tenantId: args.tenantId,
+    jobId: args.job.id,
+    operationId: args.job.operation_id,
+    jobStatus: args.jobStatus,
+    resultStatus: args.resultStatus,
+    targetRef: args.submission.targetRef,
+    errorMessage: args.errorMessage ?? null,
+    engineOperationId: args.submission.operationRef ?? null,
+    updatedAt,
+    graphMappings: mappings,
+  })
+  await args.env.D1_US.batch(buildCanonicalGraphitiProjectionAuditBatch(args.env.D1_US, {
       tenantId: args.tenantId,
       operationId: args.job.operation_id,
       createdAt: updatedAt,
       action: args.auditAction,
-    }),
-  ])
+    }))
 }

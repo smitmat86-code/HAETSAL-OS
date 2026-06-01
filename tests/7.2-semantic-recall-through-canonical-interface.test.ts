@@ -3,6 +3,7 @@ import { env } from 'cloudflare:test'
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { captureThroughCanonicalPipeline } from '../src/services/canonical-capture-pipeline'
 import { getCanonicalMemoryStatus } from '../src/services/canonical-memory-status'
+import { getCanonicalMemoryStore } from '../src/services/canonical-postgres'
 import { encryptContentForArchive } from '../src/services/ingestion/encryption'
 import { registerCanonicalMemoryTools } from '../src/tools/canonical-memory'
 import type { CanonicalPipelineCaptureInput } from '../src/types/canonical-capture-pipeline'
@@ -11,6 +12,7 @@ import type {
   CanonicalSearchResult,
 } from '../src/types/canonical-memory-query'
 import { processCanonicalProjectionDispatch } from '../src/workers/ingestion/canonical-projection-consumer'
+import { reconcileHindsightOperation } from '../src/cron/hindsight-operations'
 import { createHindsightTestEnv, type HindsightCaptureState, type HindsightRecallRow } from './support/hindsight-test-env'
 import conversationFixture from './fixtures/canonical-memory/conversation-capture.json'
 import noteFixture from './fixtures/canonical-memory/note-capture.json'
@@ -118,36 +120,40 @@ async function processDispatch(
   await Promise.allSettled(pending)
 }
 
+async function processDispatchWithoutWaitUntil(
+  message: { tenantId: string; payload: Record<string, unknown> },
+  testEnv: typeof env,
+): Promise<void> {
+  await processCanonicalProjectionDispatch(message.tenantId, message.payload, testEnv)
+}
+
 async function captureAndProject(args: {
   fixture: CanonicalPipelineCaptureInput
   suffix: string
   memoryType: 'episodic' | 'semantic' | 'world'
+  hindsightAsync?: boolean
   testEnv: typeof env
   tmk: CryptoKey
-}): Promise<{ captureId: string; documentId: string; operationId: string; engineDocumentId: string }> {
+}): Promise<{ captureId: string; documentId: string; operationId: string; engineDocumentId: string; engineOperationId: string | null }> {
   const sendSpy = vi.spyOn(args.testEnv.QUEUE_BULK, 'send').mockResolvedValue(undefined as never)
   const input = await encryptFixture(args.fixture, TENANT_A, args.suffix, args.tmk)
   const result = await captureThroughCanonicalPipeline({
     ...input,
     memoryType: args.memoryType,
     compatibilityMode: 'current_hindsight',
+    hindsightAsync: args.hindsightAsync ?? false,
   }, args.testEnv, TENANT_A)
   const message = sendSpy.mock.calls[0]?.[0] as { tenantId: string; payload: Record<string, unknown> }
   await processDispatch(message, args.testEnv)
   sendSpy.mockRestore()
-  const projection = await args.testEnv.D1_US.prepare(
-    `SELECT r.engine_document_id
-     FROM canonical_projection_results r
-     INNER JOIN canonical_projection_jobs j ON j.id = r.projection_job_id
-     WHERE j.tenant_id = ? AND j.operation_id = ? AND j.projection_kind = 'hindsight'
-     ORDER BY r.updated_at DESC, r.created_at DESC, r.id DESC
-     LIMIT 1`,
-  ).bind(TENANT_A, result.capture.operationId).first<{ engine_document_id: string }>()
+  const projection = await getCanonicalMemoryStore(args.testEnv)
+    .getLatestProjectionResultForOperation(TENANT_A, result.capture.operationId, 'hindsight')
   return {
     captureId: result.capture.captureId,
     documentId: result.capture.documentId,
     operationId: result.capture.operationId,
-    engineDocumentId: projection!.engine_document_id,
+    engineDocumentId: projection!.engine_document_id!,
+    engineOperationId: projection!.engine_operation_id,
   }
 }
 
@@ -194,6 +200,147 @@ describe('7.2 semantic recall through canonical interface', () => {
     expect(result.items[0]?.provenance?.canonicalOperationId).toBe(seeded.operationId)
     expect(result.items[0]?.semanticStatus?.ready).toBe(true)
     expect(result.items[0]?.recallText).toContain('two open questions tomorrow')
+  })
+
+  it('returns completed semantic memories even when hindsight stored extra source tags', async () => {
+    const tmk = await deriveTestTmk()
+    const recallResults: HindsightRecallRow[] = []
+    const capture: HindsightCaptureState = { retainCount: 0, operationIds: [] }
+    const testEnv = createHindsightTestEnv({ capture, operationStatus: 'completed', recallResults })
+    const seeded = await captureAndProject({
+      fixture: noteFixture as CanonicalPipelineCaptureInput,
+      suffix: 'strict-tag-match',
+      memoryType: 'episodic',
+      testEnv,
+      tmk,
+    })
+
+    replaceRecallResults(recallResults, [{
+      id: 'semantic-source-tag-result',
+      document_id: seeded.engineDocumentId,
+      text: 'The user committed to following up with two open questions tomorrow.',
+      score: 0.95,
+      metadata: { source: 'mcp_retain', domain: 'general' },
+    }])
+
+    const result = await callTool<CanonicalSearchResult>(createToolRegistry(testEnv, tmk), 'search_memory', {
+      query: 'What follow-up is due tomorrow?',
+      mode: 'semantic',
+      scope: 'general',
+      limit: 3,
+    })
+
+    expect(result.status).toBe('ok')
+    expect(result.items).toHaveLength(1)
+    expect(result.items[0]?.captureId).toBe(seeded.captureId)
+    expect(result.items[0]?.documentId).toBe(seeded.documentId)
+    expect(result.items[0]?.semanticStatus?.ready).toBe(true)
+  })
+
+  it('returns a freshly captured item after queued projection completes through reconciliation', async () => {
+    const tmk = await deriveTestTmk()
+    const recallResults: HindsightRecallRow[] = []
+    const capture: HindsightCaptureState = { retainCount: 0, operationIds: [] }
+    const testEnv = createHindsightTestEnv({
+      capture,
+      operationStatuses: ['pending', 'completed'],
+      recallResults,
+    })
+    const sendSpy = vi.spyOn(testEnv.QUEUE_BULK, 'send').mockResolvedValue(undefined as never)
+    const input = await encryptFixture(noteFixture as CanonicalPipelineCaptureInput, TENANT_A, 'queued-then-ready', tmk)
+    const seededCapture = await captureThroughCanonicalPipeline({
+      ...input,
+      memoryType: 'episodic',
+      compatibilityMode: 'current_hindsight',
+      hindsightAsync: true,
+    }, testEnv, TENANT_A)
+    const message = sendSpy.mock.calls[0]?.[0] as { tenantId: string; payload: Record<string, unknown> }
+    await processDispatchWithoutWaitUntil(message, testEnv)
+    const seeded = await getCanonicalMemoryStore(testEnv)
+      .getLatestProjectionResultForOperation(TENANT_A, seededCapture.capture.operationId, 'hindsight')
+
+    const pendingState = await reconcileHindsightOperation(seeded!.engine_operation_id!, testEnv)
+    replaceRecallResults(recallResults, [])
+    const pendingResult = await callTool<CanonicalSearchResult>(createToolRegistry(testEnv, tmk), 'search_memory', {
+      query: 'What follow-up is due tomorrow?',
+      mode: 'semantic',
+      limit: 3,
+    })
+
+    replaceRecallResults(recallResults, [{
+      id: 'semantic-note-result-after-reconcile',
+      document_id: seeded!.engine_document_id!,
+      text: 'The user committed to following up with two open questions tomorrow.',
+      score: 0.97,
+      metadata: { source: 'mcp_retain', domain: 'general' },
+    }])
+    const settledState = await reconcileHindsightOperation(seeded!.engine_operation_id!, testEnv)
+    const settledResult = await callTool<CanonicalSearchResult>(createToolRegistry(testEnv, tmk), 'search_memory', {
+      query: 'What follow-up is due tomorrow?',
+      mode: 'semantic',
+      limit: 3,
+    })
+
+    expect(pendingState).toBe('pending')
+    expect(pendingResult.items).toHaveLength(0)
+    expect(settledState).toBe('settled')
+    expect(settledResult.status).toBe('ok')
+    expect(settledResult.items[0]?.captureId).toBe(seededCapture.capture.captureId)
+    expect(settledResult.items[0]?.documentId).toBe(seededCapture.capture.documentId)
+    expect(settledResult.items[0]?.semanticStatus?.ready).toBe(true)
+  })
+
+  it('treats completed hindsight operations without materialized memory units as not semantically ready', async () => {
+    const tmk = await deriveTestTmk()
+    const recallResults: HindsightRecallRow[] = []
+    const capture: HindsightCaptureState = { retainCount: 0, operationIds: [] }
+    const testEnv = createHindsightTestEnv({
+      capture,
+      operationStatuses: ['completed'],
+      recallResults,
+      memoryUnitCount: 0,
+    })
+    const sendSpy = vi.spyOn(testEnv.QUEUE_BULK, 'send').mockResolvedValue(undefined as never)
+    const input = await encryptFixture(noteFixture as CanonicalPipelineCaptureInput, TENANT_A, 'completed-without-units', tmk)
+    const seededCapture = await captureThroughCanonicalPipeline({
+      ...input,
+      memoryType: 'episodic',
+      compatibilityMode: 'current_hindsight',
+      hindsightAsync: true,
+    }, testEnv, TENANT_A)
+    const message = sendSpy.mock.calls[0]?.[0] as { tenantId: string; payload: Record<string, unknown> }
+    await processDispatchWithoutWaitUntil(message, testEnv)
+    const seeded = await getCanonicalMemoryStore(testEnv)
+      .getLatestProjectionResultForOperation(TENANT_A, seededCapture.capture.operationId, 'hindsight')
+    const settledState = await reconcileHindsightOperation(seeded!.engine_operation_id!, testEnv)
+
+    replaceRecallResults(recallResults, [{
+      id: 'semantic-zero-unit-result',
+      document_id: seeded!.engine_document_id!,
+      text: 'The user committed to following up with two open questions tomorrow.',
+      score: 0.91,
+      metadata: { source: 'mcp_retain', domain: 'general' },
+    }])
+
+    const search = await callTool<CanonicalSearchResult>(createToolRegistry(testEnv, tmk), 'search_memory', {
+      query: 'What follow-up is due tomorrow?',
+      mode: 'semantic',
+      limit: 3,
+    })
+    const status = await getCanonicalMemoryStatus(
+      { tenantId: TENANT_A, operationId: seededCapture.capture.operationId },
+      testEnv,
+      TENANT_A,
+    )
+    const hindsight = status.projections.find((item) => item.kind === 'hindsight')
+
+    expect(settledState).toBe('settled')
+    expect(hindsight?.status).toBe('completed')
+    expect(hindsight?.resultStatus).toBe('completed')
+    expect(hindsight?.semanticReady).toBe(false)
+    expect(search.status).toBe('partial')
+    expect(search.items[0]?.captureId).toBe(seededCapture.capture.captureId)
+    expect(search.items[0]?.semanticStatus?.ready).toBe(false)
   })
 
   it('returns a conversation-style semantic memory through the canonical surface', async () => {
@@ -259,6 +406,7 @@ describe('7.2 semantic recall through canonical interface', () => {
         text: 'A local-only semantic memory without canonical capture metadata.',
         score: 0.42,
         metadata: { source: 'local_notes', domain: 'general' },
+        tags: [`tenant:${TENANT_A}`, 'domain:general', 'source:local_notes'],
       },
     ])
 
@@ -290,6 +438,7 @@ describe('7.2 semantic recall through canonical interface', () => {
       ...input,
       memoryType: 'episodic',
       compatibilityMode: 'current_hindsight',
+      hindsightAsync: true,
     }, testEnv, TENANT_A)
     sendSpy.mockRestore()
 
@@ -318,6 +467,7 @@ describe('7.2 semantic recall through canonical interface', () => {
       fixture: noteFixture as CanonicalPipelineCaptureInput,
       suffix: 'status-semantic',
       memoryType: 'episodic',
+      hindsightAsync: true,
       testEnv,
       tmk,
     })

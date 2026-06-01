@@ -33,6 +33,7 @@ export async function persistQueuedRetain(args: {
 }): Promise<void> {
   const now = Date.now()
   const a = args
+  const operationDedupHash = `${a.dedupHash}:${a.operationId ?? a.memoryId}`
   await a.env.D1_US.batch([
     a.env.D1_US.prepare(
       `INSERT OR IGNORE INTO ingestion_events
@@ -66,7 +67,7 @@ export async function persistQueuedRetain(args: {
       a.domain,
       a.memoryType,
       a.salienceTier,
-      a.dedupHash,
+      operationDedupHash,
       a.stoneR2Key,
       now,
       now,

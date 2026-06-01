@@ -61,9 +61,9 @@ beforeAll(async () => {
 })
 
 describe('8.1 graphiti projection design', () => {
-  it('locks the initial Graphiti posture as staged external-first under the Cloudflare shell', () => {
-    expect(GRAPHITI_DEPLOYMENT_POSTURE.id).toBe('staged_external_first')
-    expect(GRAPHITI_DEPLOYMENT_POSTURE.initialRuntime).toBe('external_graphiti_service')
+  it('locks the initial Graphiti posture as HAETSAL-owned internal container runtime under the Cloudflare shell', () => {
+    expect(GRAPHITI_DEPLOYMENT_POSTURE.id).toBe('haetsal_internal_container')
+    expect(GRAPHITI_DEPLOYMENT_POSTURE.initialRuntime).toBe('internal_graphiti_container')
     expect(GRAPHITI_DEPLOYMENT_POSTURE.futureRuntime).toBe('cloudflare_containers')
   })
 

@@ -5,8 +5,10 @@
 
 import { beforeEach, describe, it, expect, vi } from 'vitest'
 import { env } from 'cloudflare:test'
+import { getCanonicalMemoryStore } from '../src/services/canonical-postgres'
 import { retainViaService } from '../src/tools/retain'
 import { recallStub } from '../src/tools/recall'
+import { createHindsightTestEnv } from './support/hindsight-test-env'
 
 function makeToolEnv() {
   return {
@@ -104,6 +106,40 @@ describe('1.2 Tools - brain_v1_retain', () => {
     expect(result.status).toBe('queued')
     expect(result.memory_id).toBeTruthy()
     expect(result.salience_tier).toBeGreaterThan(0)
+  })
+
+  it('eagerly hands off direct interactive writes to hindsight without waiting on the bulk queue', async () => {
+    const tenantId = `test-tenant-eager-${crypto.randomUUID()}`
+    await ensureTenantWithKek(tenantId)
+    const tmk = await crypto.subtle.generateKey(
+      { name: 'AES-GCM', length: 256 },
+      true,
+      ['encrypt', 'decrypt'],
+    ) as CryptoKey
+    const testEnv = createHindsightTestEnv()
+    const sendSpy = vi.spyOn(testEnv.QUEUE_BULK, 'send').mockResolvedValue(undefined as never)
+
+    const result = await retainViaService(
+      {
+        content: 'Interactive memory_write should reach hindsight handoff immediately.',
+        domain: 'general',
+        memory_type: 'episodic',
+        source: 'mcp:memory_write',
+      },
+      tenantId,
+      tmk,
+      testEnv,
+    )
+
+    const row = await getCanonicalMemoryStore(testEnv)
+      .getLatestProjectionResultForOperation(tenantId, result.canonical_operation_id, 'hindsight')
+
+    expect(sendSpy).toHaveBeenCalled()
+    expect(result.status).toBe('queued')
+    expect(result.canonical_operation_id).toBeTruthy()
+    expect(['queued', 'completed']).toContain(row?.result_status ?? '')
+    expect(row?.engine_document_id).toBeTruthy()
+    expect(row?.engine_operation_id).toContain('op-')
   })
 })
 

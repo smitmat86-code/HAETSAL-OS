@@ -2,6 +2,7 @@ import type { Env } from '../../types/env'
 import type { CanonicalProjectionDispatchMessage } from '../../types/canonical-capture-pipeline'
 import { submitGraphitiProjection } from '../../services/canonical-graphiti-projection'
 import { submitHindsightProjection } from '../../services/canonical-hindsight-projection'
+import { getCanonicalMemoryStore } from '../../services/canonical-postgres'
 
 export async function processCanonicalProjectionDispatch(
   tenantId: string,
@@ -11,13 +12,8 @@ export async function processCanonicalProjectionDispatch(
 ): Promise<void> {
   const typed = payload as CanonicalProjectionDispatchMessage['payload']
   if (typed.operationId == null) throw new Error('canonical_projection_dispatch missing operationId')
-  const jobs = await env.D1_US.prepare(
-    `SELECT id, projection_kind
-     FROM canonical_projection_jobs
-     WHERE tenant_id = ? AND operation_id = ?`,
-  ).bind(tenantId, typed.operationId).all<{ id: string; projection_kind: string }>()
+  const queued = await getCanonicalMemoryStore(env).listProjectionJobsForOperation(tenantId, String(typed.operationId))
   const requestedKinds = new Set(Array.isArray(typed.projectionKinds) ? typed.projectionKinds : [])
-  const queued = jobs.results ?? []
   const hindsightJob = queued.find(job => job.projection_kind === 'hindsight')
   const graphitiJob = queued.find(job => job.projection_kind === 'graphiti')
   const tasks: Promise<unknown>[] = []

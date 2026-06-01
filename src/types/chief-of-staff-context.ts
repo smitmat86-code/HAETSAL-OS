@@ -39,6 +39,26 @@ export interface ContextEvidenceBlock {
   items: ContextSourceRef[]
 }
 
+export interface CompiledContextAssetUsage {
+  asset: 'context_pack' | 'dossier' | 'what_changed' | 'decision_log'
+  stableKey: string
+  available: boolean
+  used: boolean
+  title: string | null
+  compiledAt: number | null
+  freshness: 'fresh' | 'stale' | 'unknown'
+  completeness: 'complete' | 'partial' | 'missing'
+  sourceCount: number
+}
+
+export interface CompiledContextMetadata {
+  mode: 'compiled_first' | 'runtime_fallback'
+  fallbackUsed: boolean
+  fallbackReason: string | null
+  freshnessPolicy: string
+  assets: CompiledContextAssetUsage[]
+}
+
 export interface AgentContextBundle {
   agent: string
   intent: ContextBundleIntent
@@ -56,4 +76,5 @@ export interface AgentContextBundle {
   gaps: ContextGap[]
   sources: ContextSourceRef[]
   evidence: ContextEvidenceBlock[]
+  compiled?: CompiledContextMetadata | null
 }

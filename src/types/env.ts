@@ -6,6 +6,7 @@ export interface Env {
   // Container (Cloudflare Container — DO-backed, not Fetcher)
   HINDSIGHT: DurableObjectNamespace
   HINDSIGHT_WORKER: DurableObjectNamespace
+  GRAPHITI: DurableObjectNamespace
 
   // D1
   D1_US: D1Database
@@ -48,15 +49,18 @@ export interface Env {
   TELEGRAM_WEBHOOK_SECRET: string // Secret token for webhook validation
   BRAVE_API_KEY: string        // Brave Search API key for news headlines
   HINDSIGHT_WEBHOOK_SECRET: string // HMAC-SHA256 for Hindsight webhook validation
-  WORKER_DOMAIN: string            // e.g. 'the-brain.workers.dev' — webhook registration (2.4a)
+  WORKER_DOMAIN: string            // e.g. 'haetsalos.specialdarksystems.com' — public webhook/MCP domain
   TELNYX_API_KEY: string           // Telnyx v2 API key for sending SMS
   TELNYX_FROM_NUMBER: string       // Telnyx virtual number (e.g. +13236785761)
   NEON_CONNECTION_STRING: string   // Direct Neon Postgres URL for Hindsight container runtime
+  CANONICAL_POSTGRES_CONNECTION_STRING?: string // Optional dedicated canonical Postgres URL; falls back to NEON_CONNECTION_STRING
   AI_GATEWAY_ID: string            // Cloudflare AI Gateway id, e.g. 'haetsal-brain-gateway'
   AI_GATEWAY_ACCOUNT_ID: string    // Cloudflare account id for gateway compat URL
   AI_GATEWAY_TOKEN: string         // Cloudflare AI Gateway token (auth to gateway, BYOK stored upstream)
   HINDSIGHT_DEDICATED_WORKERS_ENABLED: string // 'true' to disable API internal worker and use dedicated Hindsight workers
   HINDSIGHT_DEDICATED_WORKER_COUNT: string    // Number of dedicated Hindsight worker container instances to keep available
+  GRAPHITI_RUNTIME_MODE?: string              // 'container' is the intended runtime; 'external' is a narrow migration fallback
+  GRAPHITI_KUZU_PATH?: string                 // Optional override for the internal Graphiti container's local Kuzu path
   CANONICAL_MEMORY_SHADOW_WRITES?: string     // 'true' enables best-effort canonical shadow writes
   GRAPHITI_API_URL?: string                  // Trusted external Graphiti runtime base URL
   GRAPHITI_API_TOKEN?: string                // Optional bearer token for the Graphiti runtime

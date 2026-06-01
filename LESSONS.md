@@ -8,6 +8,23 @@
 
 ## Recent Additions
 
+- **Semantic Acceptance Needs Meaningful Facts, Not Opaque Smoke Tokens.**
+  Hindsight can complete a retain operation and still produce zero useful memory
+  units for terse token-heavy probe strings. Treat semantic acceptance as a
+  natural-language fact extraction check: capture a meaningful declarative fact,
+  then query it with a natural-language paraphrase. Token-only probes are fine
+  for plumbing, but they are not a trustworthy semantic-quality verdict.
+  Ref: Session OPS.9 - Hindsight semantic acceptance hardening.
+
+- **`semanticReady` Should Mean Document-Available, Not Merely Operation-Completed.**
+  Hindsight already records `availability_source = 'document'` when the engine
+  observes a materialized document with memory units. If the projection only
+  reaches `operation_completed`, treat that as not truly semantically ready for
+  read-side status/search purposes. Synchronous retains have no availability
+  marker, so keep them ready unless the runtime explicitly reports
+  `operation_completed`.
+  Ref: Session OPS.9 - Hindsight semantic acceptance hardening.
+
 - **Natural-Language Routers Need A Focus Term Before Reusing Narrow Graph Reads.**
   The explicit 8.3 graph/composed helper expects an entity/topic-style lookup
   term, not a whole natural-language question. When Phase 9 adds routing on top,
@@ -598,3 +615,23 @@
   reopens first principles and risks leaking engine-specific assumptions into
   queue payloads or public status semantics.
   Ref: Session 8.1 â€” Graphiti Projection Design.
+
+- **Repeated Brain-Memory Captures Need Per-Capture Hindsight Document Identity.**
+  `brain-memory` writes can share a stable rollout `source_ref` for provenance,
+  but Hindsight projection must not reuse that stable ref as the engine
+  document identity. If repeated captures from the same client collapse onto a
+  shared Hindsight document, later writes can overwrite the semantic target and
+  make fresh recall misleading or empty even when operations complete. Preserve
+  the stable `source_ref` for attribution, but derive Hindsight document
+  identity from the canonical capture id for `mcp:memory_write`
+  `brain-memory:*` captures.
+  Ref: Session 9.x - brain-memory Hindsight semantic repair.
+
+- **Canonical Semantic Recall Should Filter Locally, Not Over-Trust Engine Tags.**
+  Hindsight may store extra tags such as `source:*` alongside tenant/domain
+  tags, and strict exact-set tag matching can hide valid completed memories even
+  when canonical capture/document/operation metadata is present and correct. For
+  canonical semantic recall, query broadly enough to recover tenant-scoped
+  candidates, then resolve the authoritative match through canonical metadata
+  and apply scope filtering locally.
+  Ref: Session 9.x - brain-memory Hindsight semantic repair.

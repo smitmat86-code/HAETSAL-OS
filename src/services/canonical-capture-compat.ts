@@ -4,6 +4,7 @@ import type {
   CompatibilityRetainResult,
 } from '../types/canonical-capture-pipeline'
 import { buildExpectedHindsightDocumentId } from './canonical-hindsight-projection-payload'
+import { getCanonicalMemoryStore } from './canonical-postgres'
 
 export async function runCompatibilityRetainBridge(
   input: CanonicalPipelineCaptureInput,
@@ -24,12 +25,7 @@ export async function runCompatibilityRetainBridge(
   if (!input.canonicalCaptureId || !input.canonicalOperationId) {
     throw new Error('Compatibility projection shim requires canonical ids')
   }
-  const body = await env.D1_US.prepare(
-    `SELECT body_r2_key
-     FROM canonical_captures
-     WHERE tenant_id = ? AND id = ?
-     LIMIT 1`,
-  ).bind(tenantId, input.canonicalCaptureId).first<{ body_r2_key: string | null }>()
+  const bodyR2Key = await getCanonicalMemoryStore(env).getCaptureBodyKey(tenantId, input.canonicalCaptureId)
   const documentId = buildExpectedHindsightDocumentId(
     input.tenantId,
     input.sourceSystem,
@@ -42,7 +38,7 @@ export async function runCompatibilityRetainBridge(
     memoryId: documentId,
     operationId: null,
     documentId,
-    stoneR2Key: body?.body_r2_key ?? null,
+    stoneR2Key: bodyR2Key,
     errorMessage: null,
   }
 }

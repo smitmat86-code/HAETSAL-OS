@@ -32,8 +32,8 @@ export function buildHindsightBankProvisioningSpec(
 ): HindsightBankProvisioningSpec {
   return {
     bankConfig: {
-      retain_mission: `Focus on: career decisions and professional milestones, health patterns and habits, relationship dynamics, learning and growth moments, financial decisions, faith and values. Deprioritize: logistics, scheduling details, generic pleasantries, one-off administrative tasks.`,
-      observations_mission: `Synthesize durable facts about professional trajectory, key relationships, recurring behavioral tendencies, and domain expertise. Observations should be stable claims accurate in 6 months. Ignore one-off events. Focus on patterns and durable facts.`,
+      retain_mission: `Focus on durable facts that will matter later: career decisions and professional milestones, health patterns and habits, relationship dynamics, learning and growth moments, financial decisions, faith and values, explicit leadership relationships, durable operational dependencies, and lasting collaborations or partnerships. Deprioritize only ephemeral scheduling details, generic pleasantries, and one-off administrative chatter.`,
+      observations_mission: `Synthesize durable facts about professional trajectory, key relationships, recurring behavioral tendencies, domain expertise, leadership structure, and stable operational dependencies or collaborations. Observations should be stable claims accurate in 6 months. Ignore one-off events. Focus on patterns and durable facts.`,
       enable_observations: true,
     },
     mentalModels: DOMAINS.map((domain) => ({

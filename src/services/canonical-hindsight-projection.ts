@@ -59,7 +59,7 @@ export async function submitHindsightProjection(
       payload.memoryType,
       row.scope,
       payload.salienceTier,
-      true,
+      payload.hindsightAsync ?? false,
     )
     const response = await retainMemory(input.tenantId, request, env)
     const submission: HindsightProjectionSubmissionResult = {

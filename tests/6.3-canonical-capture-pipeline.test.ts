@@ -2,6 +2,7 @@ import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import { env } from 'cloudflare:test'
 import { captureThroughCanonicalPipeline } from '../src/services/canonical-capture-pipeline'
 import { getCanonicalMemoryStatus } from '../src/services/canonical-memory-status'
+import { getCanonicalMemoryStore } from '../src/services/canonical-postgres'
 import { retainContent } from '../src/services/ingestion/retain'
 import { encryptContentForArchive } from '../src/services/ingestion/encryption'
 import type { CanonicalPipelineCaptureInput } from '../src/types/canonical-capture-pipeline'
@@ -117,9 +118,7 @@ describe('6.3 canonical capture pipeline', () => {
       hindsightAsync: true,
     }, testEnv, TENANT_A)
 
-    const queued = await testEnv.D1_US.prepare(
-      `SELECT status FROM canonical_memory_operations WHERE tenant_id = ? AND id = ?`,
-    ).bind(TENANT_A, result.capture.operationId).first<{ status: string }>()
+    const queued = await getCanonicalMemoryStore(testEnv).getOperationById(TENANT_A, result.capture.operationId)
     const message = sendSpy.mock.calls[0]?.[0]
     const status = await getCanonicalMemoryStatus({ tenantId: TENANT_A, operationId: result.capture.operationId }, testEnv, TENANT_A)
 
@@ -143,13 +142,11 @@ describe('6.3 canonical capture pipeline', () => {
       memoryType: 'semantic',
     }, testEnv, TENANT_A)
 
-    const chunks = await testEnv.D1_US.prepare(
-      `SELECT COUNT(*) AS count FROM canonical_chunks WHERE document_id = ?`,
-    ).bind(result.capture.documentId).first<{ count: number }>()
+    const document = await getCanonicalMemoryStore(testEnv).getDocument(TENANT_A, result.capture.documentId)
     const message = sendSpy.mock.calls[0]?.[0] as { payload: { projectionKinds: string[] } }
 
     expect(result.capture.chunkIds.length).toBeGreaterThan(1)
-    expect(chunks?.count).toBe(result.capture.chunkIds.length)
+    expect(document?.chunk_count).toBe(result.capture.chunkIds.length)
     expect(result.compatibility.status).toBe('skipped')
     expect(message.payload.projectionKinds).toEqual(expect.arrayContaining(['hindsight', 'graphiti']))
   })
@@ -165,9 +162,7 @@ describe('6.3 canonical capture pipeline', () => {
       memoryType: 'world',
     }, testEnv, TENANT_A)
 
-    const artifact = await testEnv.D1_US.prepare(
-      `SELECT filename, media_type, r2_key FROM canonical_artifacts WHERE capture_id = ?`,
-    ).bind(result.capture.captureId).first<{ filename: string; media_type: string; r2_key: string }>()
+    const artifact = await getCanonicalMemoryStore(testEnv).getDocument(TENANT_A, result.capture.documentId)
     const messageJson = JSON.stringify(sendSpy.mock.calls[0]?.[0])
 
     expect(artifact?.filename).toBe('brief.txt')
@@ -214,9 +209,8 @@ describe('6.3 canonical capture pipeline', () => {
     const tmk = await deriveTestTmk()
     const testEnv = makeEnvWithHindsightStub()
     vi.spyOn(testEnv.QUEUE_BULK, 'send').mockResolvedValue(undefined as never)
-    const before = await testEnv.D1_US.prepare(
-      `SELECT COUNT(*) AS count FROM canonical_captures WHERE tenant_id = ?`,
-    ).bind(TENANT_B).first<{ count: number }>()
+    const store = getCanonicalMemoryStore(testEnv)
+    const before = await store.getStats(TENANT_B)
 
     const result = await retainContent({
       tenantId: TENANT_B,
@@ -226,11 +220,9 @@ describe('6.3 canonical capture pipeline', () => {
       memoryType: 'procedural' as unknown as 'episodic',
       provenance: 'mcp_retain',
     }, tmk, testEnv)
-    const after = await testEnv.D1_US.prepare(
-      `SELECT COUNT(*) AS count FROM canonical_captures WHERE tenant_id = ?`,
-    ).bind(TENANT_B).first<{ count: number }>()
+    const after = await store.getStats(TENANT_B)
 
     expect(result).toBeNull()
-    expect(after?.count).toBe(before?.count)
+    expect(after.captureCount).toBe(before.captureCount)
   })
 })

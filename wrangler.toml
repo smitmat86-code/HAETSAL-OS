@@ -11,6 +11,13 @@ enabled = true
 [placement]
 mode = "smart"
 
+# Canonical Neon/Postgres access.
+# Create with:
+#   npx wrangler hyperdrive create haetsal-canonical-neon --connection-string="<NEON_UNPOOLED_URL>"
+[[hyperdrive]]
+binding = "HYPERDRIVE_CANONICAL"
+id = "replace-with-hyperdrive-canonical-id"
+
 # ── Containers ────────────────────────────────────────────────────────────────
 [[containers]]
 class_name = "HindsightContainer"

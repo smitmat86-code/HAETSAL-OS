@@ -1,6 +1,6 @@
-import { neon } from '@neondatabase/serverless'
 import type { CanonicalGraphIdentityMapping } from '../types/canonical-graph-projection'
 import { CANONICAL_POSTGRES_SCHEMA } from './canonical-postgres-schema'
+import type { PostgresSql } from './postgres-sql'
 import type {
   CanonicalArtifactRecord,
   CanonicalCaptureRecord,
@@ -23,9 +23,6 @@ import type {
   CanonicalSemanticLinkbackRow,
   CanonicalStatsRow,
 } from './canonical-postgres-schema'
-
-type NeonSql = ReturnType<typeof neon>
-type NeonQueryCapable = NeonSql & { query: (query: string) => Promise<unknown> }
 
 export interface CanonicalMemoryStore {
   writeCapture(input: CanonicalCaptureWrite): Promise<void>
@@ -584,10 +581,10 @@ export class InMemoryCanonicalMemoryStore implements CanonicalMemoryStore {
   }
 }
 
-export class NeonCanonicalMemoryStore implements CanonicalMemoryStore {
+export class PostgresCanonicalMemoryStore implements CanonicalMemoryStore {
   private schemaReadyPromise: Promise<void> | null = null
 
-  constructor(private readonly sql: NeonSql) {}
+  constructor(private readonly sql: PostgresSql) {}
 
   private async ensureSchema(): Promise<void> {
     if (!this.schemaReadyPromise) {
@@ -601,7 +598,7 @@ export class NeonCanonicalMemoryStore implements CanonicalMemoryStore {
   }
 
   private async ensureSchemaOnce(): Promise<void> {
-    await (this.sql as NeonQueryCapable).query(`CREATE SCHEMA IF NOT EXISTS ${CANONICAL_POSTGRES_SCHEMA}`)
+    await this.sql.query(`CREATE SCHEMA IF NOT EXISTS ${CANONICAL_POSTGRES_SCHEMA}`)
     const statements = [
       `CREATE TABLE IF NOT EXISTS ${CANONICAL_POSTGRES_SCHEMA}.canonical_captures (
         id TEXT PRIMARY KEY,
@@ -718,51 +715,51 @@ export class NeonCanonicalMemoryStore implements CanonicalMemoryStore {
         ON ${CANONICAL_POSTGRES_SCHEMA}.canonical_graph_identity_mappings(tenant_id, canonical_key, graph_kind, updated_at DESC)`,
     ]
     for (const statement of statements) {
-      await (this.sql as NeonQueryCapable).query(statement)
+      await this.sql.query(statement)
     }
   }
 
-  private async rows<T>(query: Promise<unknown>): Promise<T[]> {
+  private async rows<T>(query: Promise<unknown[]>): Promise<T[]> {
     await this.ensureSchema()
     return (await query as T[]).map((row) => normalizeDbRow(row))
   }
 
-  private async first<T>(query: Promise<unknown>): Promise<T | null> {
+  private async first<T>(query: Promise<unknown[]>): Promise<T | null> {
     return (await this.rows<T>(query))[0] ?? null
   }
 
   async writeCapture(input: CanonicalCaptureWrite): Promise<void> {
     await this.ensureSchema()
     const queries = [
-      this.sql`INSERT INTO haetsal_canonical.canonical_captures
+      this.sql.prepare`INSERT INTO haetsal_canonical.canonical_captures
         (id, tenant_id, source_system, source_ref, scope, title, body_r2_key, body_sha256, artifact_id, captured_at, created_at)
         VALUES (${input.capture.id}, ${input.capture.tenant_id}, ${input.capture.source_system}, ${input.capture.source_ref},
                 ${input.capture.scope}, ${input.capture.title}, ${input.capture.body_r2_key}, ${input.capture.body_sha256},
                 ${input.capture.artifact_id}, ${input.capture.captured_at}, ${input.capture.created_at})`,
-      ...(input.artifact ? [this.sql`INSERT INTO haetsal_canonical.canonical_artifacts
+      ...(input.artifact ? [this.sql.prepare`INSERT INTO haetsal_canonical.canonical_artifacts
         (id, tenant_id, capture_id, storage_kind, r2_key, media_type, filename, byte_length, sha256, created_at)
         VALUES (${input.artifact.id}, ${input.artifact.tenant_id}, ${input.artifact.capture_id}, ${input.artifact.storage_kind},
                 ${input.artifact.r2_key}, ${input.artifact.media_type}, ${input.artifact.filename}, ${input.artifact.byte_length},
                 ${input.artifact.sha256}, ${input.artifact.created_at})`] : []),
-      this.sql`INSERT INTO haetsal_canonical.canonical_documents
+      this.sql.prepare`INSERT INTO haetsal_canonical.canonical_documents
         (id, tenant_id, capture_id, artifact_id, title, body_r2_key, body_sha256, chunk_count, created_at)
         VALUES (${input.document.id}, ${input.document.tenant_id}, ${input.document.capture_id}, ${input.document.artifact_id},
                 ${input.document.title}, ${input.document.body_r2_key}, ${input.document.body_sha256},
                 ${input.document.chunk_count}, ${input.document.created_at})`,
-      ...input.chunks.map((chunk) => this.sql`INSERT INTO haetsal_canonical.canonical_chunks
+      ...input.chunks.map((chunk) => this.sql.prepare`INSERT INTO haetsal_canonical.canonical_chunks
         (id, tenant_id, document_id, ordinal, start_offset, end_offset, chunk_sha256, created_at)
         VALUES (${chunk.id}, ${chunk.tenant_id}, ${chunk.document_id}, ${chunk.ordinal}, ${chunk.start_offset},
                 ${chunk.end_offset}, ${chunk.chunk_sha256}, ${chunk.created_at})`),
-      this.sql`INSERT INTO haetsal_canonical.canonical_memory_operations
+      this.sql.prepare`INSERT INTO haetsal_canonical.canonical_memory_operations
         (id, tenant_id, capture_id, operation_type, status, created_at, updated_at)
         VALUES (${input.operation.id}, ${input.operation.tenant_id}, ${input.operation.capture_id},
                 ${input.operation.operation_type}, ${input.operation.status}, ${input.operation.created_at}, ${input.operation.updated_at})`,
-      ...input.projectionJobs.map((job) => this.sql`INSERT INTO haetsal_canonical.canonical_projection_jobs
+      ...input.projectionJobs.map((job) => this.sql.prepare`INSERT INTO haetsal_canonical.canonical_projection_jobs
         (id, tenant_id, operation_id, capture_id, document_id, projection_kind, status, created_at, enqueued_at)
         VALUES (${job.id}, ${job.tenant_id}, ${job.operation_id}, ${job.capture_id}, ${job.document_id},
                 ${job.projection_kind}, ${job.status}, ${job.created_at}, ${job.enqueued_at})`),
     ]
-    await (this.sql as unknown as { transaction: (queries: unknown[]) => Promise<unknown> }).transaction(queries)
+    await this.sql.transaction(queries)
   }
 
   async getCapture(tenantId: string, captureId: string): Promise<CanonicalCaptureRecord | null> {
@@ -856,18 +853,18 @@ export class NeonCanonicalMemoryStore implements CanonicalMemoryStore {
     await this.ensureSchema()
     const jobs = await this.listProjectionJobsForOperation(input.tenantId, input.operationId)
     const queries = [
-      this.sql`UPDATE haetsal_canonical.canonical_memory_operations
+      this.sql.prepare`UPDATE haetsal_canonical.canonical_memory_operations
         SET status = ${input.status}, updated_at = ${input.updatedAt}
         WHERE tenant_id = ${input.tenantId} AND id = ${input.operationId}`,
-      ...jobs.map((job) => this.sql`UPDATE haetsal_canonical.canonical_projection_jobs
+      ...jobs.map((job) => this.sql.prepare`UPDATE haetsal_canonical.canonical_projection_jobs
         SET status = ${input.status}, enqueued_at = ${input.updatedAt}
         WHERE tenant_id = ${input.tenantId} AND id = ${job.id}`),
-      ...jobs.map((job) => this.sql`INSERT INTO haetsal_canonical.canonical_projection_results
+      ...jobs.map((job) => this.sql.prepare`INSERT INTO haetsal_canonical.canonical_projection_results
         (id, tenant_id, projection_job_id, status, target_ref, error_message, engine_bank_id, engine_document_id, engine_operation_id, created_at, updated_at)
         VALUES (${crypto.randomUUID()}, ${input.tenantId}, ${job.id}, ${input.status}, NULL,
                 ${input.status === 'failed' ? input.errorMessage ?? null : null}, NULL, NULL, NULL, ${input.updatedAt}, ${input.updatedAt})`),
     ]
-    await (this.sql as unknown as { transaction: (queries: unknown[]) => Promise<unknown> }).transaction(queries)
+    await this.sql.transaction(queries)
   }
 
   async getProjectionJobContext(
@@ -936,25 +933,25 @@ export class NeonCanonicalMemoryStore implements CanonicalMemoryStore {
       input.jobStatus,
     )
     const queries = [
-      this.sql`UPDATE haetsal_canonical.canonical_memory_operations
+      this.sql.prepare`UPDATE haetsal_canonical.canonical_memory_operations
         SET status = ${aggregateStatus}, updated_at = ${input.updatedAt}
         WHERE tenant_id = ${input.tenantId} AND id = ${input.operationId}`,
-      this.sql`UPDATE haetsal_canonical.canonical_projection_jobs
+      this.sql.prepare`UPDATE haetsal_canonical.canonical_projection_jobs
         SET status = ${input.jobStatus}
         WHERE tenant_id = ${input.tenantId} AND id = ${input.jobId}`,
-      this.sql`INSERT INTO haetsal_canonical.canonical_projection_results
+      this.sql.prepare`INSERT INTO haetsal_canonical.canonical_projection_results
         (id, tenant_id, projection_job_id, status, target_ref, error_message, engine_bank_id, engine_document_id, engine_operation_id, created_at, updated_at)
         VALUES (${crypto.randomUUID()}, ${input.tenantId}, ${input.jobId}, ${input.resultStatus}, ${input.targetRef},
                 ${input.errorMessage ?? null}, ${input.engineBankId ?? null}, ${input.engineDocumentId ?? null},
                 ${input.engineOperationId ?? null}, ${input.updatedAt}, ${input.updatedAt})`,
-      ...dedupeGraphMappings(input.graphMappings).map((mapping) => this.sql`INSERT INTO haetsal_canonical.canonical_graph_identity_mappings
+      ...dedupeGraphMappings(input.graphMappings).map((mapping) => this.sql.prepare`INSERT INTO haetsal_canonical.canonical_graph_identity_mappings
         (id, tenant_id, projection_job_id, canonical_key, graph_ref, graph_kind, created_at, updated_at)
         VALUES (${crypto.randomUUID()}, ${input.tenantId}, ${input.jobId}, ${mapping.canonicalKey}, ${mapping.graphRef},
                 ${mapping.graphKind}, ${input.updatedAt}, ${input.updatedAt})
         ON CONFLICT (projection_job_id, canonical_key, graph_kind)
         DO UPDATE SET graph_ref = EXCLUDED.graph_ref, updated_at = EXCLUDED.updated_at`),
     ]
-    await (this.sql as unknown as { transaction: (queries: unknown[]) => Promise<unknown> }).transaction(queries)
+    await this.sql.transaction(queries)
   }
 
   async findHindsightProjectionByEngineOperation(
@@ -1127,3 +1124,5 @@ export class NeonCanonicalMemoryStore implements CanonicalMemoryStore {
     `)
   }
 }
+
+export { PostgresCanonicalMemoryStore as NeonCanonicalMemoryStore }

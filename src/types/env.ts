@@ -30,6 +30,9 @@ export interface Env {
   VECTORIZE: VectorizeIndex
   ANALYTICS: AnalyticsEngineDataset
 
+  // Hyperdrive
+  HYPERDRIVE_CANONICAL?: Hyperdrive
+
   // AI + Browser
   AI: Ai
   BROWSER: Fetcher
@@ -53,7 +56,7 @@ export interface Env {
   TELNYX_API_KEY: string           // Telnyx v2 API key for sending SMS
   TELNYX_FROM_NUMBER: string       // Telnyx virtual number (e.g. +13236785761)
   NEON_CONNECTION_STRING: string   // Direct Neon Postgres URL for Hindsight container runtime
-  CANONICAL_POSTGRES_CONNECTION_STRING?: string // Optional dedicated canonical Postgres URL; falls back to NEON_CONNECTION_STRING
+  CANONICAL_POSTGRES_CONNECTION_STRING?: string // Local/fallback canonical Postgres URL when Hyperdrive is unavailable
   AI_GATEWAY_ID: string            // Cloudflare AI Gateway id, e.g. 'haetsal-brain-gateway'
   AI_GATEWAY_ACCOUNT_ID: string    // Cloudflare account id for gateway compat URL
   AI_GATEWAY_TOKEN: string         // Cloudflare AI Gateway token (auth to gateway, BYOK stored upstream)

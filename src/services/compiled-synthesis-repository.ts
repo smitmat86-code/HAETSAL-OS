@@ -1,4 +1,3 @@
-import { neon } from '@neondatabase/serverless'
 import {
   COMPILED_SYNTHESIS_SCHEMA,
   type CompiledChangeViewRecord,
@@ -23,12 +22,7 @@ import {
   type CompiledRelationshipUpsertInput,
   type CompiledSynthesisBundle,
 } from './compiled-synthesis-schema'
-
-type NeonSql = ReturnType<typeof neon>
-type NeonQueryCapable = NeonSql & {
-  query: (statement: string) => Promise<unknown>
-  transaction: (queries: unknown[]) => Promise<unknown>
-}
+import type { PostgresSql } from './postgres-sql'
 
 export interface CompiledSynthesisStore {
   upsertCompiledDocument(input: CompiledDocumentUpsertInput): Promise<CompiledDocumentRecord>
@@ -594,10 +588,10 @@ export class InMemoryCompiledSynthesisStore implements CompiledSynthesisStore {
   }
 }
 
-export class NeonCompiledSynthesisStore implements CompiledSynthesisStore {
+export class PostgresCompiledSynthesisStore implements CompiledSynthesisStore {
   private schemaReadyPromise: Promise<void> | null = null
 
-  constructor(private readonly sql: NeonSql) {}
+  constructor(private readonly sql: PostgresSql) {}
 
   private async ensureSchema(): Promise<void> {
     if (!this.schemaReadyPromise) {
@@ -611,8 +605,7 @@ export class NeonCompiledSynthesisStore implements CompiledSynthesisStore {
   }
 
   private async ensureSchemaOnce(): Promise<void> {
-    const q = this.sql as NeonQueryCapable
-    await q.query(`CREATE SCHEMA IF NOT EXISTS ${COMPILED_SYNTHESIS_SCHEMA}`)
+    await this.sql.query(`CREATE SCHEMA IF NOT EXISTS ${COMPILED_SYNTHESIS_SCHEMA}`)
     const statements = [
       `CREATE TABLE IF NOT EXISTS ${COMPILED_SYNTHESIS_SCHEMA}.compiled_documents (
         id TEXT PRIMARY KEY,
@@ -835,16 +828,16 @@ export class NeonCompiledSynthesisStore implements CompiledSynthesisStore {
         ON ${COMPILED_SYNTHESIS_SCHEMA}.compiled_change_views(tenant_id, stable_key)`,
     ]
     for (const statement of statements) {
-      await q.query(statement)
+      await this.sql.query(statement)
     }
   }
 
-  private async rows<T>(query: Promise<unknown>): Promise<T[]> {
+  private async rows<T>(query: Promise<unknown[]>): Promise<T[]> {
     await this.ensureSchema()
     return (await query as T[]).map((row) => normalizeDbRow(row))
   }
 
-  private async first<T>(query: Promise<unknown>): Promise<T | null> {
+  private async first<T>(query: Promise<unknown[]>): Promise<T | null> {
     return (await this.rows<T>(query))[0] ?? null
   }
 
@@ -876,11 +869,10 @@ export class NeonCompiledSynthesisStore implements CompiledSynthesisStore {
     const normalized = dedupeSources(sources)
     normalized.forEach(assertSourceLink)
     const createdAt = Date.now()
-    const q = this.sql as NeonQueryCapable
-    await q.transaction([
-      this.sql`DELETE FROM haetsal_canonical.compiled_document_sources
+    await this.sql.transaction([
+      this.sql.prepare`DELETE FROM haetsal_canonical.compiled_document_sources
         WHERE tenant_id = ${tenantId} AND compiled_document_id = ${compiledDocumentId}`,
-      ...normalized.map((source) => this.sql`
+      ...normalized.map((source) => this.sql.prepare`
         INSERT INTO haetsal_canonical.compiled_document_sources
           (id, tenant_id, compiled_document_id, source_role, canonical_capture_id, canonical_document_id, canonical_artifact_id, canonical_operation_id, created_at)
         VALUES (${crypto.randomUUID()}, ${tenantId}, ${compiledDocumentId}, ${source.sourceRole},
@@ -1234,3 +1226,5 @@ export class NeonCompiledSynthesisStore implements CompiledSynthesisStore {
     }
   }
 }
+
+export { PostgresCompiledSynthesisStore as NeonCompiledSynthesisStore }

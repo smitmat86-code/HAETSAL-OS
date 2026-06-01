@@ -6,6 +6,10 @@
 # Format: postgresql://user:password@host:5432/dbname?sslmode=require
 NEON_CONNECTION_STRING=postgresql://user:password@localhost:5432/brain_dev
 
+# Local canonical Postgres fallback when HYPERDRIVE_CANONICAL is unavailable
+# in wrangler dev / tests. Production canonical access should use Hyperdrive.
+CANONICAL_POSTGRES_CONNECTION_STRING=postgresql://user:password@localhost:5432/brain_dev
+
 # Cloudflare AI Gateway ID (created in dashboard)
 AI_GATEWAY_ID=haetsal-brain-gateway
 

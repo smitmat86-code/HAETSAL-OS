@@ -1,6 +1,6 @@
-import { neon } from '@neondatabase/serverless'
 import type { Env } from '../types/env'
-import { InMemoryCanonicalMemoryStore, NeonCanonicalMemoryStore, type CanonicalMemoryStore } from './canonical-postgres-repository'
+import { InMemoryCanonicalMemoryStore, PostgresCanonicalMemoryStore, type CanonicalMemoryStore } from './canonical-postgres-repository'
+import { createCanonicalPostgresSql } from './postgres-sql'
 
 const CANONICAL_STORE = Symbol.for('haetsal.canonicalMemoryStore')
 
@@ -29,13 +29,5 @@ export function getCanonicalMemoryStore(env: Env): CanonicalMemoryStore {
   const scopedEnv = env as EnvWithStore
   if (scopedEnv[CANONICAL_STORE]) return scopedEnv[CANONICAL_STORE]!
 
-  const connectionString = env.CANONICAL_POSTGRES_CONNECTION_STRING?.trim()
-    || env.NEON_CONNECTION_STRING?.trim()
-  if (!connectionString) {
-    throw new Error('Canonical Postgres connection string is required')
-  }
-
-  return installCanonicalMemoryStore(env, new NeonCanonicalMemoryStore(neon(connectionString, {
-    fetchOptions: { cache: 'no-store' },
-  })))
+  return installCanonicalMemoryStore(env, new PostgresCanonicalMemoryStore(createCanonicalPostgresSql(env)))
 }

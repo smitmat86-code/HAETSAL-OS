@@ -1,10 +1,10 @@
-import { neon } from '@neondatabase/serverless'
 import type { Env } from '../types/env'
 import {
   InMemoryCompiledSynthesisStore,
-  NeonCompiledSynthesisStore,
+  PostgresCompiledSynthesisStore,
   type CompiledSynthesisStore,
 } from './compiled-synthesis-repository'
+import { createCanonicalPostgresSql } from './postgres-sql'
 
 const COMPILED_SYNTHESIS_STORE = Symbol.for('haetsal.compiledSynthesisStore')
 
@@ -33,13 +33,5 @@ export function getCompiledSynthesisStore(env: Env): CompiledSynthesisStore {
   const scopedEnv = env as EnvWithStore
   if (scopedEnv[COMPILED_SYNTHESIS_STORE]) return scopedEnv[COMPILED_SYNTHESIS_STORE]!
 
-  const connectionString = env.CANONICAL_POSTGRES_CONNECTION_STRING?.trim()
-    || env.NEON_CONNECTION_STRING?.trim()
-  if (!connectionString) {
-    throw new Error('Compiled synthesis Postgres connection string is required')
-  }
-
-  return installCompiledSynthesisStore(env, new NeonCompiledSynthesisStore(neon(connectionString, {
-    fetchOptions: { cache: 'no-store' },
-  })))
+  return installCompiledSynthesisStore(env, new PostgresCompiledSynthesisStore(createCanonicalPostgresSql(env)))
 }

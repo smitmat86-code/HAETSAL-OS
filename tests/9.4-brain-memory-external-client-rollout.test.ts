@@ -249,7 +249,7 @@ describe('9.4 brain-memory external client rollout', () => {
     expect(retainMetadata[1]?.app_memory_type).toBe('episodic')
     expect(retainMetadata[2]?.app_memory_type).toBe('episodic')
     const explicitBrainMemory = JSON.parse(retainMetadata[0]?.brain_memory ?? '{}') as Record<string, unknown>
-    expect(explicitBrainMemory.client_name).toBeUndefined()
+    expect(explicitBrainMemory.client_name).toBe('Codex')
     expect(explicitBrainMemory.capture_mode).toBe('explicit')
     expect(explicitBrainMemory.provenance).toBe('user_authored')
   })
@@ -490,11 +490,9 @@ describe('9.4 brain-memory external client rollout', () => {
     expect(context).toContain('source=mcp:memory_write')
     expect(context).toContain('provenance=user_authored')
     expect(context).toContain('domain=general')
-    expect(context).toContain('capture_mode=explicit')
-    expect(context).toContain('intent=retain_durable_fact')
-    expect(context).toContain('pattern=durable_dependency')
-    expect(context).toContain('subject=Northgate_Studio')
-    expect(context).toContain('object=Meridian_Stack')
+    expect(context).not.toContain('capture_mode=')
+    expect(context).not.toContain('intent=retain_durable_fact')
+    expect(context).not.toContain('pattern=durable_dependency')
   })
 
   it('keeps the hindsight bank mission focused on durable long-horizon patterns', () => {
@@ -503,9 +501,11 @@ describe('9.4 brain-memory external client rollout', () => {
     const observationsMission = String(spec.bankConfig.observations_mission)
 
     expect(retainMission).toContain('career decisions and professional milestones')
-    expect(retainMission).toContain('durable dependencies')
-    expect(retainMission).toContain('lasting dependency')
+    expect(retainMission).toContain('faith and values')
+    expect(retainMission).toContain('durable operational dependencies')
+    expect(retainMission).toContain('ephemeral scheduling details')
     expect(observationsMission).toContain('professional trajectory')
     expect(observationsMission).toContain('domain expertise')
+    expect(observationsMission).toContain('leadership structure')
   })
 })

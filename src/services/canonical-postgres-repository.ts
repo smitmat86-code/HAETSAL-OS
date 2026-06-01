@@ -1,5 +1,6 @@
 import { neon } from '@neondatabase/serverless'
 import type { CanonicalGraphIdentityMapping } from '../types/canonical-graph-projection'
+import { CANONICAL_POSTGRES_SCHEMA } from './canonical-postgres-schema'
 import type {
   CanonicalArtifactRecord,
   CanonicalCaptureRecord,
@@ -24,6 +25,7 @@ import type {
 } from './canonical-postgres-schema'
 
 type NeonSql = ReturnType<typeof neon>
+type NeonQueryCapable = NeonSql & { query: (query: string) => Promise<unknown> }
 
 export interface CanonicalMemoryStore {
   writeCapture(input: CanonicalCaptureWrite): Promise<void>
@@ -132,6 +134,40 @@ function dedupeGraphMappings(
     seen.add(key)
     return true
   })
+}
+
+const NUMERIC_DB_FIELDS = new Set([
+  'captured_at',
+  'created_at',
+  'updated_at',
+  'enqueued_at',
+  'result_updated_at',
+  'document_created_at',
+  'byte_length',
+  'chunk_count',
+  'ordinal',
+  'start_offset',
+  'end_offset',
+  'count',
+  'capture_count',
+  'document_count',
+  'operation_count',
+  'pending_projection_count',
+  'completed_projection_count',
+  'failed_projection_count',
+  'last_capture_at',
+])
+
+function normalizeDbRow<T>(row: T): T {
+  if (!row || typeof row !== 'object' || Array.isArray(row)) return row
+  return Object.fromEntries(
+    Object.entries(row).map(([key, value]) => {
+      if (typeof value === 'string' && NUMERIC_DB_FIELDS.has(key) && /^-?\d+$/.test(value)) {
+        return [key, Number(value)]
+      }
+      return [key, value]
+    }),
+  ) as T
 }
 
 export class InMemoryCanonicalMemoryStore implements CanonicalMemoryStore {
@@ -549,10 +585,146 @@ export class InMemoryCanonicalMemoryStore implements CanonicalMemoryStore {
 }
 
 export class NeonCanonicalMemoryStore implements CanonicalMemoryStore {
+  private schemaReadyPromise: Promise<void> | null = null
+
   constructor(private readonly sql: NeonSql) {}
 
+  private async ensureSchema(): Promise<void> {
+    if (!this.schemaReadyPromise) {
+      this.schemaReadyPromise = this.ensureSchemaOnce()
+        .catch((error) => {
+          this.schemaReadyPromise = null
+          throw error
+        })
+    }
+    await this.schemaReadyPromise
+  }
+
+  private async ensureSchemaOnce(): Promise<void> {
+    await (this.sql as NeonQueryCapable).query(`CREATE SCHEMA IF NOT EXISTS ${CANONICAL_POSTGRES_SCHEMA}`)
+    const statements = [
+      `CREATE TABLE IF NOT EXISTS ${CANONICAL_POSTGRES_SCHEMA}.canonical_captures (
+        id TEXT PRIMARY KEY,
+        tenant_id TEXT NOT NULL,
+        source_system TEXT NOT NULL,
+        source_ref TEXT,
+        scope TEXT NOT NULL,
+        title TEXT,
+        body_r2_key TEXT NOT NULL,
+        body_sha256 TEXT NOT NULL,
+        artifact_id TEXT,
+        captured_at BIGINT NOT NULL,
+        created_at BIGINT NOT NULL
+      )`,
+      `CREATE INDEX IF NOT EXISTS idx_pg_canonical_captures_tenant_source
+        ON ${CANONICAL_POSTGRES_SCHEMA}.canonical_captures(tenant_id, source_system, created_at DESC)`,
+      `CREATE INDEX IF NOT EXISTS idx_pg_canonical_captures_tenant_scope
+        ON ${CANONICAL_POSTGRES_SCHEMA}.canonical_captures(tenant_id, scope, created_at DESC)`,
+      `CREATE TABLE IF NOT EXISTS ${CANONICAL_POSTGRES_SCHEMA}.canonical_artifacts (
+        id TEXT PRIMARY KEY,
+        tenant_id TEXT NOT NULL,
+        capture_id TEXT NOT NULL REFERENCES ${CANONICAL_POSTGRES_SCHEMA}.canonical_captures(id) ON DELETE CASCADE,
+        storage_kind TEXT NOT NULL,
+        r2_key TEXT,
+        media_type TEXT,
+        filename TEXT,
+        byte_length BIGINT,
+        sha256 TEXT,
+        created_at BIGINT NOT NULL
+      )`,
+      `CREATE INDEX IF NOT EXISTS idx_pg_canonical_artifacts_tenant_created
+        ON ${CANONICAL_POSTGRES_SCHEMA}.canonical_artifacts(tenant_id, created_at DESC)`,
+      `CREATE TABLE IF NOT EXISTS ${CANONICAL_POSTGRES_SCHEMA}.canonical_documents (
+        id TEXT PRIMARY KEY,
+        tenant_id TEXT NOT NULL,
+        capture_id TEXT NOT NULL REFERENCES ${CANONICAL_POSTGRES_SCHEMA}.canonical_captures(id) ON DELETE CASCADE,
+        artifact_id TEXT REFERENCES ${CANONICAL_POSTGRES_SCHEMA}.canonical_artifacts(id) ON DELETE SET NULL,
+        title TEXT,
+        body_r2_key TEXT NOT NULL,
+        body_sha256 TEXT NOT NULL,
+        chunk_count INTEGER NOT NULL,
+        created_at BIGINT NOT NULL
+      )`,
+      `CREATE INDEX IF NOT EXISTS idx_pg_canonical_documents_tenant_capture
+        ON ${CANONICAL_POSTGRES_SCHEMA}.canonical_documents(tenant_id, capture_id, created_at DESC)`,
+      `CREATE TABLE IF NOT EXISTS ${CANONICAL_POSTGRES_SCHEMA}.canonical_chunks (
+        id TEXT PRIMARY KEY,
+        tenant_id TEXT NOT NULL,
+        document_id TEXT NOT NULL REFERENCES ${CANONICAL_POSTGRES_SCHEMA}.canonical_documents(id) ON DELETE CASCADE,
+        ordinal INTEGER NOT NULL,
+        start_offset INTEGER NOT NULL,
+        end_offset INTEGER NOT NULL,
+        chunk_sha256 TEXT NOT NULL,
+        created_at BIGINT NOT NULL
+      )`,
+      `CREATE UNIQUE INDEX IF NOT EXISTS idx_pg_canonical_chunks_document_ordinal
+        ON ${CANONICAL_POSTGRES_SCHEMA}.canonical_chunks(document_id, ordinal)`,
+      `CREATE INDEX IF NOT EXISTS idx_pg_canonical_chunks_tenant_document
+        ON ${CANONICAL_POSTGRES_SCHEMA}.canonical_chunks(tenant_id, document_id)`,
+      `CREATE TABLE IF NOT EXISTS ${CANONICAL_POSTGRES_SCHEMA}.canonical_memory_operations (
+        id TEXT PRIMARY KEY,
+        tenant_id TEXT NOT NULL,
+        capture_id TEXT NOT NULL REFERENCES ${CANONICAL_POSTGRES_SCHEMA}.canonical_captures(id) ON DELETE CASCADE,
+        operation_type TEXT NOT NULL,
+        status TEXT NOT NULL,
+        created_at BIGINT NOT NULL,
+        updated_at BIGINT NOT NULL
+      )`,
+      `CREATE INDEX IF NOT EXISTS idx_pg_canonical_memory_operations_tenant_status
+        ON ${CANONICAL_POSTGRES_SCHEMA}.canonical_memory_operations(tenant_id, status, created_at DESC)`,
+      `CREATE TABLE IF NOT EXISTS ${CANONICAL_POSTGRES_SCHEMA}.canonical_projection_jobs (
+        id TEXT PRIMARY KEY,
+        tenant_id TEXT NOT NULL,
+        operation_id TEXT NOT NULL REFERENCES ${CANONICAL_POSTGRES_SCHEMA}.canonical_memory_operations(id) ON DELETE CASCADE,
+        capture_id TEXT NOT NULL REFERENCES ${CANONICAL_POSTGRES_SCHEMA}.canonical_captures(id) ON DELETE CASCADE,
+        document_id TEXT NOT NULL REFERENCES ${CANONICAL_POSTGRES_SCHEMA}.canonical_documents(id) ON DELETE CASCADE,
+        projection_kind TEXT NOT NULL,
+        status TEXT NOT NULL,
+        created_at BIGINT NOT NULL,
+        enqueued_at BIGINT NOT NULL
+      )`,
+      `CREATE INDEX IF NOT EXISTS idx_pg_canonical_projection_jobs_tenant_status
+        ON ${CANONICAL_POSTGRES_SCHEMA}.canonical_projection_jobs(tenant_id, projection_kind, status, created_at DESC)`,
+      `CREATE TABLE IF NOT EXISTS ${CANONICAL_POSTGRES_SCHEMA}.canonical_projection_results (
+        id TEXT PRIMARY KEY,
+        tenant_id TEXT NOT NULL,
+        projection_job_id TEXT NOT NULL REFERENCES ${CANONICAL_POSTGRES_SCHEMA}.canonical_projection_jobs(id) ON DELETE CASCADE,
+        status TEXT NOT NULL,
+        target_ref TEXT,
+        error_message TEXT,
+        engine_bank_id TEXT,
+        engine_document_id TEXT,
+        engine_operation_id TEXT,
+        created_at BIGINT NOT NULL,
+        updated_at BIGINT NOT NULL
+      )`,
+      `CREATE INDEX IF NOT EXISTS idx_pg_canonical_projection_results_tenant_status
+        ON ${CANONICAL_POSTGRES_SCHEMA}.canonical_projection_results(tenant_id, status, created_at DESC)`,
+      `CREATE INDEX IF NOT EXISTS idx_pg_canonical_projection_results_operation
+        ON ${CANONICAL_POSTGRES_SCHEMA}.canonical_projection_results(engine_operation_id, updated_at DESC)`,
+      `CREATE TABLE IF NOT EXISTS ${CANONICAL_POSTGRES_SCHEMA}.canonical_graph_identity_mappings (
+        id TEXT PRIMARY KEY,
+        tenant_id TEXT NOT NULL,
+        projection_job_id TEXT NOT NULL REFERENCES ${CANONICAL_POSTGRES_SCHEMA}.canonical_projection_jobs(id) ON DELETE CASCADE,
+        canonical_key TEXT NOT NULL,
+        graph_ref TEXT NOT NULL,
+        graph_kind TEXT NOT NULL,
+        created_at BIGINT NOT NULL,
+        updated_at BIGINT NOT NULL
+      )`,
+      `CREATE UNIQUE INDEX IF NOT EXISTS idx_pg_canonical_graph_identity_unique
+        ON ${CANONICAL_POSTGRES_SCHEMA}.canonical_graph_identity_mappings(projection_job_id, canonical_key, graph_kind)`,
+      `CREATE INDEX IF NOT EXISTS idx_pg_canonical_graph_identity_lookup
+        ON ${CANONICAL_POSTGRES_SCHEMA}.canonical_graph_identity_mappings(tenant_id, canonical_key, graph_kind, updated_at DESC)`,
+    ]
+    for (const statement of statements) {
+      await (this.sql as NeonQueryCapable).query(statement)
+    }
+  }
+
   private async rows<T>(query: Promise<unknown>): Promise<T[]> {
-    return await query as T[]
+    await this.ensureSchema()
+    return (await query as T[]).map((row) => normalizeDbRow(row))
   }
 
   private async first<T>(query: Promise<unknown>): Promise<T | null> {
@@ -560,6 +732,7 @@ export class NeonCanonicalMemoryStore implements CanonicalMemoryStore {
   }
 
   async writeCapture(input: CanonicalCaptureWrite): Promise<void> {
+    await this.ensureSchema()
     const queries = [
       this.sql`INSERT INTO haetsal_canonical.canonical_captures
         (id, tenant_id, source_system, source_ref, scope, title, body_r2_key, body_sha256, artifact_id, captured_at, created_at)
@@ -680,6 +853,7 @@ export class NeonCanonicalMemoryStore implements CanonicalMemoryStore {
   }
 
   async recordDispatchState(input: CanonicalDispatchStateInput): Promise<void> {
+    await this.ensureSchema()
     const jobs = await this.listProjectionJobsForOperation(input.tenantId, input.operationId)
     const queries = [
       this.sql`UPDATE haetsal_canonical.canonical_memory_operations
@@ -734,6 +908,7 @@ export class NeonCanonicalMemoryStore implements CanonicalMemoryStore {
   }
 
   async recordProjectionState(input: CanonicalProjectionStateWriteInput): Promise<void> {
+    await this.ensureSchema()
     const jobRows = await this.rows<CanonicalProjectionJobSummary>(this.sql`
       SELECT id, projection_kind
       FROM haetsal_canonical.canonical_projection_jobs

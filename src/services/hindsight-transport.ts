@@ -1,3 +1,4 @@
+import { getContainer } from '@cloudflare/containers'
 import type { Env } from '../types/env'
 
 type FetchLike = {
@@ -8,8 +9,8 @@ type StartableFetchLike = FetchLike & {
   start?: () => Promise<void>
   startAndWaitForPorts?: (args: { ports: number | number[] }) => Promise<void>
 }
-const HINDSIGHT_CONTAINER_NAME = 'hindsight-api-shared-v6'
-const HINDSIGHT_WORKER_PREFIX = 'hindsight-worker-v5'
+const HINDSIGHT_CONTAINER_NAME = 'hindsight-api-shared-v9'
+const HINDSIGHT_WORKER_PREFIX = 'hindsight-worker-v9'
 const HINDSIGHT_ORIGIN = 'http://hindsight'
 const HINDSIGHT_PORT = 8888
 const HINDSIGHT_WORKER_PORT = 8889
@@ -30,18 +31,20 @@ export function getHindsightStub(_scopeId: string, env: Env): StartableFetchLike
   const binding = env.HINDSIGHT as DurableObjectNamespace | (FetchLike & {
     getByName?: (name: string) => StartableFetchLike
   })
+  if (typeof (binding as FetchLike).fetch === 'function') {
+    return binding as StartableFetchLike
+  }
   return getNamedContainerStub(binding, HINDSIGHT_CONTAINER_NAME)
 }
 
 function getNamedContainerStub(binding: DurableObjectNamespace | (FetchLike & {
   getByName?: (name: string) => StartableFetchLike
 }), name: string): StartableFetchLike {
+  if ('idFromName' in binding && typeof binding.idFromName === 'function') {
+    return getContainer(binding as DurableObjectNamespace, name) as unknown as StartableFetchLike
+  }
   if ('getByName' in binding && typeof binding.getByName === 'function') {
     return binding.getByName(name)
-  }
-  if ('idFromName' in binding && typeof binding.idFromName === 'function') {
-    const id = binding.idFromName(name)
-    return binding.get(id) as unknown as StartableFetchLike
   }
   return binding as StartableFetchLike
 }

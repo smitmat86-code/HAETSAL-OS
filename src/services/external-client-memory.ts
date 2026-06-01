@@ -36,6 +36,12 @@ export const EXTERNAL_CLIENT_CAPTURE_PATTERNS: ExternalClientCapturePattern[] = 
   { id: 'artifact', label: 'artifact-linked capture', durableValue: 'Durable meaning plus provenance for a spec, plan, doc, or review artifact.' },
 ]
 
+export function resolveBrainMemoryType(
+  input: Pick<ExternalClientCaptureInput, 'capture_mode' | 'memory_type'>,
+): 'episodic' | 'semantic' | 'world' {
+  return input.memory_type ?? 'episodic'
+}
+
 const SURFACE_PREFIX = 'brain-memory'
 
 function trimOrNull(value?: string | null): string | null {

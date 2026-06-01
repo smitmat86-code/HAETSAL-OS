@@ -1,7 +1,13 @@
 # Advanced Open Brain Implementation Plan
 
+> Superseded by `docs/implementation-plans/post-hindsight-cloudflare-open-brain-roadmap.md`.
+> This plan treated Hindsight as the semantic projection and Graphiti as the
+> planned graph projection. The current direction removes Hindsight completely,
+> keeps Graphiti optional/deferred, and makes HAETSAL-owned Neon/Postgres memory
+> plus AI Search projections the execution target.
+
 Date: 2026-04-18
-Status: Planning approved pending execution
+Status: Superseded
 Related architecture: `docs/advanced-open-brain-architecture.md`
 
 ## Purpose

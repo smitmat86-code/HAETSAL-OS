@@ -16,7 +16,7 @@ mode = "smart"
 #   npx wrangler hyperdrive create haetsal-canonical-neon --connection-string="<NEON_UNPOOLED_URL>"
 [[hyperdrive]]
 binding = "HYPERDRIVE_CANONICAL"
-id = "replace-with-hyperdrive-canonical-id"
+id = "facdb64643d74ed2b3a3b90e7a4e2071"
 
 # ── Containers ────────────────────────────────────────────────────────────────
 [[containers]]

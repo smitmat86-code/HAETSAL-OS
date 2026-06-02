@@ -9,7 +9,7 @@ import type { ActionQueueMessage } from '../../types/action'
 
 export const runPlaybookSchema = z.object({
   playbook_name: z.string().describe('Playbook template name'),
-  parameters: z.record(z.string()).optional().describe('Key-value parameters'),
+  parameters: z.record(z.string(), z.string()).optional().describe('Key-value parameters'),
 })
 
 export async function runPlaybookStub(

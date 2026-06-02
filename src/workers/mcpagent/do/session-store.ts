@@ -6,9 +6,11 @@ export interface PersistedSessionRow {
   interview_state: string | null
 }
 
-type SessionSql = <TRow = unknown>(
+type SessionSqlValue = string | number | boolean | null
+
+type SessionSql = <TRow = Record<string, SessionSqlValue>>(
   strings: TemplateStringsArray,
-  ...values: unknown[]
+  ...values: SessionSqlValue[]
 ) => TRow[]
 
 export function ensureSessionTable(sql: SessionSql): void {

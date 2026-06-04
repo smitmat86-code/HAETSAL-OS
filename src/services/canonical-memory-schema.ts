@@ -12,6 +12,25 @@ export const CANONICAL_PROJECTION_KINDS: CanonicalProjectionKind[] = [
   'graphiti',
 ]
 
+export function resolveCanonicalProjectionKinds(
+  projectionKinds?: readonly CanonicalProjectionKind[] | null,
+): CanonicalProjectionKind[] {
+  if (projectionKinds == null) return [...CANONICAL_PROJECTION_KINDS]
+
+  const allowedKinds = new Set<CanonicalProjectionKind>(CANONICAL_PROJECTION_KINDS)
+  const resolved: CanonicalProjectionKind[] = []
+  for (const kind of projectionKinds) {
+    if (!allowedKinds.has(kind)) {
+      throw new Error(`Invalid canonical projection kind: ${String(kind)}`)
+    }
+    if (!resolved.includes(kind)) resolved.push(kind)
+  }
+  if (resolved.length === 0) {
+    throw new Error('Canonical capture requires at least one projection kind')
+  }
+  return resolved
+}
+
 export function normalizeCanonicalBody(body: string): string {
   return body.replace(/\r\n/g, '\n').trim()
 }

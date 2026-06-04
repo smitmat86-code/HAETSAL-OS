@@ -22,6 +22,7 @@ export interface CanonicalPipelineCaptureInput {
   salienceSurpriseScore?: number
   hindsightAsync?: boolean
   eagerProjectionDispatch?: boolean
+  projectionKinds?: CanonicalProjectionKind[] | null
   canonicalCaptureId?: string
   canonicalDocumentId?: string
   canonicalOperationId?: string

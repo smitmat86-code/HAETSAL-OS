@@ -7,7 +7,6 @@ import { maybeTriggerCompiledRefresh } from './canonical-compiled-refresh-trigge
 import { materializeGraphitiProjectionPayload } from './canonical-graphiti-projection'
 import { materializeHindsightProjectionPayload } from './canonical-hindsight-projection'
 import { captureCanonicalMemory } from './canonical-memory'
-import { CANONICAL_PROJECTION_KINDS } from './canonical-memory-schema'
 import {
   enqueueCanonicalProjectionDispatch,
   markCanonicalProjectionDispatchFailed,
@@ -32,6 +31,7 @@ export async function captureThroughCanonicalPipeline(
     bodyEncrypted: input.bodyEncrypted ?? null,
     artifactRef: input.artifactRef ?? null,
     capturedAt: input.capturedAt ?? null,
+    projectionKinds: input.projectionKinds ?? null,
   }, env, tenantId)
 
   const message = {
@@ -41,7 +41,7 @@ export async function captureThroughCanonicalPipeline(
       captureId: capture.captureId,
       documentId: capture.documentId,
       operationId: capture.operationId,
-      projectionKinds: CANONICAL_PROJECTION_KINDS,
+      projectionKinds: capture.projectionKinds,
     },
     enqueuedAt: Date.now(),
   }
@@ -52,13 +52,16 @@ export async function captureThroughCanonicalPipeline(
     canonicalDocumentId: capture.documentId,
     canonicalOperationId: capture.operationId,
   }
-  await Promise.allSettled([
-    materializeHindsightProjectionPayload(projectionInput, capture.captureId, env),
-    materializeGraphitiProjectionPayload(projectionInput, capture.captureId, env),
-  ]).then((results) => {
+  const materializationTasks = capture.projectionKinds.map((kind) => ({
+    kind,
+    task: kind === 'hindsight'
+      ? materializeHindsightProjectionPayload(projectionInput, capture.captureId, env)
+      : materializeGraphitiProjectionPayload(projectionInput, capture.captureId, env),
+  }))
+  await Promise.allSettled(materializationTasks.map(({ task }) => task)).then((results) => {
     results.forEach((result, index) => {
       if (result.status === 'fulfilled') return
-      const lane = index === 0 ? 'HINDSIGHT' : 'GRAPHITI'
+      const lane = materializationTasks[index]?.kind.toUpperCase() ?? 'UNKNOWN'
       console.error(`${lane}_PROJECTION_PAYLOAD_MATERIALIZE_FAILED`, {
         tenantId,
         captureId: capture.captureId,
@@ -101,7 +104,7 @@ export async function captureThroughCanonicalPipeline(
   return {
     capture: {
       ...capture,
-      projectionKinds: CANONICAL_PROJECTION_KINDS,
+      projectionKinds: capture.projectionKinds,
     },
     dispatch: {
       queue: 'QUEUE_BULK',

@@ -22,6 +22,7 @@ export interface CanonicalCaptureInput {
   bodyEncrypted?: string | null
   artifactRef?: CanonicalArtifactRef | null
   capturedAt?: number | null
+  projectionKinds?: CanonicalProjectionKind[] | null
 }
 
 export interface CanonicalCaptureResult {
@@ -31,4 +32,5 @@ export interface CanonicalCaptureResult {
   chunkIds: string[]
   operationId: string
   projectionJobIds: string[]
+  projectionKinds: CanonicalProjectionKind[]
 }

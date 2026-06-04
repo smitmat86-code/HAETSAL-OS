@@ -8,10 +8,10 @@ import { persistCanonicalPayloads, sha256Hex } from './canonical-memory-artifact
 import { getCanonicalMemoryStore } from './canonical-postgres'
 import {
   assertCanonicalIdentity,
-  CANONICAL_PROJECTION_KINDS,
   normalizeCanonicalBody,
   planCanonicalChunks,
   requireEncryptedBody,
+  resolveCanonicalProjectionKinds,
 } from './canonical-memory-schema'
 import { toNormalizedArtifact, type CanonicalShadowCaptureArgs } from './canonical-memory-types'
 
@@ -34,7 +34,7 @@ export async function captureCanonicalMemory(
     captureId: crypto.randomUUID(),
     documentId: crypto.randomUUID(),
     operationId: crypto.randomUUID(),
-    projectionKinds: CANONICAL_PROJECTION_KINDS,
+    projectionKinds: resolveCanonicalProjectionKinds(input.projectionKinds),
     tenantId,
     sourceSystem: input.sourceSystem,
     sourceRef: input.sourceRef ?? null,
@@ -139,6 +139,7 @@ export async function captureCanonicalMemory(
     chunkIds: chunks.map(chunk => chunk.id),
     operationId: capture.operationId,
     projectionJobIds: projectionJobs.map(job => job.id),
+    projectionKinds: capture.projectionKinds,
   }
 }
 

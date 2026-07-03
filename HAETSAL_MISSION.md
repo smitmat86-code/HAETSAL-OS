@@ -140,9 +140,9 @@ Fable owns the exact phase boundaries. This is the mission's target shape; adjus
 - Fix vitest discovery to ignore `gbrain/`, `OB1/`, `Second-Brain/` reference dirs (from spec 10.1)
 - Reconcile `package.json` ↔ `package-lock.json` (baseline report §2 flagged lock-only `@neondatabase/serverless`)
 - Refresh Hindsight-reference inventory using codegraph (`codegraph_search hindsight`, `codegraph_impact` on HindsightContainer, callers of `hindsight.ts` service)
-- Verify CF Access application policy on `haetsalos.specialdarksystems.com` restricts to `smitmat86@gmail.com` — dashboard check, screenshot into `docs/lessons/phase-0-cf-access-audit.md`
-- Provision Sendblue account + phone number + API key + webhook signing secret — **Matt does this in parallel; not a Fable action.** If not provisioned by Phase 4 gate, Phase 4 waits.
-- Add `SENDBLUE_*` env keys to `.dev.vars.example` (empty placeholders), never real values
+- **CF Access already verified pre-mission.** The Haetsal Access app (`haetsalos.specialdarksystems.com`) has one identity policy `Allow Matt` (include email `smitmat86@gmail.com`) plus one service-token policy `haetsal-brain-shell-smoke` for automated smokes. The Sendblue webhook bypass app `Webhook: Sendblue` at `haetsalos.specialdarksystems.com/webhooks/sendblue/*` exists with `bypass-all` policy (CF Access app id `05fd91af-e8f5-48f8-8a0b-43a419ff4f13`). Phase 0 gate: confirm both still exist via `GET /accounts/<acct>/access/apps`. Do not modify unless drift is detected.
+- **Sendblue credentials already provisioned in prod Secrets Store and `.dev.vars`.** As of mission start, Worker `the-brain` has all four secrets: `SENDBLUE_API_KEY_ID`, `SENDBLUE_API_SECRET_KEY`, `SENDBLUE_PHONE_NUMBER`, `SENDBLUE_WEBHOOK_PATH_SECRET`. The phone number is a Free Tier shared line — do not upgrade the plan; Matt owns billing decisions. `.dev.vars.example` has SENDBLUE_* placeholders. Phase 0 gate: confirm all four appear in `wrangler secret list --name the-brain`.
+- **Google OAuth is NOT provisioned.** Deferred by Matt. Demo clauses 1 (Gmail summary) and 2 (Gmail send) require `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET`. Fable stops at Phase 5 gate (S5) with a lessons file describing what Matt needs to create in Google Cloud Console. Do not attempt to work around this.
 - Baseline `npm run checkout` passes clean
 - **Gate:** clean baseline, one commit, `docs/lessons/phase-0-*.md` written
 
@@ -184,12 +184,13 @@ Blocked until Phase 1 + Phase 2 gates green (write path canonical + read path ca
 - **Gate:** demo clause 10 (Zero Hindsight) passes plus a Graphiti equivalent. Live smoke: worker starts cleanly, no HindsightContainer/GraphitiContainer DO classes registered, MCP tools respond, memory capture + recall work through canonical only, all seven retrieval modes return expected fixtures. Fresh-context verifier subagent runs a Law-2 audit against the post-removal codebase.
 
 ### Phase 4 — Sendblue iMessage Channel
-- Matt confirms Sendblue provisioning is done (blocks otherwise)
-- `src/services/delivery/sendblue.ts` (send API) + `POST /sendblue/webhook` (inbound)
-- HMAC signature verification (same middleware pattern as Telnyx)
-- Fold into existing `processInboundMessage` channel abstraction: `processInboundMessage(..., 'sendblue')`
-- Photo attachments → R2 → vision-capable model → canonical capture with photo provenance (WS8 slice)
-- **Gate:** demo clauses 1 (iMessage inbound reply) and 8 (photo → memory) pass live.
+Sendblue credentials + CF Access bypass are already in place (see Phase 0). The Free Tier phone number is a shared line with must-text-first, 24h reply window; automations (Phase 7) will only fire reliably if Matt has texted the brain in the prior 24h — call this out in Phase 7 lessons but do not attempt to work around it.
+- `src/services/delivery/sendblue.ts` — outbound API client. Auth headers: `sb-api-key-id: env.SENDBLUE_API_KEY_ID`, `sb-api-secret-key: env.SENDBLUE_API_SECRET_KEY`. Base URL: `https://api.sendblue.co`. Primary send endpoint: `POST /api/send-message` with `{from_number: env.SENDBLUE_PHONE_NUMBER, number, content, media_url?, send_style?}`.
+- `POST /webhooks/sendblue/:pathSecret` inbound route on the Worker. **Sendblue does NOT sign webhooks.** Auth model: middleware compares the `:pathSecret` URL segment against `env.SENDBLUE_WEBHOOK_PATH_SECRET` in constant time (`crypto.subtle.timingSafeEqual`); reject on mismatch. Second-layer validation: `to_number` in body must equal `env.SENDBLUE_PHONE_NUMBER`; else reject.
+- Fold into existing `processInboundMessage` channel abstraction: `processInboundMessage(..., 'sendblue')`.
+- Photo attachments (`media_url` in inbound webhook body) → download → R2 → vision-capable model → canonical capture with photo provenance (WS8 slice).
+- **Register the webhook with Sendblue once the route is deployed to prod.** Command (Fable runs this at Phase 4 gate after prod deploy): `curl -X POST https://api.sendblue.co/api/account/webhooks -H "sb-api-key-id: $SENDBLUE_API_KEY_ID" -H "sb-api-secret-key: $SENDBLUE_API_SECRET_KEY" -H "Content-Type: application/json" -d '{"url":"https://haetsalos.specialdarksystems.com/webhooks/sendblue/'"$SENDBLUE_WEBHOOK_PATH_SECRET"'","type":"receive"}'` — or the CLI equivalent `sendblue webhooks set-receive <url>`. Verify with `GET /api/account/webhooks`.
+- **Gate:** demo clauses 1 (iMessage inbound reply) and 8 (photo → memory) pass live. Matt texts the Sendblue number `+16452067656` from his iPhone, gets a real reply citing at least one specific Gmail thread and one calendar event within 15 seconds. Photo separately produces a captured memory with vision-extracted description.
 
 ### Phase 5 — Real Action Executors
 Wire the stubs. Preserve authorization gate, HMAC, TOCTOU, undo.
@@ -212,7 +213,8 @@ Wire the stubs. Preserve authorization gate, HMAC, TOCTOU, undo.
 - Backed by Agents SDK `this.schedule()`, timezone-aware (default: America/Los_Angeles for Matt; user-settable)
 - Each fires a scoped agent run
 - Chat-to-automation: dispatcher recognizes automation intent from natural language ("every weekday 8am brief me")
-- **Gate:** demo clause 5 (automation created from chat, fires next window, delivers) passes live.
+- **Sendblue Free Tier caveat:** the shared-number plan only allows outbound within a 24h reply window of an inbound message. Automations that fire outside this window will be rejected by Sendblue. Do NOT try to work around this by rate-limit heuristics or the "typing indicator" endpoint. Instead: (a) if delivery attempt returns a Sendblue rejection, the automation logs a `skipped_outside_reply_window` event visible in the dashboard, does NOT retry, and Matt can text the brain to re-open the window; (b) surface this constraint in the automation manager UI (WS9) so Matt understands why an automation didn't fire; (c) note in Phase 7 lessons that upgrading to AI Agent plan removes this limit (Matt's call, not Fable's).
+- **Gate:** demo clause 5 (automation created from chat, fires next window while reply window is open, delivers via iMessage) passes live.
 
 ### Phase 8 — Dream / Janitor / Consolidation Loop
 Replaces Hindsight reflection. Implements as Workflows + Queues.

@@ -8,7 +8,7 @@ const S = CANONICAL_POSTGRES_SCHEMA
  * Postgres store's ensureSchema alongside the base canonical DDL.
  *
  * Law 2 note: canonical Postgres via Hyperdrive is the authorized plaintext
- * boundary for memory content (shifted from the Hindsight container).
+ * boundary for memory content (Hindsight container retired in mission Phase 3).
  * chunk_text / claim statements / message content are plaintext here by
  * design; encrypted archival bodies remain in R2.
  */
@@ -75,7 +75,7 @@ export const CANONICAL_GOVERNANCE_DDL: string[] = [
   )`,
   `CREATE INDEX IF NOT EXISTS idx_pg_canonical_messages_session
     ON ${S}.canonical_messages(tenant_id, session_id, occurred_at)`,
-  // Entities + typed edges (Postgres-native graph; the only graph path post-Graphiti)
+  // Entities + typed edges (Postgres-native graph; legacy Graphiti engine retired mission Phase 3)
   `CREATE TABLE IF NOT EXISTS ${S}.canonical_entities (
     id TEXT PRIMARY KEY,
     tenant_id TEXT NOT NULL,

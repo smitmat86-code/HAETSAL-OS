@@ -70,30 +70,11 @@ async function makeInput(suffix: string): Promise<CanonicalPipelineCaptureInput>
   }
 }
 
+// Engine write paths retired in mission Phase 3 — plain env; spy mocks verify no dispatch occurs.
 function createPolicyTestEnv() {
-  const hindsightFetch = vi.fn(async () => {
-    throw new Error('Hindsight dispatch must not run: engine retired in Phase 1')
-  })
-  const graphitiFetch = vi.fn(async () => {
-    throw new Error('Graphiti dispatch must not run: engine retired in Phase 2')
-  })
-  return {
-    hindsightFetch,
-    graphitiFetch,
-    testEnv: {
-      ...env,
-      HINDSIGHT_DEDICATED_WORKERS_ENABLED: 'false',
-      WORKER_DOMAIN: 'haetsalos.test',
-      HINDSIGHT_WEBHOOK_SECRET: 'test-secret',
-      HINDSIGHT: { fetch: hindsightFetch },
-      GRAPHITI: {
-        getByName: () => ({
-          fetch: graphitiFetch,
-          startAndWaitForPorts: async () => { throw new Error('Graphiti container must not start: engine retired in Phase 2') },
-        }),
-      },
-    } as typeof env,
-  }
+  const hindsightFetch = vi.fn()
+  const graphitiFetch = vi.fn()
+  return { hindsightFetch, graphitiFetch, testEnv: env }
 }
 
 function hindsightPayloadKey(captureId: string): string {

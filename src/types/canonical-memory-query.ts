@@ -1,4 +1,3 @@
-import type { CanonicalGraphProjectionStatus } from './canonical-graph-projection'
 import type { CanonicalProjectionProvenance } from './canonical-graph-query'
 import type { BrainMemoryRolloutAttribution } from './external-client-memory'
 import type { GoogleSourceReadAttribution } from './google-source-read'
@@ -30,7 +29,7 @@ export interface CanonicalMemoryRouteMetadata {
 }
 export interface CanonicalSourceAttribution {
   mode: MemoryQueryMode; sourceSystem: string | null; captureId: string | null; documentId: string | null
-  canonicalOperationId: string | null; projectionKind: 'hindsight' | 'graphiti' | null
+  canonicalOperationId: string | null; projectionKind: string | null
   projectionRef: string | null; targetRef: string | null; graphRef: string | null
 }
 
@@ -48,7 +47,7 @@ export interface CanonicalMemoryListItem {
   citation?: CanonicalRetrievalCitation | null
   trustState?: string | null
   semanticStatus?: {
-    projectionKind: 'hindsight'
+    projectionKind: string
     projectionStatus: 'accepted' | 'queued' | 'completed' | 'failed' | 'unknown'
     resultStatus: 'queued' | 'completed' | 'failed' | 'missing'
     ready: boolean
@@ -81,7 +80,8 @@ export interface CanonicalDocumentResult {
   artifact: CanonicalDocumentArtifact | null
 }
 
-export interface CanonicalReflectionStatus { mode: 'hindsight'; status: 'pending' | 'queued' | 'completed' | 'failed'; targetRef?: string | null; updatedAt?: number | null; errorMessage?: string | null }
+/** Retired in mission Phase 3 — both engine projection statuses are null after cleanup. */
+export interface CanonicalReflectionStatus { mode: string; status: 'pending' | 'queued' | 'completed' | 'failed'; targetRef?: string | null; updatedAt?: number | null; errorMessage?: string | null }
 export interface CanonicalMemoryStatusResult {
   captureId: string; sourceSystem?: string | null; sourceRef?: string | null; scope?: string | null
   title?: string | null; capturedAt?: number | null; brainMemory?: BrainMemoryRolloutAttribution | null
@@ -101,15 +101,9 @@ export interface CanonicalMemoryStatusResult {
     semanticReady: boolean
     updatedAt: number | null
   }>
-  graph: CanonicalGraphProjectionStatus | null
+  graph: null
   reflection: CanonicalReflectionStatus | null
-  compatibility: {
-    mode: 'current_hindsight'
-    status: 'queued' | 'retained' | 'failed'
-    targetRef: string | null
-    errorMessage: string | null
-    updatedAt: number | null
-  } | null
+  compatibility: null
 }
 
 export interface CanonicalMemoryStatsResult {

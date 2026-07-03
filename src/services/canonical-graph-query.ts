@@ -1,6 +1,5 @@
-// Postgres-native graph traversal over canonical entities/edges — the only
-// graph path post-Graphiti (HAETSAL_MISSION.md Phase 2). One-hop matching plus
-// two-hop expansion; provenance cites the canonical capture that observed the
+// Postgres-native graph traversal over canonical entities/edges (legacy Graphiti engine retired mission Phase 3).
+// One-hop matching plus two-hop expansion; provenance cites the canonical capture that observed the
 // edge, never a projection engine.
 
 import type { Env } from '../types/env'

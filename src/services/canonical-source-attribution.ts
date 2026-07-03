@@ -8,11 +8,9 @@ import type {
 import { parseBrainMemoryRolloutAttribution } from './external-client-memory'
 import { parseGoogleSourceReadAttribution } from './google-source-read-contract'
 
-function projectionKindOf(item: CanonicalMemoryListItem): 'hindsight' | 'graphiti' | null {
-  if (item.provenance?.projectionKind) return item.provenance.projectionKind
-  if (item.semanticStatus) return 'hindsight'
-  if (item.graphContext) return 'graphiti'
-  return null
+// Engine projections retired in mission Phase 3 — kind comes from provenance only.
+function projectionKindOf(item: CanonicalMemoryListItem): string | null {
+  return item.provenance?.projectionKind ?? null
 }
 
 function projectionRefOf(item: CanonicalMemoryListItem): string | null {

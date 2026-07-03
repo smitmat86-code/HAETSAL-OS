@@ -10,8 +10,8 @@ export class ChiefOfStaff extends BaseAgent {
   readonly domain = 'general'
   readonly agentIdentity = 'chief_of_staff'
 
-  constructor(env: Env, tenantId: string, tmk: CryptoKey, hindsightTenantId: string) {
-    super(env, tenantId, tmk, hindsightTenantId)
+  constructor(env: Env, tenantId: string, tmk: CryptoKey) {
+    super(env, tenantId, tmk)
   }
 
   protected systemPrompt(): string {

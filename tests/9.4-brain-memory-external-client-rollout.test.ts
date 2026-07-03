@@ -10,9 +10,6 @@ import type {
 import { BRAIN_MEMORY_SURFACE_PROFILE, EXTERNAL_CLIENT_CAPTURE_PATTERNS } from '../src/services/external-client-memory'
 import { BRAIN_MEMORY_TOOL_NAMES } from '../src/tools/brain-memory-surface'
 import { registerCanonicalMemoryTools } from '../src/tools/canonical-memory'
-import { createGraphitiContainerTestEnv } from './support/graphiti-test-env'
-import { createHindsightTestEnv, type HindsightRecallRow } from './support/hindsight-test-env'
-import { seedHistoricalHindsightProjection } from './support/historical-hindsight-seed'
 import { getCanonicalMemoryStatus } from '../src/services/canonical-memory-status'
 
 type ToolResponse = { content: Array<{ text: string }> }
@@ -44,47 +41,6 @@ async function ensureTenantWithKek(): Promise<void> {
     .bind(now + (24 * 60 * 60 * 1000), now, TENANT_ID).run()
 }
 
-function makeEnvWithHindsightStub() {
-  const { testEnv } = createGraphitiContainerTestEnv()
-  return {
-    ...env,
-    GRAPHITI_RUNTIME_MODE: testEnv.GRAPHITI_RUNTIME_MODE,
-    GRAPHITI: testEnv.GRAPHITI,
-    HINDSIGHT_DEDICATED_WORKERS_ENABLED: 'false',
-    WORKER_DOMAIN: 'brain.workers.dev',
-    HINDSIGHT_WEBHOOK_SECRET: 'test-secret',
-    HINDSIGHT: {
-      fetch: async (input: RequestInfo | URL, init?: RequestInit) => {
-        const url = input instanceof Request ? new URL(input.url) : new URL(input.toString())
-        if (/^\/v1\/default\/banks\/[^/]+\/mental-models$/.test(url.pathname) || /^\/v1\/default\/banks\/[^/]+\/webhooks$/.test(url.pathname)) {
-          return new Response(JSON.stringify({ items: [] }), { status: 200, headers: { 'Content-Type': 'application/json' } })
-        }
-        if (/^\/v1\/default\/banks\/[^/]+\/memories$/.test(url.pathname)) {
-          const request = input instanceof Request ? input : new Request(input.toString(), init)
-          const body = await request.clone().json() as { async?: boolean }
-          return new Response(JSON.stringify({
-            success: true,
-            bank_id: url.pathname.split('/')[4],
-            items_count: 1,
-            async: body.async ?? false,
-            operation_id: body.async ? `op-${crypto.randomUUID()}` : undefined,
-          }), { status: 200, headers: { 'Content-Type': 'application/json' } })
-        }
-        return new Response(JSON.stringify({ status: 'ok' }), { status: 200, headers: { 'Content-Type': 'application/json' } })
-      },
-    },
-  } as unknown as typeof env
-}
-
-function createRuntimeEnvWithRecall(recallResults: HindsightRecallRow[]): typeof env {
-  const { testEnv } = createGraphitiContainerTestEnv()
-  return {
-    ...createHindsightTestEnv({ recallResults, operationStatus: 'completed' }),
-    GRAPHITI_RUNTIME_MODE: testEnv.GRAPHITI_RUNTIME_MODE,
-    GRAPHITI: testEnv.GRAPHITI,
-  } as typeof env
-}
-
 function createToolRegistry(testEnv: typeof env, tmk: CryptoKey | null): ToolRegistry {
   const handlers = new Map<string, ToolHandler>()
   const pending: Promise<unknown>[] = []
@@ -110,9 +66,8 @@ beforeEach(() => { vi.restoreAllMocks() })
 describe('9.4 brain-memory external client rollout', () => {
   it('captures explicit, session-summary, and artifact-linked memories through capture_memory and preserves rollout attribution on reads', async () => {
     const tmk = await deriveTestTmk()
-    const testEnv = makeEnvWithHindsightStub()
-    vi.spyOn(testEnv.QUEUE_BULK, 'send').mockResolvedValue(undefined as never)
-    const registry = createToolRegistry(testEnv, tmk)
+    vi.spyOn(env.QUEUE_BULK, 'send').mockResolvedValue(undefined as never)
+    const registry = createToolRegistry(env, tmk)
 
     const explicit = await callTool<Record<string, string | object>>(registry, 'capture_memory', {
       content: 'Decision: keep brain-memory as the first MCP-native rollout surface.',
@@ -200,9 +155,8 @@ describe('9.4 brain-memory external client rollout', () => {
 
   it('defaults brain-memory captures to episodic unless the caller explicitly overrides memory_type', async () => {
     const tmk = await deriveTestTmk()
-    const testEnv = makeEnvWithHindsightStub()
-    vi.spyOn(testEnv.QUEUE_BULK, 'send').mockResolvedValue(undefined as never)
-    const registry = createToolRegistry(testEnv, tmk)
+    vi.spyOn(env.QUEUE_BULK, 'send').mockResolvedValue(undefined as never)
+    const registry = createToolRegistry(env, tmk)
 
     const explicit = await callTool<Record<string, string | Record<string, unknown>>>(registry, 'capture_memory', {
       content: 'Decision: keep Northgate Studio focused on durable factual recall.',
@@ -228,8 +182,7 @@ describe('9.4 brain-memory external client rollout', () => {
 
     // No caller ever set memory_type, so resolveBrainMemoryType() falls back
     // to 'episodic' for every capture mode; that surfaces as the 'episode'
-    // memory class on the governance receipt returned by the canonical
-    // pipeline (write path severed for Hindsight, HAETSAL_MISSION.md Phase 1).
+    // memory class on the governance receipt returned by the canonical pipeline.
     for (const result of [explicit, sessionSummary, artifact]) {
       const governance = result.governance as Record<string, unknown>
       expect(governance.memoryClass).toBe('episode')
@@ -241,9 +194,8 @@ describe('9.4 brain-memory external client rollout', () => {
 
   it('defaults capture_memory to the brain-memory explicit rollout path when capture_mode is omitted', async () => {
     const tmk = await deriveTestTmk()
-    const testEnv = makeEnvWithHindsightStub()
-    vi.spyOn(testEnv.QUEUE_BULK, 'send').mockResolvedValue(undefined as never)
-    const registry = createToolRegistry(testEnv, tmk)
+    vi.spyOn(env.QUEUE_BULK, 'send').mockResolvedValue(undefined as never)
+    const registry = createToolRegistry(env, tmk)
 
     const capture = await callTool<Record<string, string | object>>(registry, 'capture_memory', {
       content: 'Decision: default brain-memory capture should still normalize to explicit mode.',
@@ -263,9 +215,8 @@ describe('9.4 brain-memory external client rollout', () => {
 
   it('gives repeated brain-memory captures distinct canonical capture identities', async () => {
     const tmk = await deriveTestTmk()
-    const testEnv = makeEnvWithHindsightStub()
-    vi.spyOn(testEnv.QUEUE_BULK, 'send').mockResolvedValue(undefined as never)
-    const registry = createToolRegistry(testEnv, tmk)
+    vi.spyOn(env.QUEUE_BULK, 'send').mockResolvedValue(undefined as never)
+    const registry = createToolRegistry(env, tmk)
 
     const first = await callTool<Record<string, string | Record<string, unknown>>>(registry, 'capture_memory', {
       content: 'Decision: first explicit brain-memory capture for unique projection identity.',
@@ -281,81 +232,16 @@ describe('9.4 brain-memory external client rollout', () => {
     })
 
     // Each capture_memory call must produce a unique canonical identity so
-    // captures are independently addressable. Projection engines are retired;
-    // per-capture isolation is verifiable from the IDs alone.
+    // captures are independently addressable.
     expect(first.canonical_capture_id).not.toBe(second.canonical_capture_id)
     expect(first.canonical_operation_id).not.toBe(second.canonical_operation_id)
     expect(first.canonical_document_id).not.toBe(second.canonical_document_id)
   })
 
-  it('resolves semantic linkback to the correct historical capture using canonical metadata', async () => {
-    // Historical Hindsight projection: simulates a capture that was projected
-    // to Hindsight before the write path was severed (mission Phase 1). The
-    // pipeline can no longer produce these for brain-memory captures, so this
-    // is seeded directly to exercise linkback resolution for the
-    // mcp:memory_write source system.
+  it('confirms operation status and governance after capture with engines retired', async () => {
     const tmk = await deriveTestTmk()
-    const recallResults: HindsightRecallRow[] = []
-    const testEnv = createRuntimeEnvWithRecall(recallResults)
-
-    const first = await seedHistoricalHindsightProjection(testEnv, {
-      tenantId: TENANT_ID,
-      sourceSystem: 'mcp:memory_write',
-      sourceRef: 'brain-memory:explicit:first',
-      scope: 'general',
-      title: null,
-      body: 'Decision: first semantic linkback candidate for isolated hindsight document.',
-      tmk,
-    })
-    const second = await seedHistoricalHindsightProjection(testEnv, {
-      tenantId: TENANT_ID,
-      sourceSystem: 'mcp:memory_write',
-      sourceRef: 'brain-memory:explicit:second',
-      scope: 'general',
-      title: null,
-      body: 'Decision: second semantic linkback candidate should be selected by canonical metadata.',
-      tmk,
-    })
-
-    recallResults.splice(0, recallResults.length, {
-      id: 'brain-memory-semantic-result',
-      document_id: second.engineDocumentId,
-      text: 'Second semantic linkback candidate should be selected by canonical metadata.',
-      score: 0.93,
-      tags: [`tenant:${TENANT_ID}`],
-      metadata: {
-        source: 'mcp:memory_write',
-        domain: 'general',
-        canonical_capture_id: second.captureId,
-        canonical_document_id: second.documentId,
-        canonical_operation_id: second.operationId,
-      },
-    })
-
-    const registry = createToolRegistry(testEnv, tmk)
-    const semantic = await callTool<CanonicalSearchResult>(registry, 'search_memory', {
-      query: 'selected by canonical metadata',
-      mode: 'semantic',
-      limit: 3,
-    })
-
-    // Semantic search degrades to lexical ('partial') when chunk embeddings
-    // are absent (historical seeds pre-date the pgvector pipeline). Either
-    // way the correct capture must surface as the top result. The
-    // provenance.canonicalOperationId field is populated only on Hindsight
-    // recall paths; in lexical fallback the captureId and documentId on the
-    // item row are the canonical linkback identifiers.
-    expect(['ok', 'partial']).toContain(semantic.status)
-    expect(semantic.items[0]?.captureId).toBe(second.captureId)
-    expect(semantic.items[0]?.documentId).toBe(second.documentId)
-    expect(semantic.items[0]?.captureId).not.toBe(first.captureId)
-  })
-
-  it('eagerly dispatches graphiti projection for brain-memory captures so status is completed immediately', async () => {
-    const tmk = await deriveTestTmk()
-    const testEnv = makeEnvWithHindsightStub()
-    vi.spyOn(testEnv.QUEUE_BULK, 'send').mockResolvedValue(undefined as never)
-    const registry = createToolRegistry(testEnv, tmk)
+    vi.spyOn(env.QUEUE_BULK, 'send').mockResolvedValue(undefined as never)
+    const registry = createToolRegistry(env, tmk)
 
     const explicit = await callTool<Record<string, string | Record<string, unknown>>>(registry, 'capture_memory', {
       content: 'Decision: Alder Port depends on Nimbus Rail for freight movement.',
@@ -366,13 +252,12 @@ describe('9.4 brain-memory external client rollout', () => {
 
     const status = await getCanonicalMemoryStatus(
       { tenantId: TENANT_ID, operationId: String(explicit.canonical_operation_id) },
-      testEnv,
+      env,
       TENANT_ID,
     )
 
-    // Projection engines are retired (Hindsight: Phase 1, Graphiti: Phase 2).
-    // With no active projection kinds the operation settles at 'accepted' and
-    // there is no graph row. The governance contract is the stable invariant.
+    // Projection engines are retired (Hindsight: Phase 1, Graphiti: Phase 2, both: Phase 3).
+    // With no active projection kinds the operation settles at 'accepted'.
     expect(status.operation.operationId).toBe(String(explicit.canonical_operation_id))
     expect(status.captureId).toBe(String(explicit.canonical_capture_id))
     expect((explicit.governance as Record<string, unknown>).authorKind).toBe('external_client')

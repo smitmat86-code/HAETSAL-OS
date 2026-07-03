@@ -14,7 +14,6 @@
     "cf:types": "wrangler types src/types/cloudflare-env.generated.d.ts --include-runtime false"
   },
   "dependencies": {
-    "@cloudflare/containers": "^0.3.5",
     "@cloudflare/puppeteer": "^1.1.0",
     "agents": "^0.13.3",
     "ai": "^6.0.116",

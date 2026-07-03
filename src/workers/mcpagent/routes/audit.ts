@@ -1,6 +1,5 @@
 import { Hono } from 'hono'
 import { getOrCreateTenant } from '../../../services/tenant'
-import { getHindsightMemoryOpsSnapshot } from '../../../services/hindsight-ops'
 import type { Env } from '../../../types/env'
 
 type Variables = { tenantId: string; jwtSub: string; traceId: string }
@@ -38,13 +37,6 @@ audit.get('/', async (c) => {
     offset,
     total: totalRow?.total ?? 0,
   })
-})
-
-audit.get('/memory', async (c) => {
-  await getOrCreateTenant(c.get('tenantId'), c.get('jwtSub'), c.env)
-  const tenantId = c.get('tenantId')
-  const snapshot = await getHindsightMemoryOpsSnapshot(c.env, tenantId)
-  return c.json(snapshot)
 })
 
 function clampPositiveInt(

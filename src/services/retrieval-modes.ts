@@ -26,9 +26,8 @@ export async function searchCanonicalLexicalMemory(
 }
 
 /**
- * Semantic retrieval over canonical Postgres pgvector — the Phase 2 hard
- * cutover replacement for Hindsight recall. Degrades to lexical (status
- * 'partial') when embeddings or pgvector are unavailable.
+ * Semantic retrieval over canonical Postgres pgvector (legacy Hindsight recall retired mission Phase 3).
+ * Degrades to lexical (status 'partial') when embeddings or pgvector are unavailable.
  */
 export async function searchCanonicalSemanticMemory(
   input: CanonicalSearchInput,

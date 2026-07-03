@@ -1,4 +1,3 @@
-import type { CanonicalGraphIdentityMapping } from '../types/canonical-graph-projection'
 import { CANONICAL_POSTGRES_SCHEMA } from './canonical-postgres-schema'
 import { CANONICAL_BASE_DDL } from './canonical-postgres-base-ddl'
 import { CANONICAL_GOVERNANCE_DDL } from './canonical-governance-ddl'
@@ -9,9 +8,8 @@ import type {
   CanonicalCaptureWrite,
   CanonicalDispatchStateInput,
   CanonicalDocumentLookupRow,
-  CanonicalGraphEdgeObservationRow,
+  CanonicalGraphIdentityMapping,
   CanonicalGraphIdentityMappingRecord,
-  CanonicalHindsightProjectionLookupRow,
   CanonicalListRow,
   CanonicalMemoryOperationRecord,
   CanonicalOperationLookupRow,
@@ -23,7 +21,6 @@ import type {
   CanonicalProjectionStateRow,
   CanonicalProjectionStateWriteInput,
   CanonicalRetrievalRow,
-  CanonicalSemanticLinkbackRow,
   CanonicalStatsRow,
 } from './canonical-postgres-schema'
 
@@ -57,25 +54,11 @@ export interface CanonicalMemoryStore {
     projectionKind: CanonicalProjectionKind,
   ): Promise<CanonicalProjectionStateRow | null>
   recordProjectionState(input: CanonicalProjectionStateWriteInput): Promise<void>
-  findHindsightProjectionByEngineOperation(
-    tenantId: string,
-    engineOperationId: string,
-  ): Promise<{ projection_job_id: string; operation_id: string } | null>
   listCompletedProjectionOperationIds(
     tenantId: string,
     projectionKind: CanonicalProjectionKind,
   ): Promise<string[]>
-  findSemanticLinkback(
-    tenantId: string,
-    lookup: { captureId?: string | null; documentId?: string | null; operationId?: string | null; targetRef?: string | null },
-  ): Promise<CanonicalSemanticLinkbackRow | null>
-  listGraphEdgeObservations(tenantId: string): Promise<CanonicalGraphEdgeObservationRow[]>
   getStats(tenantId: string): Promise<CanonicalStatsRow>
-  getLatestHindsightProjection(
-    tenantId: string,
-    args: { captureId?: string | null; operationId?: string | null },
-  ): Promise<CanonicalHindsightProjectionLookupRow | null>
-  listGraphIdentityMappings(tenantId: string): Promise<CanonicalGraphIdentityMappingRecord[]>
 }
 
 function compareProjectionResults(
@@ -536,18 +519,6 @@ export class InMemoryCanonicalMemoryStore implements CanonicalMemoryStore {
     })
   }
 
-  async findHindsightProjectionByEngineOperation(
-    tenantId: string,
-    engineOperationId: string,
-  ): Promise<{ projection_job_id: string; operation_id: string } | null> {
-    const result = [...this.projectionResults.values()]
-      .filter((row) => row.tenant_id === tenantId && row.engine_operation_id === engineOperationId)
-      .sort(compareProjectionResults)[0]
-    if (!result) return null
-    const job = this.projectionJobs.get(result.projection_job_id)
-    return job ? { projection_job_id: job.id, operation_id: job.operation_id } : null
-  }
-
   async listCompletedProjectionOperationIds(
     tenantId: string,
     projectionKind: CanonicalProjectionKind,
@@ -557,82 +528,6 @@ export class InMemoryCanonicalMemoryStore implements CanonicalMemoryStore {
       .filter((job) => latestProjectionResult(this.projectionResults.values(), job.id)?.status === 'completed')
       .map((job) => job.operation_id)
     return [...new Set(ids)].sort()
-  }
-
-  async findSemanticLinkback(
-    tenantId: string,
-    lookup: { captureId?: string | null; documentId?: string | null; operationId?: string | null; targetRef?: string | null },
-  ): Promise<CanonicalSemanticLinkbackRow | null> {
-    const candidates = [...this.projectionJobs.values()]
-      .filter((job) => job.tenant_id === tenantId && job.projection_kind === 'hindsight')
-      .map((job) => {
-        const result = latestProjectionResult(this.projectionResults.values(), job.id)
-        const capture = this.captures.get(job.capture_id)
-        const document = this.documents.get(job.document_id)
-        const operation = this.operations.get(job.operation_id)
-        return capture && document && operation && result
-          ? {
-            capture_id: capture.id,
-            document_id: document.id,
-            operation_id: operation.id,
-            projection_job_id: job.id,
-            projection_result_id: result.id,
-            scope: capture.scope,
-            source_system: capture.source_system,
-            source_ref: capture.source_ref,
-            title: document.title,
-            captured_at: capture.captured_at,
-            projection_status: job.status,
-            result_status: result.status,
-            target_ref: result.target_ref,
-            engine_document_id: result.engine_document_id,
-            engine_operation_id: result.engine_operation_id,
-            updated_at: result.updated_at,
-            created_at: result.created_at,
-          }
-          : null
-      })
-      .filter((row): row is CanonicalSemanticLinkbackRow & { updated_at: number; created_at: number } => Boolean(row))
-      .filter((row) =>
-        (lookup.captureId && row.capture_id === lookup.captureId)
-        || (lookup.documentId && row.engine_document_id === lookup.documentId)
-        || (lookup.operationId && row.engine_operation_id === lookup.operationId)
-        || (lookup.targetRef && row.target_ref === lookup.targetRef),
-      )
-      .sort((left, right) => right.updated_at - left.updated_at || right.created_at - left.created_at || right.projection_result_id.localeCompare(left.projection_result_id))
-    if (!candidates[0]) return null
-    const { updated_at: _updatedAt, created_at: _createdAt, ...row } = candidates[0]
-    return row
-  }
-
-  async listGraphEdgeObservations(tenantId: string): Promise<CanonicalGraphEdgeObservationRow[]> {
-    const rows = [...this.graphIdentityMappings.values()]
-      .filter((mapping) => mapping.tenant_id === tenantId && mapping.graph_kind === 'edge')
-      .map((mapping) => {
-        const job = this.projectionJobs.get(mapping.projection_job_id)
-        if (!job || job.projection_kind !== 'graphiti' || job.status !== 'completed') return null
-        const capture = this.captures.get(job.capture_id)
-        const latest = latestProjectionResult(this.projectionResults.values(), job.id)
-        return capture
-          ? {
-            canonical_key: mapping.canonical_key,
-            graph_ref: mapping.graph_ref,
-            projection_job_id: job.id,
-            projection_result_id: latest?.id ?? null,
-            target_ref: latest?.target_ref ?? null,
-            operation_id: job.operation_id,
-            capture_id: job.capture_id,
-            document_id: job.document_id,
-            scope: capture.scope,
-            source_system: capture.source_system,
-            source_ref: capture.source_ref,
-            title: capture.title,
-            captured_at: capture.captured_at,
-          }
-          : null
-      })
-      .filter(Boolean)
-    return rows as CanonicalGraphEdgeObservationRow[]
   }
 
   async getStats(tenantId: string): Promise<CanonicalStatsRow> {
@@ -658,50 +553,6 @@ export class InMemoryCanonicalMemoryStore implements CanonicalMemoryStore {
     }
   }
 
-  async getLatestHindsightProjection(
-    tenantId: string,
-    args: { captureId?: string | null; operationId?: string | null },
-  ): Promise<CanonicalHindsightProjectionLookupRow | null> {
-    const rows = [...this.projectionJobs.values()]
-      .filter((job) => job.tenant_id === tenantId && job.projection_kind === 'hindsight')
-      .map((job) => {
-        const capture = this.captures.get(job.capture_id)
-        const operation = this.operations.get(job.operation_id)
-        const result = latestProjectionResult(this.projectionResults.values(), job.id)
-        return capture && operation && result
-          ? {
-            capture_id: capture.id,
-            document_id: job.document_id,
-            operation_id: operation.id,
-            projection_job_id: job.id,
-            projection_result_id: result.id,
-            projection_status: job.status,
-            result_status: result.status,
-            engine_document_id: result.engine_document_id,
-            engine_operation_id: result.engine_operation_id,
-            target_ref: result.target_ref,
-            updated_at: result.updated_at,
-            created_at: result.created_at,
-          }
-          : null
-      })
-      .filter((row): row is CanonicalHindsightProjectionLookupRow & { updated_at: number; created_at: number } => Boolean(row))
-      .filter((row) =>
-        (args.captureId && row.capture_id === args.captureId)
-        || (args.operationId && row.operation_id === args.operationId),
-      )
-      .sort((left, right) => right.updated_at - left.updated_at || right.created_at - left.created_at || right.projection_result_id.localeCompare(left.projection_result_id))
-    if (!rows[0]) return null
-    const { updated_at: _updatedAt, created_at: _createdAt, ...row } = rows[0]
-    return row
-  }
-
-  async listGraphIdentityMappings(tenantId: string): Promise<CanonicalGraphIdentityMappingRecord[]> {
-    return [...this.graphIdentityMappings.values()]
-      .filter((row) => row.tenant_id === tenantId)
-      .sort((left, right) => left.graph_kind.localeCompare(right.graph_kind) || left.canonical_key.localeCompare(right.canonical_key))
-      .map((row) => ({ ...row }))
-  }
 }
 
 export class PostgresCanonicalMemoryStore implements CanonicalMemoryStore {
@@ -1044,7 +895,7 @@ export class PostgresCanonicalMemoryStore implements CanonicalMemoryStore {
         operation_id: input.operationId,
         capture_id: '',
         document_id: '',
-        projection_kind: (jobRows.find((job) => job.id === row.id)?.projection_kind ?? 'hindsight'),
+        projection_kind: (jobRows.find((job) => job.id === row.id)?.projection_kind ?? 'unknown'),
         status: row.status,
         created_at: 0,
         enqueued_at: 0,
@@ -1075,20 +926,6 @@ export class PostgresCanonicalMemoryStore implements CanonicalMemoryStore {
     await this.sql.transaction(queries)
   }
 
-  async findHindsightProjectionByEngineOperation(
-    tenantId: string,
-    engineOperationId: string,
-  ): Promise<{ projection_job_id: string; operation_id: string } | null> {
-    return this.first<{ projection_job_id: string; operation_id: string }>(this.sql`
-      SELECT r.projection_job_id, j.operation_id
-      FROM haetsal_canonical.canonical_projection_results r
-      INNER JOIN haetsal_canonical.canonical_projection_jobs j ON j.id = r.projection_job_id
-      WHERE r.tenant_id = ${tenantId} AND r.engine_operation_id = ${engineOperationId}
-      ORDER BY r.updated_at DESC, r.created_at DESC, r.id DESC
-      LIMIT 1
-    `)
-  }
-
   async listCompletedProjectionOperationIds(
     tenantId: string,
     projectionKind: CanonicalProjectionKind,
@@ -1107,61 +944,6 @@ export class PostgresCanonicalMemoryStore implements CanonicalMemoryStore {
       ORDER BY j.operation_id ASC
     `)
     return rows.map((row) => row.operation_id)
-  }
-
-  async findSemanticLinkback(
-    tenantId: string,
-    lookup: { captureId?: string | null; documentId?: string | null; operationId?: string | null; targetRef?: string | null },
-  ): Promise<CanonicalSemanticLinkbackRow | null> {
-    return this.first<CanonicalSemanticLinkbackRow>(this.sql`
-      SELECT c.id AS capture_id, d.id AS document_id, o.id AS operation_id,
-             j.id AS projection_job_id, r.id AS projection_result_id,
-             c.scope, c.source_system, c.source_ref, d.title, c.captured_at,
-             j.status AS projection_status, r.status AS result_status,
-             r.target_ref, r.engine_document_id, r.engine_operation_id
-      FROM haetsal_canonical.canonical_projection_jobs j
-      INNER JOIN haetsal_canonical.canonical_captures c ON c.id = j.capture_id
-      INNER JOIN haetsal_canonical.canonical_documents d ON d.id = j.document_id
-      INNER JOIN haetsal_canonical.canonical_memory_operations o ON o.id = j.operation_id
-      INNER JOIN LATERAL (
-        SELECT id, status, target_ref, engine_document_id, engine_operation_id, updated_at, created_at
-        FROM haetsal_canonical.canonical_projection_results
-        WHERE projection_job_id = j.id
-        ORDER BY updated_at DESC, created_at DESC, id DESC
-        LIMIT 1
-      ) r ON true
-      WHERE j.tenant_id = ${tenantId}
-        AND j.projection_kind = 'hindsight'
-        AND (
-          (${lookup.captureId ?? null}::text IS NOT NULL AND c.id = ${lookup.captureId ?? null})
-          OR (${lookup.documentId ?? null}::text IS NOT NULL AND r.engine_document_id = ${lookup.documentId ?? null})
-          OR (${lookup.operationId ?? null}::text IS NOT NULL AND r.engine_operation_id = ${lookup.operationId ?? null})
-          OR (${lookup.targetRef ?? null}::text IS NOT NULL AND r.target_ref = ${lookup.targetRef ?? null})
-      )
-      ORDER BY r.updated_at DESC, r.created_at DESC, r.id DESC
-      LIMIT 1
-    `)
-  }
-
-  async listGraphEdgeObservations(tenantId: string): Promise<CanonicalGraphEdgeObservationRow[]> {
-    return this.rows<CanonicalGraphEdgeObservationRow>(this.sql`
-      SELECT m.canonical_key, m.graph_ref, j.id AS projection_job_id, r.id AS projection_result_id, r.target_ref,
-             j.operation_id, c.id AS capture_id, j.document_id, c.scope, c.source_system, c.source_ref, c.title, c.captured_at
-      FROM haetsal_canonical.canonical_graph_identity_mappings m
-      INNER JOIN haetsal_canonical.canonical_projection_jobs j ON j.id = m.projection_job_id
-      INNER JOIN haetsal_canonical.canonical_captures c ON c.id = j.capture_id
-      LEFT JOIN LATERAL (
-        SELECT id, target_ref
-        FROM haetsal_canonical.canonical_projection_results
-        WHERE projection_job_id = j.id
-        ORDER BY updated_at DESC, created_at DESC, id DESC
-        LIMIT 1
-      ) r ON true
-      WHERE m.tenant_id = ${tenantId}
-        AND m.graph_kind = 'edge'
-        AND j.projection_kind = 'graphiti'
-        AND j.status = 'completed'
-    `)
   }
 
   async getStats(tenantId: string): Promise<CanonicalStatsRow> {
@@ -1205,45 +987,6 @@ export class PostgresCanonicalMemoryStore implements CanonicalMemoryStore {
     }
   }
 
-  async getLatestHindsightProjection(
-    tenantId: string,
-    args: { captureId?: string | null; operationId?: string | null },
-  ): Promise<CanonicalHindsightProjectionLookupRow | null> {
-    return this.first<CanonicalHindsightProjectionLookupRow>(this.sql`
-      SELECT c.id AS capture_id, d.id AS document_id, o.id AS operation_id,
-             j.id AS projection_job_id, r.id AS projection_result_id,
-             j.status AS projection_status, r.status AS result_status,
-             r.engine_document_id, r.engine_operation_id, r.target_ref
-      FROM haetsal_canonical.canonical_projection_jobs j
-      INNER JOIN haetsal_canonical.canonical_captures c ON c.id = j.capture_id
-      INNER JOIN haetsal_canonical.canonical_documents d ON d.id = j.document_id
-      INNER JOIN haetsal_canonical.canonical_memory_operations o ON o.id = j.operation_id
-      INNER JOIN LATERAL (
-        SELECT id, status, engine_document_id, engine_operation_id, target_ref, updated_at, created_at
-        FROM haetsal_canonical.canonical_projection_results
-        WHERE projection_job_id = j.id
-        ORDER BY updated_at DESC, created_at DESC, id DESC
-        LIMIT 1
-      ) r ON true
-      WHERE j.tenant_id = ${tenantId}
-        AND j.projection_kind = 'hindsight'
-        AND (
-          (${args.captureId ?? null}::text IS NOT NULL AND c.id = ${args.captureId ?? null})
-          OR (${args.operationId ?? null}::text IS NOT NULL AND o.id = ${args.operationId ?? null})
-      )
-      ORDER BY r.updated_at DESC, r.created_at DESC, r.id DESC
-      LIMIT 1
-    `)
-  }
-
-  async listGraphIdentityMappings(tenantId: string): Promise<CanonicalGraphIdentityMappingRecord[]> {
-    return this.rows<CanonicalGraphIdentityMappingRecord>(this.sql`
-      SELECT id, tenant_id, projection_job_id, canonical_key, graph_ref, graph_kind, created_at, updated_at
-      FROM haetsal_canonical.canonical_graph_identity_mappings
-      WHERE tenant_id = ${tenantId}
-      ORDER BY graph_kind ASC, canonical_key ASC
-    `)
-  }
 }
 
 export { PostgresCanonicalMemoryStore as NeonCanonicalMemoryStore }

@@ -13,7 +13,6 @@ export abstract class BaseAgent {
   protected env: Env
   protected tenantId: string
   protected tmk: CryptoKey
-  protected hindsightTenantId: string
   protected traceId: string = ''
   protected parentTraceId?: string
   protected context: AgentContext = { memories: [], pendingActions: [] }
@@ -21,11 +20,10 @@ export abstract class BaseAgent {
   private cumulativeTokens = 0
   private contextFlushes = 0
 
-  constructor(env: Env, tenantId: string, tmk: CryptoKey, hindsightTenantId: string) {
+  constructor(env: Env, tenantId: string, tmk: CryptoKey) {
     this.env = env
     this.tenantId = tenantId
     this.tmk = tmk
-    this.hindsightTenantId = hindsightTenantId
     this.reasoningTrace = this.freshTrace()
   }
 

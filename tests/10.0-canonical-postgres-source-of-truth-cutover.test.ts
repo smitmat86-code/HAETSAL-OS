@@ -7,9 +7,6 @@ import { encryptContentForArchive } from '../src/services/ingestion/encryption'
 import { registerCanonicalMemoryTools } from '../src/tools/canonical-memory'
 import type { CanonicalPipelineCaptureInput } from '../src/types/canonical-capture-pipeline'
 import type { CanonicalDocumentResult, CanonicalMemoryStatusResult } from '../src/types/canonical-memory-query'
-import { createGraphitiContainerTestEnv } from './support/graphiti-test-env'
-import { createHindsightTestEnv } from './support/hindsight-test-env'
-import { seedAvailableHindsightOperation, seedHistoricalHindsightProjectionOnCapture } from './support/hindsight-historical-projection-seed'
 import artifactFixture from './fixtures/canonical-memory/artifact-capture.json'
 import conversationFixture from './fixtures/canonical-memory/conversation-capture.json'
 import noteFixture from './fixtures/canonical-memory/note-capture.json'
@@ -60,15 +57,6 @@ async function ensureTenantWithKek(tenantId: string): Promise<void> {
      SET cron_kek_expires_at = ?, updated_at = ?
      WHERE id = ?`,
   ).bind(now + (24 * 60 * 60 * 1000), now, tenantId).run()
-}
-
-function createRuntimeEnv(): typeof env {
-  const { testEnv: graphEnv } = createGraphitiContainerTestEnv()
-  return {
-    ...createHindsightTestEnv({ operationStatus: 'completed' }),
-    GRAPHITI_RUNTIME_MODE: graphEnv.GRAPHITI_RUNTIME_MODE,
-    GRAPHITI: graphEnv.GRAPHITI,
-  } as typeof env
 }
 
 async function encryptFixture(
@@ -123,18 +111,18 @@ describe('10.0 canonical Postgres source-of-truth cutover', () => {
     const id = tenantId('note')
     const tmk = await deriveTestTmk(id)
     await ensureTenantWithKek(id)
-    const testEnv = createRuntimeEnv()
     const input = await encryptFixture(noteFixture as CanonicalPipelineCaptureInput, id, 'note', tmk)
 
     const result = await captureThroughCanonicalPipeline({
       ...input,
       eagerProjectionDispatch: true,
       memoryType: 'episodic',
-    }, testEnv, id)
-    const store = getCanonicalMemoryStore(testEnv)
+    }, env, id)
+    const store = getCanonicalMemoryStore(env)
     const capture = await store.getCapture(id, result.capture.captureId)
+    // Both engines retired — no projection jobs
     const projection = await store.getLatestProjectionResultForOperation(id, result.capture.operationId, 'graphiti')
-    const d1Mirror = await testEnv.D1_US.prepare(
+    const d1Mirror = await env.D1_US.prepare(
       `SELECT source_system, source_ref, title, body_r2_key, body_sha256
        FROM canonical_captures
        WHERE tenant_id = ? AND id = ?`,
@@ -150,29 +138,16 @@ describe('10.0 canonical Postgres source-of-truth cutover', () => {
     const id = tenantId('conversation')
     const tmk = await deriveTestTmk(id)
     await ensureTenantWithKek(id)
-    const testEnv = createRuntimeEnv()
-    const handlers = createToolRegistry(testEnv, id, tmk)
+    const handlers = createToolRegistry(env, id, tmk)
     const input = await encryptFixture(conversationFixture as CanonicalPipelineCaptureInput, id, 'conversation', tmk)
 
     const result = await captureThroughCanonicalPipeline({
       ...input,
       eagerProjectionDispatch: true,
       memoryType: 'semantic',
-    }, testEnv, id)
+    }, env, id)
 
-    // Simulate a historical hindsight projection alongside the real (graphiti-only)
-    // capture — memory_status still surfaces hindsight rows created before the
-    // write path was severed in mission Phase 1.
-    await seedHistoricalHindsightProjectionOnCapture({
-      testEnv,
-      tenantId: id,
-      captureId: result.capture.captureId,
-      documentId: result.capture.documentId,
-      operationId: result.capture.operationId,
-      resultStatus: 'completed',
-    })
-
-    const store = getCanonicalMemoryStore(testEnv)
+    const store = getCanonicalMemoryStore(env)
     const document = await store.getDocument(id, result.capture.documentId)
     const status = await callTool<CanonicalMemoryStatusResult>(handlers, 'memory_status', {
       operation_id: result.capture.operationId,
@@ -183,50 +158,30 @@ describe('10.0 canonical Postgres source-of-truth cutover', () => {
 
     expect(document?.chunk_count).toBeGreaterThan(1)
     expect(status.operation.operationId).toBe(result.capture.operationId)
-    expect(status.projections.some((item) => item.kind === 'hindsight')).toBe(true)
+    // Both engines retired — no projection rows
+    expect(status.projections).toHaveLength(0)
     expect(hydrated.documentId).toBe(result.capture.documentId)
     expect(hydrated.body).toContain('operations checklist still needs an owner')
   })
 
-  it('preserves artifact-backed R2 linkage and graph/hindsight reconciliation through Postgres truth', async () => {
+  it('preserves artifact-backed R2 linkage through Postgres truth (engines retired)', async () => {
     const id = tenantId('artifact')
     const tmk = await deriveTestTmk(id)
     await ensureTenantWithKek(id)
-    const testEnv = createRuntimeEnv()
     const input = await encryptFixture(artifactFixture as CanonicalPipelineCaptureInput, id, 'artifact', tmk)
 
     const result = await captureThroughCanonicalPipeline({
       ...input,
       eagerProjectionDispatch: true,
       memoryType: 'semantic',
-    }, testEnv, id)
+    }, env, id)
 
-    // Historical hindsight projection seeded directly through the canonical
-    // store — the write path was severed in mission Phase 1, but graph/hindsight
-    // reconciliation over already-projected historical rows is still real
-    // production behavior read straight from Postgres truth.
-    const seeded = await seedHistoricalHindsightProjectionOnCapture({
-      testEnv,
-      tenantId: id,
-      captureId: result.capture.captureId,
-      documentId: result.capture.documentId,
-      operationId: result.capture.operationId,
-      resultStatus: 'completed',
-    })
-    await seedAvailableHindsightOperation({
-      testEnv,
-      tenantId: id,
-      bankId: `hindsight-${id}`,
-      operationId: seeded.engineOperationId!,
-      sourceDocumentId: seeded.engineDocumentId!,
-    })
-
-    const store = getCanonicalMemoryStore(testEnv)
+    const store = getCanonicalMemoryStore(env)
     const document = await store.getDocument(id, result.capture.documentId)
+    // Both engines retired in mission Phase 3: no projection jobs created
     const hindsight = await store.getLatestProjectionResultForOperation(id, result.capture.operationId, 'hindsight')
     const graph = await store.getLatestProjectionResultForOperation(id, result.capture.operationId, 'graphiti')
-    const mappings = await store.listGraphIdentityMappings(id)
-    const d1Artifact = await testEnv.D1_US.prepare(
+    const d1Artifact = await env.D1_US.prepare(
       `SELECT filename, media_type, r2_key
        FROM canonical_artifacts
        WHERE tenant_id = ?`,
@@ -234,10 +189,8 @@ describe('10.0 canonical Postgres source-of-truth cutover', () => {
 
     expect(document?.artifact_id).toBeTruthy()
     expect(document?.body_r2_key).toBeTruthy()
-    expect(hindsight?.result_status).toBe('completed')
-    // Graphiti engine retired in Phase 2: live captures create no graphiti projection job.
+    expect(hindsight).toBeNull()
     expect(graph).toBeNull()
-    // mappings are populated only by graphiti projection runs; none exist for retired engine.
     expect(d1Artifact).toBeNull()
   })
 })

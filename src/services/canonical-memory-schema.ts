@@ -20,13 +20,7 @@ export function resolveCanonicalProjectionKinds(
 ): CanonicalProjectionKind[] {
   if (projectionKinds == null || projectionKinds.length === 0) return [...CANONICAL_PROJECTION_KINDS]
   for (const kind of projectionKinds) {
-    if (kind === 'hindsight') {
-      throw new Error('Hindsight projections are retired: the write path was severed in mission Phase 1')
-    }
-    if (kind === 'graphiti') {
-      throw new Error('Graphiti projections are retired: Postgres-native graph replaced them in mission Phase 2')
-    }
-    throw new Error(`Invalid canonical projection kind: ${String(kind)}`)
+    throw new Error(`Invalid canonical projection kind: ${String(kind)} (engine projections were retired; canonical Postgres is the substrate)`)
   }
   return []
 }

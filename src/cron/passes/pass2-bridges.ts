@@ -1,5 +1,5 @@
 // src/cron/passes/pass2-bridges.ts
-// Bridge edge discovery — Phase 2: seeds from canonical governance store instead of Hindsight graph.
+// Bridge edge discovery — Hindsight graph retired in mission phase 3; seeds from canonical governance store.
 // Uses getCanonicalGovernanceStore(env).listEdgesWithEntities() to build adjacency map.
 
 import type { Env } from '../../types/env'

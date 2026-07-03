@@ -1,6 +1,6 @@
 // Mission Phase 1: canonical governed write path contract tests.
 // Every capture carries a provenance envelope + epistemic class + trust state
-// + use policy; an event ledger row is recorded; the Hindsight write path is gone.
+// + use policy; an event ledger row is recorded; engine write paths are gone (Phase 3).
 
 import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import { env } from 'cloudflare:test'
@@ -9,7 +9,6 @@ import { resolveCaptureGovernance } from '../src/services/canonical-governance'
 import { getCanonicalMemoryStore, installCanonicalMemoryTestStore } from '../src/services/canonical-postgres'
 import { encryptContentForArchive } from '../src/services/ingestion/encryption'
 import type { CanonicalPipelineCaptureInput } from '../src/types/canonical-capture-pipeline'
-import { createGraphitiContainerTestEnv } from './support/graphiti-test-env'
 
 const SUITE_ID = crypto.randomUUID()
 const TENANT_ID = `test-tenant-mission-10-${SUITE_ID}`
@@ -37,21 +36,6 @@ async function ensureTenant(tenantId: string): Promise<void> {
      (id, created_at, updated_at, data_region, primary_channel, hindsight_tenant_id, ai_cost_reset_at)
      VALUES (?, ?, ?, 'us', 'sms', ?, ?)`,
   ).bind(tenantId, now, now, `hindsight-${tenantId}`, now).run()
-}
-
-function createWriteTestEnv() {
-  const { testEnv } = createGraphitiContainerTestEnv()
-  const hindsightFetch = vi.fn(async () => {
-    throw new Error('Hindsight dispatch must never run on the governed write path')
-  })
-  return {
-    hindsightFetch,
-    testEnv: {
-      ...testEnv,
-      WORKER_DOMAIN: 'haetsalos.test',
-      HINDSIGHT: { fetch: hindsightFetch },
-    } as typeof env,
-  }
 }
 
 async function makeInput(suffix: string, governance?: CanonicalPipelineCaptureInput['governance']): Promise<CanonicalPipelineCaptureInput> {
@@ -134,8 +118,7 @@ describe('mission 1.0 — governance resolution rules', () => {
 
 describe('mission 1.0 — governed canonical capture', () => {
   it('persists the provenance envelope, event ledger row, and chunk text', async () => {
-    const { hindsightFetch, testEnv } = createWriteTestEnv()
-    vi.spyOn(testEnv.QUEUE_BULK, 'send').mockResolvedValue(undefined as never)
+    vi.spyOn(env.QUEUE_BULK, 'send').mockResolvedValue(undefined as never)
     const input = await makeInput('envelope', {
       authorKind: 'agent',
       agentIdentity: 'chief_of_staff',
@@ -145,8 +128,8 @@ describe('mission 1.0 — governed canonical capture', () => {
       provenanceNote: 'agent session close',
     })
 
-    const result = await captureThroughCanonicalPipeline(input, testEnv, TENANT_ID)
-    const store = getCanonicalMemoryStore(testEnv)
+    const result = await captureThroughCanonicalPipeline(input, env, TENANT_ID)
+    const store = getCanonicalMemoryStore(env)
     const capture = await store.getCapture(TENANT_ID, result.capture.captureId)
     const events = await store.listRecentEvents(TENANT_ID, 50)
     const captureEvent = events.find((event) => event.capture_id === result.capture.captureId)
@@ -165,12 +148,12 @@ describe('mission 1.0 — governed canonical capture', () => {
     expect(captureEvent?.event_type).toBe('memory.captured')
     expect(captureEvent?.actor_kind).toBe('agent')
     expect(JSON.parse(captureEvent?.detail_json ?? '{}').trustState).toBe('evidence')
-    expect(hindsightFetch).not.toHaveBeenCalled()
+    // Engine write paths fully retired in mission Phase 3 — no dispatch to any engine
+    expect(result.dispatch.status).toBe('skipped')
   })
 
   it('enforces evidence-only trust on the full pipeline for agent writes that claim more', async () => {
-    const { testEnv } = createWriteTestEnv()
-    vi.spyOn(testEnv.QUEUE_BULK, 'send').mockResolvedValue(undefined as never)
+    vi.spyOn(env.QUEUE_BULK, 'send').mockResolvedValue(undefined as never)
     const input = await makeInput('downgrade', {
       authorKind: 'external_client',
       agentIdentity: 'claude-code',
@@ -179,8 +162,8 @@ describe('mission 1.0 — governed canonical capture', () => {
       usePolicy: 'can_use_as_instruction',
     })
 
-    const result = await captureThroughCanonicalPipeline(input, testEnv, TENANT_ID)
-    const capture = await getCanonicalMemoryStore(testEnv).getCapture(TENANT_ID, result.capture.captureId)
+    const result = await captureThroughCanonicalPipeline(input, env, TENANT_ID)
+    const capture = await getCanonicalMemoryStore(env).getCapture(TENANT_ID, result.capture.captureId)
 
     expect(capture?.memory_class).toBe('claim')
     expect(capture?.trust_state).toBe('evidence')

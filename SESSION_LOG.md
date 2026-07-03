@@ -5,6 +5,25 @@
 
 ---
 
+## Mission Phase 3 - 2026-07-03
+
+**Spec:** HAETSAL_MISSION.md Phase 3 (Hindsight + Graphiti Removal)
+**Built:**
+- G7 data export: `/api/mission/hindsight-export/{scan,table,finalize}` (temporary CF-Access-authenticated admin surface) generically dumps the Hindsight engine's Postgres tables (public schema, same Neon db) + Graphiti identity mappings as KEK(TMK)-encrypted JSONL parts to `brain-artifacts/hindsight-export-<UTC>/` with a metadata-only manifest; surface removed after the export ran
+- Full engine code removal: containers (HindsightContainer/HindsightWorkerContainer/GraphitiContainer + hindsight/ graphiti/ dirs), DO bindings, transports/facades/clients, projection/reflection/reconcile modules, operation crons, webhook route, ops snapshot, engine-named types (projectionKind unions -> string), env types, wrangler vars; wrangler migration v5 `deleted_classes` for the three engine DO classes (history v2-v4 preserved forward-only); @cloudflare/containers dependency dropped; env types regenerated
+- Postflight "Retired Engines" guard: any hindsight/graphiti reference in src/** or wrangler.toml fails checkout (exemptions: tenants legacy column files, wrangler migration-history entries, explicitly historical comments) — demo clause 10 enforced mechanically
+- Docs sweep: ARCHITECTURE.md (Law 1/Law 2 language -> canonical Postgres via Hyperdrive as the plaintext boundary; C5 containers row removed; bindings table updated; post-Hindsight migration note), .claude/governance.md (T1 Neon via Hyperdrive; escalation triggers reworded), checkin/checkout workflows, README, CONVENTIONS, LESSONS (new Post-Hindsight Migration section; historical lessons retained)
+- Deploys: Step A intermediate (export surface, containers not rolled) then Step B removal (v5 migration); rollback anchors: wrangler version 4209df4d + git tags deploy-phase-3-prev / deploy-phase-3; memo at docs/lessons/phase-3-prod-deploy-memo.md
+**Decisions:**
+- Hindsight's Neon tables and historical D1 tables (hindsight_operations, hindsight_bank_config, tenants.hindsight_tenant_id) are NOT dropped — inert schema history alongside the R2 archive (S7 risk low)
+- Export encrypted under the tenant whose KEK Matt's current login refreshes (the only practically recoverable TMK); archival-only per G7 default
+**Verification:** postflight clean (Retired Engines 0), suite green, live smokes + fresh-context verifier + Law-2 audit: see phase gate report
+**Hindsight Pin:** N/A — engine removed
+**Blockers:** export required Matt to authenticate once (Cron KEK 24h TTL had lapsed on all tenants)
+**Next:** Phase 4 - Sendblue iMessage channel (webhook route + outbound client + photo ingestion; demo clauses 1 + 8)
+
+---
+
 ## Mission Phase 2 - 2026-07-03
 
 **Spec:** HAETSAL_MISSION.md Phase 2 (Retrieval Broker, hard cutover)

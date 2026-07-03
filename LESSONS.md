@@ -6,6 +6,53 @@
 
 ---
 
+## Post-Hindsight Migration (Mission Phase 3, 2026-07-03)
+
+- **The Hindsight Engines Are Gone — Write and Read Severance Both Landed First.**
+  The mission removed the Hindsight engines (API container + dedicated worker
+  containers) in stages: write path severed in Phase 1, read path severed in
+  Phase 2, container classes deleted in Phase 3. Canonical Postgres via
+  Hyperdrive (`HYPERDRIVE_CANONICAL`) is now the only memory substrate — do
+  not assume a container-based engine exists when reading older specs or
+  session logs.
+
+- **Canonical Postgres Via Hyperdrive Is The Only Memory Substrate Now.**
+  Plaintext memory content (chunk_text, claims, messages, recall traces) lives
+  only in canonical Postgres, reached exclusively through HAETSAL's canonical
+  DB adapter running inside the Worker. This is the authorized Law 2 boundary.
+  Retrieval is a 7-mode broker (raw | lexical | semantic | graph | temporal |
+  compiled | composed) — semantic mode uses pgvector, not Vectorize.
+
+- **Historical Engine Lessons Below Are Retained For Archaeology, Not Operative Guidance.**
+  The Hindsight-era lessons in this file (Zero-Knowledge & Encryption, Database
+  & Migrations, Infrastructure, Spec Authoring sections) describe a container
+  topology and API that no longer exist. They remain valuable for
+  understanding why certain patterns exist and for historical debugging
+  context, but do not follow them as current operational instructions —
+  cross-check against `ARCHITECTURE.md`'s Post-Hindsight Migration note first.
+
+- **D1 Engine Tables Remain As Schema History — Do Not Write To Them.**
+  `hindsight_operations`, `hindsight_bank_config`, and
+  `tenants.hindsight_tenant_id` still exist in D1 but are inert. Their
+  presence is not evidence Hindsight is still live, and no new code should
+  read or write them as part of an active lifecycle.
+
+- **Wrangler Durable Object Migrations Are Forward-Only.**
+  The container DO classes were removed via a `wrangler.toml` migration using
+  `deleted_classes` (migration v5). DO migrations cannot be un-applied —
+  treat every migration step as a one-way door, and verify the class removal
+  is truly safe (no remaining code path references the deleted class) before
+  landing the migration.
+
+- **The G7 Archival Export Is The Durable Record Of The Old Engine.**
+  The final Hindsight-era export lives at
+  `R2 brain-artifacts/hindsight-export-*/`, encrypted under the tenant KEK.
+  If a future audit or tenant data request needs pre-migration history, this
+  export — not the live canonical database — is the source of truth for
+  that period.
+
+---
+
 ## Recent Additions
 
 - **Semantic Acceptance Needs Meaningful Facts, Not Opaque Smoke Tokens.**

@@ -72,7 +72,7 @@ async function buildAndDeliver(
     ctx.waitUntil(writeToDriveBrainFolder(fn, md, driveToken).catch(() => {}))
   }
 
-  // 4. Archive to Hindsight (non-blocking)
+  // 4. Archive to canonical memory store (non-blocking); historical label "Hindsight" removed Phase 3
   const artifact: IngestionArtifact = {
     tenantId, source: 'mcp_retain', content: mdBrief,
     occurredAt: Date.now(), memoryType: 'episodic', domain: 'general',

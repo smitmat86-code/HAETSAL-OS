@@ -63,7 +63,6 @@ Mark items as N/A if the spec didn't touch that area.
 ## Step 5: Spec Lifecycle
 
 10. Move completed spec from `specs/active/` to `specs/completed/`
-11. If spec touches Hindsight: verify pin is a real commit hash in `Dockerfile`, `MANIFEST.md`, and `README.md` (not a placeholder)
 
 ## Step 6: Final Verification
 

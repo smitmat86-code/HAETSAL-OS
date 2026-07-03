@@ -68,16 +68,9 @@ function makeArtifact(overrides: Partial<IngestionArtifact> = {}): IngestionArti
   }
 }
 
+// Engine write paths retired in mission Phase 3 — plain env used for all retain tests
 function makeSeveredTestEnv() {
-  const hindsightFetch = vi.fn(async () => {
-    throw new Error('Hindsight must not be called by the retain pipeline (write path severed)')
-  })
-  const testEnv = {
-    ...env,
-    WORKER_DOMAIN: 'brain.workers.dev',
-    HINDSIGHT: { fetch: hindsightFetch },
-  } as unknown as typeof env
-  return { testEnv, hindsightFetch }
+  return { testEnv: env }
 }
 
 describe('dedup', () => {
@@ -129,10 +122,10 @@ describe('domain inference', () => {
 })
 
 describe('retainContent pipeline (canonical-only)', () => {
-  it('retains content, creates the D1 ingestion trail, and never calls Hindsight', async () => {
+  it('retains content, creates the D1 ingestion trail (engine write paths retired)', async () => {
     const tmk = await deriveTestTmk()
     const artifact = makeArtifact()
-    const { testEnv, hindsightFetch } = makeSeveredTestEnv()
+    const { testEnv } = makeSeveredTestEnv()
 
     const result = await retainContent(artifact, tmk, testEnv)
 
@@ -141,7 +134,6 @@ describe('retainContent pipeline (canonical-only)', () => {
     expect(result!.memoryId).toBe(result!.canonicalOperationId)
     expect(result!.salienceTier).toBeGreaterThanOrEqual(1)
     expect(result!.dedupHash).toBeTruthy()
-    expect(hindsightFetch).not.toHaveBeenCalled()
 
     // Verify ingestion_events row (load-bearing for dedup)
     const event = await testEnv.D1_US.prepare(

@@ -18,8 +18,8 @@ export class CareerCoach extends BaseAgent {
   private sessionProposedActions: string[] = []
   private sessionKeyInsight: string = ''
 
-  constructor(env: Env, tenantId: string, tmk: CryptoKey, hindsightTenantId: string) {
-    super(env, tenantId, tmk, hindsightTenantId)
+  constructor(env: Env, tenantId: string, tmk: CryptoKey) {
+    super(env, tenantId, tmk)
   }
 
   protected async open(): Promise<void> {

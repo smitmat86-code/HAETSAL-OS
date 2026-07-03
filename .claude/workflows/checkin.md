@@ -42,14 +42,14 @@ Before writing ANY code, answer these 9 questions. If you cannot answer one conf
 ### Law Check
 Does this change violate any of the three Laws?
 - **One Public Face** — only McpAgent Worker exposes public routes
-- **Zero-Knowledge** — memory content lives in T1 (Neon via Hindsight) only, never D1/KV/Analytics
+- **Zero-Knowledge** — memory content lives in T1 (Neon via Hyperdrive) only, never D1/KV/Analytics
 - **Agents Write Facts** — agents write episodic/semantic/world only, never procedural
 
 If yes → STOP and explain the conflict.
 
 ### State Tier
 Which tier does the data belong to?
-- Memory content → T1 (Neon via Hindsight)
+- Memory content → T1 (Neon via Hyperdrive)
 - Operational metadata → T2 (D1)
 - Session/ephemeral → T3 (KV)
 - Artifacts → T4 (R2)
@@ -60,7 +60,6 @@ Where does this computation run?
 - Sync and fast (<30s) → Worker (C1)
 - One-step fire-and-forget → Queue (C3)
 - >30s or multi-step → Workflow (C4)
-- Heavy math → Container (C5)
 
 ### Encryption
 Does this touch memory content?

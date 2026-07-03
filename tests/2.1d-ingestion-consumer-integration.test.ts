@@ -59,51 +59,9 @@ function makeMessage(body: IngestionQueueMessage) {
   } as unknown as Message<IngestionQueueMessage>
 }
 
+// Engine write paths retired in mission Phase 3 — plain env used, queue intercepted for projection dispatch.
 function makeEnvWithHindsightStub() {
-  const testEnv = {
-    ...env,
-    WORKER_DOMAIN: 'brain.workers.dev',
-    HINDSIGHT_WEBHOOK_SECRET: 'test-secret',
-    HINDSIGHT: {
-      fetch: async (input: RequestInfo | URL, init?: RequestInit) => {
-        const url =
-          input instanceof Request
-            ? new URL(input.url)
-            : new URL(input.toString())
-        if (/^\/v1\/default\/banks\/[^/]+\/mental-models$/.test(url.pathname) && (!init?.method || init.method === 'GET')) {
-          return new Response(JSON.stringify({ items: [] }), {
-            status: 200,
-            headers: { 'Content-Type': 'application/json' },
-          })
-        }
-        if (/^\/v1\/default\/banks\/[^/]+\/webhooks$/.test(url.pathname) && (!init?.method || init.method === 'GET')) {
-          return new Response(JSON.stringify({ items: [] }), {
-            status: 200,
-            headers: { 'Content-Type': 'application/json' },
-          })
-        }
-        if (/^\/v1\/default\/banks\/[^/]+\/memories$/.test(url.pathname)) {
-          const request = input instanceof Request
-            ? input
-            : new Request(input.toString(), init)
-          await request.clone().json()
-          return new Response(JSON.stringify({
-            success: true,
-            bank_id: url.pathname.split('/')[4],
-            items_count: 1,
-            async: false,
-          }), {
-            status: 200,
-            headers: { 'Content-Type': 'application/json' },
-          })
-        }
-        return new Response(JSON.stringify({ status: 'ok' }), {
-          status: 200,
-          headers: { 'Content-Type': 'application/json' },
-        })
-      },
-    },
-  } as unknown as typeof env
+  const testEnv = { ...env } as unknown as typeof env
   testEnv.QUEUE_BULK.send = (async (message: {
     tenantId: string
     payload: Record<string, unknown>

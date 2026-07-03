@@ -4,18 +4,6 @@ import type { CanonicalProjectionKind } from '../types/canonical-memory'
 type CaptureAuditArgs = { tenantId: string; createdAt: number; captureId: string }
 type OperationAuditArgs = { tenantId: string; createdAt: number; operationId: string }
 type ProjectionAuditArgs = OperationAuditArgs & { projectionKinds: CanonicalProjectionKind[] }
-type ProjectionAuditAction =
-  | 'memory.projection.hindsight_started'
-  | 'memory.projection.hindsight_queued'
-  | 'memory.projection.hindsight_completed'
-  | 'memory.projection.hindsight_failed'
-  | 'memory.projection.hindsight_reflect_started'
-  | 'memory.projection.hindsight_reflect_completed'
-  | 'memory.projection.hindsight_reflect_failed'
-  | 'memory.projection.graphiti_started'
-  | 'memory.projection.graphiti_queued'
-  | 'memory.projection.graphiti_completed'
-  | 'memory.projection.graphiti_failed'
 
 function insertCanonicalAudit(
   db: D1Database,
@@ -35,21 +23,6 @@ function insertCanonicalAudit(
     args.domain,
     args.memoryType ?? null,
   )
-}
-
-function buildProjectionAuditBatch(
-  db: D1Database,
-  args: OperationAuditArgs & { action: ProjectionAuditAction; provenance: 'hindsight' | 'graphiti' },
-): D1PreparedStatement[] {
-  return [insertCanonicalAudit(db, {
-    tenantId: args.tenantId,
-    createdAt: args.createdAt,
-    action: args.action,
-    memoryId: args.operationId,
-    provenance: args.provenance,
-    domain: 'canonical',
-    memoryType: 'world',
-  })]
 }
 
 export function buildCanonicalCaptureAcceptedAuditBatch(
@@ -95,37 +68,3 @@ export function buildCanonicalCaptureFailedAuditBatch(
   })]
 }
 
-export function buildCanonicalCompatibilityAuditBatch(
-  db: D1Database,
-  args: OperationAuditArgs & { failed?: boolean },
-): D1PreparedStatement[] {
-  return [insertCanonicalAudit(db, {
-    tenantId: args.tenantId,
-    createdAt: args.createdAt,
-    action: args.failed ? 'memory.capture.compatibility_retain_failed' : 'memory.capture.compatibility_retain_started',
-    memoryId: args.operationId,
-    provenance: 'current_hindsight',
-    domain: 'canonical',
-  })]
-}
-
-export function buildCanonicalHindsightProjectionAuditBatch(
-  db: D1Database,
-  args: OperationAuditArgs & { action: Extract<ProjectionAuditAction, `memory.projection.hindsight_${string}`> },
-): D1PreparedStatement[] {
-  return buildProjectionAuditBatch(db, { ...args, provenance: 'hindsight' })
-}
-
-export function buildCanonicalHindsightReflectionAuditBatch(
-  db: D1Database,
-  args: OperationAuditArgs & { action: Extract<ProjectionAuditAction, `memory.projection.hindsight_reflect_${string}`> },
-): D1PreparedStatement[] {
-  return buildProjectionAuditBatch(db, { ...args, provenance: 'hindsight' })
-}
-
-export function buildCanonicalGraphitiProjectionAuditBatch(
-  db: D1Database,
-  args: OperationAuditArgs & { action: Extract<ProjectionAuditAction, `memory.projection.graphiti_${string}`> },
-): D1PreparedStatement[] {
-  return buildProjectionAuditBatch(db, { ...args, provenance: 'graphiti' })
-}

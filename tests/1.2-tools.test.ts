@@ -7,38 +7,6 @@ import { beforeEach, describe, it, expect, vi } from 'vitest'
 import { env } from 'cloudflare:test'
 import { retainViaService } from '../src/tools/retain'
 import { recallStub } from '../src/tools/recall'
-import { createHindsightTestEnv } from './support/hindsight-test-env'
-
-function makeToolEnv() {
-  return {
-    ...env,
-    HINDSIGHT_DEDICATED_WORKERS_ENABLED: 'false',
-    HINDSIGHT: {
-      fetch: async (input: RequestInfo | URL) => {
-        const url =
-          input instanceof Request
-            ? new URL(input.url)
-            : new URL(input.toString())
-        if (/^\/v1\/default\/banks\/[^/]+\/memories$/.test(url.pathname)) {
-          return new Response(JSON.stringify({
-            success: true,
-            bank_id: url.pathname.split('/')[4],
-            items_count: 1,
-            async: true,
-            operation_id: 'op-test-retain',
-          }), {
-            status: 200,
-            headers: { 'Content-Type': 'application/json' },
-          })
-        }
-        return new Response(JSON.stringify({ status: 'ok' }), {
-          status: 200,
-          headers: { 'Content-Type': 'application/json' },
-        })
-      },
-    },
-  } as unknown as typeof env
-}
 
 async function ensureTenantWithKek(tenantId: string): Promise<void> {
   const now = Date.now()
@@ -100,7 +68,7 @@ describe('1.2 Tools - brain_v1_retain', () => {
       { content: 'Queue this memory', domain: 'career', memory_type: 'episodic' },
       'test-tenant',
       tmk,
-      makeToolEnv(),
+      env,
     )
     expect(result.status).toBe('queued')
     expect(result.memory_id).toBeTruthy()
@@ -115,8 +83,7 @@ describe('1.2 Tools - brain_v1_retain', () => {
       true,
       ['encrypt', 'decrypt'],
     ) as CryptoKey
-    const testEnv = createHindsightTestEnv()
-    const sendSpy = vi.spyOn(testEnv.QUEUE_BULK, 'send').mockResolvedValue(undefined as never)
+    const sendSpy = vi.spyOn(env.QUEUE_BULK, 'send').mockResolvedValue(undefined as never)
 
     const result = await retainViaService(
       {
@@ -127,12 +94,12 @@ describe('1.2 Tools - brain_v1_retain', () => {
       },
       tenantId,
       tmk,
-      testEnv,
+      env,
       undefined,
       { governance: { authorKind: 'user', legacyMemoryType: 'episodic' } },
     )
 
-    // Phase 2: both engine projections retired — no queue dispatch, dispatch_status is 'skipped'
+    // Both engine projections retired — no queue dispatch, dispatch_status is 'skipped'
     expect(sendSpy).not.toHaveBeenCalled()
     expect(result.status).toBe('queued')
     expect(result.canonical_operation_id).toBeTruthy()

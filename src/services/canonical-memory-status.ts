@@ -1,6 +1,5 @@
 import type { Env } from '../types/env'
 import type { CanonicalMemoryStatusInput, CanonicalMemoryStatusResult } from '../types/canonical-memory-query'
-import { buildCanonicalGraphProjectionStatus } from './canonical-graph-projection-design'
 import { parseBrainMemoryRolloutAttribution } from './external-client-memory'
 import { parseGoogleSourceReadAttribution } from './google-source-read-contract'
 import { getCanonicalMemoryStore } from './canonical-postgres'
@@ -17,9 +16,8 @@ interface ProjectionRow {
   availability_source: string | null
 }
 
-const isSemanticReady = (row: ProjectionRow): boolean =>
-  row.projection_kind === 'hindsight'
-  && row.availability_source === 'document'
+// Engine projections retired in mission Phase 3 — semantic readiness is always false.
+const isSemanticReady = (_row: ProjectionRow): boolean => false
 
 async function readOperationRow(input: CanonicalMemoryStatusInput, env: Env, tenantId: string): Promise<OperationRow | null> {
   const store = getCanonicalMemoryStore(env)
@@ -33,23 +31,9 @@ export async function getCanonicalMemoryStatus(input: CanonicalMemoryStatusInput
   const operation = await readOperationRow(input, env, tenantId)
   if (!operation) throw new Error('Canonical memory status not found')
 
-  const rows = await Promise.all(
-    (await getCanonicalMemoryStore(env).listProjectionStatesForOperation(tenantId, operation.id)).map(async (row) => {
-      const availability = row.engine_operation_id
-        ? await env.D1_US.prepare(
-          `SELECT availability_source
-           FROM hindsight_operations
-           WHERE operation_id = ?`,
-        ).bind(row.engine_operation_id).first<{ availability_source: string | null }>()
-        : null
-      return {
-        ...row,
-        availability_source: availability?.availability_source ?? null,
-      }
-    }),
-  ) as ProjectionRow[]
-
-  const graph = rows.find((row) => row.projection_kind === 'graphiti')
+  // Both engines retired in mission Phase 3 — no rows expected; read anyway for completeness.
+  const rows = (await getCanonicalMemoryStore(env)
+    .listProjectionStatesForOperation(tenantId, operation.id)) as ProjectionRow[]
 
   return {
     captureId: operation.capture_id,
@@ -81,17 +65,8 @@ export async function getCanonicalMemoryStatus(input: CanonicalMemoryStatusInput
       semanticReady: isSemanticReady(row),
       updatedAt: row.result_updated_at,
     })),
-    graph: buildCanonicalGraphProjectionStatus(graph ? {
-      jobId: graph.job_id,
-      kind: graph.projection_kind,
-      status: graph.status,
-      resultStatus: graph.result_status,
-      targetRef: graph.target_ref,
-      errorMessage: graph.error_message,
-      projectionResultId: graph.projection_result_id,
-      updatedAt: graph.result_updated_at,
-    } : null),
-    // Phase 2: reflection and compatibility retired — Hindsight engine reads severed
+    // Both engines retired in mission Phase 3 — graph and reflection are null.
+    graph: null,
     compatibility: null,
     reflection: null,
   }

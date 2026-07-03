@@ -42,7 +42,7 @@ split, add to `FILE_SIZE_ACCEPTED` in `postflight-check.ts` with justification.
 | Agent identity strings | `snake_case` | `career_coach`, `consolidation_cron` |
 | MCP tool names | `brain_v{N}_{verb}` | `brain_v1_retain`, `brain_v1_act_browse` |
 | Queue names | `descriptive-kebab` | `priority-high`, `action-queue` |
-| Environment Variables | `SCREAMING_SNAKE` | `HINDSIGHT_SERVICE_URL` |
+| Environment Variables | `SCREAMING_SNAKE` | `HYPERDRIVE_CANONICAL` |
 | Memory types | `snake_case` | `episodic`, `semantic`, `procedural`, `world` |
 | Capability classes | `SCREAMING_SNAKE` | `WRITE_EXTERNAL_IRREVERSIBLE` |
 
@@ -191,26 +191,21 @@ the ciphertext with a link to the audit record ID.
 If a later engine lifecycle needs to be attached to an already-canonical
 operation, prefer metadata-only canonical audit events plus the existing
 operation/projection tables before adding new schema. This is the default
-alignment pattern for post-projection states such as Hindsight
-reflection/consolidation when:
+alignment pattern for post-projection states when:
 
 - the lifecycle can be described truthfully as `started` / `completed` / `failed`
 - no raw memory body is required in D1
 - the public canonical status surface only needs a small derived subsection
 
-For Hindsight semantic readiness specifically, prefer existing lifecycle signals
-from `hindsight_operations` before inventing new projection fields. The current
-truthful signal is:
-
-- `availability_source = 'document'` means the engine observed a materialized
-  document with memory units and the item is semantically ready
-- `availability_source = 'operation_completed'` means the async op finished, but
-  read-side surfaces should not overstate semantic readiness
-- `NULL` availability source is acceptable for synchronous retains that never
-  entered the async availability lifecycle
-
 When deriving status from those audit rows, readers must define explicit
 precedence for same-timestamp events instead of trusting timestamp order alone.
+
+**Historical (pre-Phase 3, Hindsight-era):** Hindsight semantic readiness used
+to be read from `hindsight_operations` lifecycle signals
+(`availability_source = 'document'` vs. `'operation_completed'` vs. `NULL`).
+That table is now inert schema history — post-Hindsight, semantic readiness
+is derived directly from canonical Postgres/pgvector state, not from an
+engine-reported availability source.
 
 ---
 
@@ -297,9 +292,6 @@ await writeAudit(actionId) // could fail silently
 ### Migration naming
 
 ```
-Hindsight migrations: managed by Hindsight, never touch
-  0001_hindsight_*.sql
-
 Brain additions: always additive, 1001+ prefix
   1001_brain_tenants.sql
   1002_brain_audit.sql
@@ -307,6 +299,12 @@ Brain additions: always additive, 1001+ prefix
   1004_brain_action_layer.sql
   1005_brain_observability.sql
 ```
+
+**Historical (pre-Phase 3, Hindsight-era):** Hindsight managed its own
+Postgres migrations (`0001_hindsight_*.sql`, range 0001-0999) and Brain
+migrations were never to touch those files. Hindsight is removed; the
+`0001-0999` range is retired schema history, not an active migration
+namespace to avoid.
 
 ---
 
@@ -355,7 +353,7 @@ only after confirmed R2 write.
 
 | Anti-Pattern | Why |
 |-------------|-----|
-| Calling Hindsight from outside the Worker via service binding | Law 1 |
+| Reaching Neon from outside the Worker's Hyperdrive binding | Law 1 |
 | Storing memory content in D1, KV, or Analytics Engine | Law 2 |
 | Writing `memory_type = procedural` from a domain agent | Law 3 |
 | Calling an AI provider directly (not via AI Gateway) | All LLM traffic through haetsal-brain-gateway |
@@ -367,7 +365,7 @@ only after confirmed R2 write.
 | Business logic in route handlers | Extract to service layer |
 | Rate limiting in application code | Edge/CDN only |
 | String interpolation in SQL | Law 3 — always `.bind()` |
-| Modifying Hindsight's migration files | Brain additions use 1001+ prefix, separate files |
+| Writing to historical `hindsight_*` D1 tables | They are inert schema history, not an active engine |
 | Writing `agent_identity = action_worker` from a domain agent | Action Worker has isolated identity |
 | Running `wrangler pages deploy` from project root | Functions are discovered relative to CWD — always `cd pages && wrangler pages deploy dist` |
 | Forwarding `CF-Access-Jwt-Assertion` through a CF Access bypass | CF Access strips it — use `X-Forwarded-Access-Jwt` custom header |
@@ -420,18 +418,20 @@ explicitly in scope.
 
 ---
 
-## Canonical Semantic Recall Pattern
+## Canonical Semantic Recall Pattern (historical, pre-Phase 3)
 
-When Hindsight remains the semantic authority but canonical metadata is the
-truth source for linkback, keep retrieval broad enough to recover valid
-tenant-scoped candidates and then resolve the authoritative item through
-canonical capture/document/operation metadata:
+**Historical (Hindsight-era):** When Hindsight was the semantic authority but
+canonical metadata was the truth source for linkback, retrieval stayed broad
+enough to recover valid tenant-scoped candidates and then resolved the
+authoritative item through canonical capture/document/operation metadata:
 
 - do not depend on strict exact-set engine tag matching for correctness
 - allow engine-side source tags to vary without hiding valid completed memories
 - apply canonical scope filtering locally after linkback resolution
 - preserve stable rollout provenance separately from engine document identity
 
-Use this pattern especially for repeated `brain-memory` writes from the same
-client, where provenance may stay stable but Hindsight document identity must
-remain per-capture.
+This pattern applied especially to repeated `brain-memory` writes from the
+same client, where provenance stayed stable but Hindsight document identity
+had to remain per-capture. Post-Hindsight, semantic recall reads directly from
+canonical Postgres/pgvector (the `semantic` mode of the 7-mode retrieval
+broker) — there is no separate engine document identity to reconcile against.

@@ -295,6 +295,56 @@ function checkSpecAsBuilt(): Violation[] {
     return violations;
 }
 
+/**
+ * Check 6: Retired memory engines stay retired (mission Phase 3).
+ * Hindsight and Graphiti were removed; any reference reappearing in active
+ * runtime code or wrangler.toml is a violation. Historical D1 migrations,
+ * docs, and the tenants-table hindsight_tenant_id legacy column references
+ * are exempt via the explicit allowlist below.
+ */
+const ENGINE_REFERENCE_EXEMPT = new Set<string>([
+    // Legacy identity column on tenants (D1 schema history); reads/writes of
+    // the column string only, no engine behavior.
+    'src/services/tenant.ts',
+    'src/types/tenant.ts',
+    // Phase 3 G7 export surface — removed together with this exemption once
+    // the R2 archival export has run against prod.
+    'src/services/mission-hindsight-export.ts',
+    'src/workers/mcpagent/routes/mission.ts',
+]);
+
+function checkRetiredEngines(): Violation[] {
+    const violations: Violation[] = [];
+    const pattern = /hindsight|graphiti/i;
+    const files = [
+        ...walkFiles(SRC_DIR, ['.ts', '.tsx']),
+        join(ROOT, 'wrangler.toml'),
+    ];
+    for (const file of files) {
+        if (!existsSync(file)) continue;
+        const rel = relative(ROOT, file).replace(/\\/g, '/');
+        if (ENGINE_REFERENCE_EXEMPT.has(rel)) continue;
+        const lines = readFileSync(file, 'utf-8').split('\n');
+        for (let i = 0; i < lines.length; i++) {
+            if (!pattern.test(lines[i])) continue;
+            const trimmed = lines[i].trim();
+            // Comment lines that explicitly mark history/removal are allowed.
+            if ((trimmed.startsWith('//') || trimmed.startsWith('*') || trimmed.startsWith('#'))
+                && /retired|removed|historical|severed|legacy|phase 3|mission/i.test(trimmed)) continue;
+            // Wrangler DO migration history is forward-only; class names in
+            // migration entries are historical facts, not live bindings.
+            if (rel === 'wrangler.toml' && /^(new_sqlite_classes|deleted_classes|new_classes)\s*=/.test(trimmed)) continue;
+            violations.push({
+                check: 'Retired Engines',
+                file: rel,
+                line: i + 1,
+                detail: `Reference to retired memory engine: ${trimmed.slice(0, 80)}`,
+            });
+        }
+    }
+    return violations;
+}
+
 // ── Project-Specific Checks (Customize These) ──────────────────────
 
 // PROJECT: Add your framework-specific checks here. Examples:
@@ -329,6 +379,7 @@ const allViolations: Violation[] = [
     ...checkSqlSafety(),
     ...checkDuplicateTables(),
     ...checkSpecAsBuilt(),
+    ...checkRetiredEngines(),
     // PROJECT: Add your custom checks here:
     // ...checkFrameworkGenerics(),
     // ...checkPermissionCrossRef(),

@@ -1,4 +1,9 @@
-export type CanonicalProjectionKind = 'hindsight' | 'graphiti'
+/**
+ * Projection kind — engine names ('hindsight', 'graphiti') are historical;
+ * both engines retired in mission Phase 3. Type is string to keep historical
+ * DB rows readable while allowing future canonical projections.
+ */
+export type CanonicalProjectionKind = string
 
 export type CanonicalArtifactMode = 'inline_encrypted' | 'stored_r2'
 

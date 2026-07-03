@@ -1,7 +1,6 @@
 import path from 'node:path'
 import { cloudflareTest, readD1Migrations } from '@cloudflare/vitest-pool-workers'
 import { defineConfig } from 'vitest/config'
-import { buildMiniflareServiceBindings } from './tests/support/miniflare-service-bindings'
 
 const TEST_OUTPUT_FILTER_FLAG = Symbol.for('haetsal.testOutputFilterInstalled')
 const QUIET_TEST_LOG_PREFIXES = [
@@ -16,7 +15,6 @@ const QUIET_TEST_LOG_PREFIXES = [
 const QUIET_TEST_OUTPUT_PATTERNS = [
   /^\[vpw:debug\] Adding `enable_nodejs_/,
   /^\[vpw:info\] Starting runtime for /,
-  /^Sourcemap for ".*node_modules\/@cloudflare\/containers\/dist\/.*" points to missing source files$/,
 ]
 
 function installFilteredTestOutput(): void {
@@ -54,9 +52,7 @@ export default defineConfig(async () => {
             CF_ACCESS_TEAM: 'test-team',
             HMAC_SECRET: 'test-hmac-secret-not-production',
             TELNYX_PUBLIC_KEY: 'test-telnyx-public-key-hex',
-            GRAPHITI_RUNTIME_MODE: 'container',
           },
-          serviceBindings: buildMiniflareServiceBindings(),
         },
       }),
     ],

@@ -1,5 +1,5 @@
 // src/tools/recall.ts
-// Canonical memory recall via the broker — rewired in Phase 2 to sever Hindsight reads.
+// Canonical memory recall via the broker (legacy Hindsight reads severed in mission phase 3).
 // Queries route through searchCanonicalMemory (mode: 'semantic').
 
 import type { RecallInput, RecallOutput } from '../types/tools'
@@ -8,7 +8,7 @@ import { searchCanonicalMemory } from '../services/canonical-memory-query'
 
 /**
  * Recall via canonical memory broker — called from DO where tenant context is available.
- * Phase 2: Hindsight recall retired; routes through searchCanonicalMemory (mode: 'semantic').
+ * Hindsight recall retired in mission phase 3; routes through searchCanonicalMemory (mode: 'semantic').
  */
 export async function recallViaService(
   input: RecallInput,

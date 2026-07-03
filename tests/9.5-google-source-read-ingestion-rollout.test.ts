@@ -44,33 +44,9 @@ async function ensureTenantWithKek(): Promise<void> {
     .bind(now + (24 * 60 * 60 * 1000), now, TENANT_ID).run()
 }
 
+// Engine write paths retired in mission Phase 3 — plain env used for all source-read tests.
 function makeEnvWithHindsightStub() {
-  return {
-    ...env,
-    HINDSIGHT_DEDICATED_WORKERS_ENABLED: 'false',
-    WORKER_DOMAIN: 'brain.workers.dev',
-    HINDSIGHT_WEBHOOK_SECRET: 'test-secret',
-    HINDSIGHT: {
-      fetch: async (input: RequestInfo | URL, init?: RequestInit) => {
-        const url = input instanceof Request ? new URL(input.url) : new URL(input.toString())
-        if (/^\/v1\/default\/banks\/[^/]+\/mental-models$/.test(url.pathname) || /^\/v1\/default\/banks\/[^/]+\/webhooks$/.test(url.pathname)) {
-          return new Response(JSON.stringify({ items: [] }), { status: 200, headers: { 'Content-Type': 'application/json' } })
-        }
-        if (/^\/v1\/default\/banks\/[^/]+\/memories$/.test(url.pathname)) {
-          const request = input instanceof Request ? input : new Request(input.toString(), init)
-          const body = await request.clone().json() as { async?: boolean }
-          return new Response(JSON.stringify({
-            success: true,
-            bank_id: url.pathname.split('/')[4],
-            items_count: 1,
-            async: body.async ?? false,
-            operation_id: body.async ? `op-${crypto.randomUUID()}` : undefined,
-          }), { status: 200, headers: { 'Content-Type': 'application/json' } })
-        }
-        return new Response(JSON.stringify({ status: 'ok' }), { status: 200, headers: { 'Content-Type': 'application/json' } })
-      },
-    },
-  } as unknown as typeof env
+  return env
 }
 
 function createToolRegistry(testEnv: typeof env, tmk: CryptoKey | null): ToolRegistry {

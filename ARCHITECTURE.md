@@ -8,6 +8,24 @@
 
 ---
 
+## Post-Hindsight Migration (mission Phase 3, 2026-07)
+
+The Hindsight engines (API container + dedicated worker containers) were
+removed in the mission: write path severed in Phase 1, read path severed in
+Phase 2, container classes deleted in Phase 3 (`wrangler.toml` DO migration
+v5, `deleted_classes`). Canonical Postgres (Neon), reached through the
+`HYPERDRIVE_CANONICAL` binding, is now the only memory substrate. Retrieval
+is a 7-mode broker (raw | lexical | semantic | graph | temporal | compiled |
+composed) running against canonical tables and pgvector, not a Graphiti
+projection. Historical D1 tables (`hindsight_operations`, `hindsight_bank_config`,
+`tenants.hindsight_tenant_id`) remain in the schema as inert history - do not
+write to them and do not treat their presence as evidence Hindsight is still
+live. Consolidation passes 1-4 and weekly synthesis are parked pending the
+Phase 8 dream cycle; Law 3 (Agents Write Facts - Crons Write Patterns) is
+unchanged and still governs that work once it resumes.
+
+---
+
 ## The Laws
 
 > These are non-negotiable. Every design decision is evaluated against them.
@@ -16,10 +34,10 @@
 ### Law 1: One Public Face
 
 The Cloudflare Worker (McpAgent) is the **only** public surface of THE Brain.
-Hindsight runs inside a Cloudflare Container reachable exclusively via service
-binding. The Hindsight API service and dedicated Hindsight worker services both
-reach Neon through a direct Postgres secret. HAETSAL tracks async Hindsight
-operations in D1, but the Hindsight API remains the memory engine itself.
+Canonical Postgres (Neon) is reached exclusively through the `HYPERDRIVE_CANONICAL`
+binding, accessed by HAETSAL's canonical DB adapter running inside the Worker.
+There are no containers and no separate memory-engine service - the Worker is
+both the public face and the sole caller of the canonical database.
 No database, no container port, no internal service is ever exposed to the
 public internet - directly or indirectly.
 
@@ -34,9 +52,10 @@ remain named `the-brain` as a legacy internal/runtime identifier.
 Tenant-derived key material stays scoped to authenticated session work and
 HAETSAL-owned storage surfaces. The Tenant Master Key (TMK) is derived from a
 WebAuthn passkey assertion and held in Durable Object memory only for the
-duration of the authenticated session. Hindsight receives plaintext through its
-official API, while HAETSAL archives, traces, and cron handoff material stay
-encrypted at rest with tenant-scoped or cron-scoped keys.
+duration of the authenticated session. Canonical Postgres via Hyperdrive
+receives plaintext memory content through HAETSAL's canonical DB adapter
+running inside the Worker, while HAETSAL archives, traces, and cron handoff
+material stay encrypted at rest with tenant-scoped or cron-scoped keys.
 
 **Corollary:** Cron jobs that need tenant-scoped encrypted artifacts use a
 time-bound Cron KEK provisioned during an active session and stored encrypted
@@ -44,11 +63,13 @@ in KV. If the Cron KEK has expired, crons queue their work and drain on next
 authentication. Crons NEVER bypass tenant key isolation for HAETSAL-owned
 encrypted artifacts.
 
-**Corollary:** Vector embeddings are stored in plaintext in Vectorize by
-architectural necessity - cosine similarity math requires plaintext vectors.
-Embeddings are not reversible to source text but represent THE Brain's
-primary plaintext retrieval surface at the infrastructure layer. This is
-documented and accepted.
+**Corollary:** Vector embeddings are stored in plaintext in Postgres pgvector
+(T1, via Hyperdrive) by architectural necessity - cosine similarity math
+requires plaintext vectors. Embeddings are not reversible to source text but
+represent THE Brain's primary plaintext retrieval surface at the
+infrastructure layer. This is documented and accepted. The `VECTORIZE`
+binding still exists but is currently unused - the semantic index lives in
+pgvector alongside the rest of canonical memory content, not in Vectorize.
 
 ### Law 3: Agents Write Facts - Crons Write Patterns
 
@@ -90,18 +111,19 @@ tenant says matters and what their behavior shows.
 
 | Tier | Storage | Encrypted? | Purpose |
 |------|---------|-----------|---------|
-| T1: Memory Content | Neon Postgres via Hindsight container | Partial - plaintext in Hindsight, encrypted in HAETSAL-owned sidecars | Knowledge graph, engrams, entity relationships, mental models |
+| T1: Memory Content | Neon Postgres via Hyperdrive (canonical schema `haetsal_canonical`) | Partial - plaintext authorized in canonical Postgres, encrypted in HAETSAL-owned sidecars | Knowledge graph, engrams, entity relationships, mental models, chunk_text, claims, messages, recall traces |
 | T2: Operational Metadata | Cloudflare D1 | Partial (reasoning traces yes, metadata no) | Audit logs, agent traces, action queue, scheduled tasks, tenant config |
 | T3: Ephemeral Session | Durable Objects (McpAgent DO) | TMK in DO memory only | Active session state, WebSocket connections, TMK for session duration |
-| T4: Semantic Index | Cloudflare Vectorize | Plaintext (required by design) | Fast semantic retrieval, audit semantic index |
-| T5: Artifacts & Archive | Cloudflare R2 | Server-side + tenant-encrypted sidecars | Raw files (PDFs, audio, docs), cold observability archive |
+| T4: Semantic Index | Cloudflare Vectorize (unused/reserved) | Plaintext (required by design) | Currently unused - semantic index lives in pgvector in T1. Binding kept reserved. |
+| T5: Artifacts & Archive | Cloudflare R2 | Server-side + tenant-encrypted sidecars | Raw files (PDFs, audio, docs), cold observability archive, encrypted archival bodies |
 | T6: Ephemeral Cache | Cloudflare KV | Cron KEK encrypted | Rate limits, session tokens, Cron KEK (time-bound) |
 | T7: Aggregate Metrics | Analytics Engine (BRAIN_ANALYTICS) | N/A - metadata only | Aggregate dashboards - never memory content |
 
 **Anti-pattern:** Never store memory content in D1, KV, or Analytics Engine.
-These tiers are visible to the platform operator. T1 (Neon through Hindsight)
-is the primary home for memory content, with encrypted HAETSAL-owned sidecars
-stored only where explicitly documented.
+These tiers are visible to the platform operator. T1 (Neon via Hyperdrive) is
+the primary home for memory content and the sole authorized Law 2 boundary for
+plaintext, with encrypted HAETSAL-owned sidecars stored only where explicitly
+documented.
 
 ---
 
@@ -115,7 +137,6 @@ stored only where explicitly documented.
 | C2: Durable Object | McpAgent DO | Session duration | Stateful MCP sessions, WebSocket push, TMK holding |
 | C3: Fire-and-Forget | Cloudflare Queues | N/A (consumer handles) | SMS routing, external ingestion, session write-back, action dispatch |
 | C4: Durable Async | Cloudflare Workflows | No timeout | Bootstrap import, nightly crons, long-running synthesis, full data export |
-| C5: Container | Cloudflare Containers | Long-running | Hindsight API + dedicated Hindsight worker services |
 
 **The 30-second rule:** Any operation that might exceed 30s MUST use C4
 (Cloudflare Workflow) or an async queue handoff. This includes bootstrap import,
@@ -158,14 +179,21 @@ SMS "CANCEL" or Pages UI during the window.
 All LLM traffic routes through AI Gateway (`haetsal-brain-gateway`).
 
 ```
-McpAgent -> haetsal-brain-gateway -> Anthropic (primary)
-                                 -> Workers AI (fallback)
+McpAgent -> haetsal-brain-gateway -> Workers AI (primary tier, this mission)
                                  -> Cache layer (semantic caching enabled)
 ```
 
+Workers AI is the primary tier for this mission - there is no BYOK
+(bring-your-own-key external provider) path active. Embeddings are generated
+via `@cf/baai/bge-base-en-v1.5` through AI Gateway and stored in Postgres
+pgvector (T1), not Vectorize.
+
 AI Gateway sits **after** the DLP scrubbing layer. It sees scrubbed/transformed
 prompts only - never raw memory content unless an explicit prompt path requires
-it and the calling code allows it.
+it and the calling code allows it. Any AI Gateway call that carries or could
+carry content-bearing prompts MUST set `collectLog: false` - this is a
+discipline, not a default, and applies whether the call is embeddings,
+chat completion, or classification.
 
 **AI cost ceiling enforcement:**
 - Warning (80% daily): anomaly signal + morning brief mention
@@ -205,14 +233,13 @@ it and the calling code allows it.
 
 | Binding | Type | Purpose |
 |---------|------|---------|
-| `HINDSIGHT` | Container (service binding) | Hindsight API service - internal only |
-| `HINDSIGHT_WORKER` | Container (service binding) | Dedicated Hindsight background workers - internal only |
-| `NEON_CONNECTION_STRING` | Secret | Direct Postgres connection for the Hindsight container |
+| `HYPERDRIVE_CANONICAL` | Hyperdrive | Pooled connection to canonical Neon Postgres - the memory substrate, reached only by the Worker's canonical DB adapter |
+| `NEON_CONNECTION_STRING` | Secret | Legacy - direct Postgres connection used by the removed Hindsight container. Phase 13 retirement candidate. Not used by the canonical DB adapter. |
 | `D1_US` | D1 Database | Operational metadata, audit, action queue |
 | `R2_ARTIFACTS` | R2 Bucket | Raw uploaded files, provenance |
 | `R2_OBSERVABILITY` | R2 Bucket | Cold archive, Logpush, export zips |
 | `KV_SESSION` | KV Namespace | Session tokens, Cron KEK, rate limits |
-| `VECTORIZE` | Vectorize Index | Semantic retrieval, audit index |
+| `VECTORIZE` | Vectorize Index | Currently unused - semantic index lives in pgvector (T1) instead |
 | `QUEUE_HIGH` | Queue | SMS/voice/Tier3 - 30s SLA |
 | `QUEUE_NORMAL` | Queue | Gmail/Calendar - 5min SLA |
 | `QUEUE_BULK` | Queue | Bootstrap/Drive - best effort |
@@ -223,6 +250,10 @@ it and the calling code allows it.
 | `AI_GATEWAY` | AI Gateway | haetsal-brain-gateway - all LLM calls |
 | `D1_EU` | D1 Database | Stubbed - EU tenant jurisdiction |
 | `R2_EU` | R2 Bucket | Stubbed - EU tenant jurisdiction |
+
+**Note:** There is no `GRAPHITI` binding. Graphiti projection was a candidate
+engine considered during Phase 8 design work; it was never provisioned and
+is not part of the current retrieval broker.
 
 ---
 
@@ -237,7 +268,7 @@ knowledge graph. Google Drive sync is the bridge. No local process required.
 - Salience scorer tiers all ingested content (a grocery list ingests at Tier 1,
   not excluded - behavioral patterns live in mundane data too)
 - Obsidian-specific extraction pass parses `[[wikilinks]]` as explicit relationship
-  declarations -> candidate bridge edges in Hindsight with `provenance = obsidian_link`
+  declarations -> canonical edges with `provenance = obsidian_link`
   (stronger signal than co-occurrence - the user made the connection intentionally)
 
 **Brain outputs to Obsidian (`/from-brain/` Drive folder):**

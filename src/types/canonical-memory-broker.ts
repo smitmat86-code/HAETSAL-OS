@@ -29,7 +29,7 @@ export interface CanonicalBrokerBranchTrace {
   latencyMs: number | null
   itemCount: number | null
   summary: string | null
-  projectionKind: 'hindsight' | 'graphiti' | 'canonical' | 'mixed' | null
+  projectionKind: string | null
   projectionRef: string | null
   captureId: string | null
   errorMessage: string | null

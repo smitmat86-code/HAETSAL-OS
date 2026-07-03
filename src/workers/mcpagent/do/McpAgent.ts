@@ -30,7 +30,7 @@ export class McpAgentDO extends BaseMcpAgent<Env, unknown, McpAgentProps> {
       waitUntil: (promise) => this.ctx.waitUntil(promise),
     })
     registerActTools({ env: this.env, server: this.server, getTenantId: () => this._tenantId! })
-    const ctx = { getEnv: () => this.env, getTenantId: () => this._tenantId!, getTmk: () => this.tmk, getHindsightTenantId: () => this._tenantId!,
+    const ctx = { getEnv: () => this.env, getTenantId: () => this._tenantId!, getTmk: () => this.tmk,
       getExecutionContext: () => ({ waitUntil: this.ctx.waitUntil.bind(this.ctx) }) }
     registerBrainMemorySurface(this.server, ctx)
     registerMemoryTools(this.server, ctx)
@@ -121,7 +121,6 @@ export class McpAgentDO extends BaseMcpAgent<Env, unknown, McpAgentProps> {
   }
 
   getTmk(): CryptoKey | null { return this.tmk }
-  getHindsightTenantId(): string | null { return this._tenantId }
 
   async fetch(request: Request): Promise<Response> {
     await this.ensureTenantContext(request)

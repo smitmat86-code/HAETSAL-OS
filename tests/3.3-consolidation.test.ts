@@ -18,9 +18,9 @@ const setupTenant = async (status = 'completed') => {
 }
 
 describe('Consolidation orchestrator', () => {
-  it('exports runConsolidationPasses and handleNightlyConsolidation', async () => {
+  it('exports handleNightlyConsolidation (runConsolidationPasses removed in mission Phase 3)', async () => {
     const mod = await import('../src/cron/consolidation')
-    expect(typeof mod.runConsolidationPasses).toBe('function')
+    // runConsolidationPasses was the webhook entry — retired in mission Phase 3 (engine retired)
     expect(typeof mod.handleNightlyConsolidation).toBe('function')
   })
 

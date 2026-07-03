@@ -26,7 +26,7 @@ Before writing ANY code, answer these 9 questions:
    If yes, STOP immediately and explain the conflict to the human.
 
 2. **State Tier** — Which tier does the data belong to?
-   Memory content → T1 (Neon via Hindsight). Never D1, KV, or Analytics Engine.
+   Memory content → T1 (Neon via Hyperdrive). Never D1, KV, or Analytics Engine.
 
 3. **Compute Tier** — Where does this computation run?
    >30s or multi-step → Workflow (C4). One step fire-and-forget → Queue (C3).
@@ -106,7 +106,7 @@ They are structural guarantees. Focus on behavioral wiring instead.
 ### Zero-Knowledge Guardrail
 
 Before writing any database query or insert:
-- Am I writing memory content to D1, KV, or Analytics Engine? → STOP. Content lives in T1 (Neon via Hindsight) only.
+- Am I writing memory content to D1, KV, or Analytics Engine? → STOP. Content lives in T1 (Neon via Hyperdrive) only.
 - Am I reading memory content and returning it unencrypted in an audit record? → STOP.
 - Am I writing plaintext in any field that should be encrypted? → STOP.
 
@@ -180,7 +180,6 @@ manifest regeneration, and the final postflight pass.
 ### Step 5: Spec Lifecycle
 
 - [ ] Completed spec moved from `specs/active/` to `specs/completed/`
-- [ ] If spec touches Hindsight: pin is a real commit hash in Dockerfile, MANIFEST.md, and README.md (not a placeholder)
 
 ---
 
@@ -189,7 +188,7 @@ manifest regeneration, and the final postflight pass.
 **STOP and ask Matt when:**
 
 - A change requires modifying ARCHITECTURE.md
-- A change would expose Hindsight or Neon beyond the Worker service binding
+- A change would expose Neon beyond the Worker's Hyperdrive binding
 - A change involves writing plaintext memory content outside of Neon
 - The change affects the Cron KEK flow or TMK derivation
 - A security review finding would be created by the change

@@ -1,6 +1,6 @@
 # HAETSAL OS
 
-> Personal AI second brain built on Cloudflare + Hindsight + Neon Postgres.
+> Personal AI second brain built on Cloudflare + canonical Neon Postgres.
 > Private by default. Action-capable. Self-improving.
 >
 > Public MCP face: `https://haetsalos.specialdarksystems.com/mcp`
@@ -34,15 +34,17 @@ Read these files in order before writing any code:
 ## The Three Laws
 
 **Law 1 - One Public Face**
-McpAgent Worker is the only public surface. Hindsight (Container) and Neon
-are internal only, reachable via service binding and direct Postgres secret respectively.
+McpAgent Worker is the only public surface. Canonical Neon Postgres is internal
+only, reachable exclusively through the `HYPERDRIVE_CANONICAL` binding from
+HAETSAL's canonical DB adapter running inside the Worker.
 The public MCP endpoint is `https://haetsalos.specialdarksystems.com/mcp`;
 the Worker can remain named `the-brain` internally.
 
 **Law 2 - Key-Isolated Platform**
-Tenant keys stay scoped to authenticated session work. Hindsight receives
-plaintext through its official API, while HAETSAL-owned archives, traces, and
-cron material remain encrypted at rest with tenant-scoped or cron-scoped keys.
+Tenant keys stay scoped to authenticated session work. Canonical Postgres via
+Hyperdrive receives plaintext memory content through HAETSAL's canonical DB
+adapter, while HAETSAL-owned archives, traces, and cron material remain
+encrypted at rest with tenant-scoped or cron-scoped keys.
 
 **Law 3 - Agents Write Facts, Crons Write Patterns**
 Domain agents write episodic and semantic memories only.
@@ -56,11 +58,11 @@ Enforced structurally in `brain_v1_retain` middleware - not by prompt.
 | Layer | Technology |
 |-------|-----------|
 | Runtime | Cloudflare Workers (Hono routing) |
-| Memory engine | Hindsight API-only container + dedicated Hindsight worker containers |
-| Database | Neon Postgres (direct from Hindsight container) |
+| Memory substrate | Canonical Neon Postgres, reached via Hyperdrive (`HYPERDRIVE_CANONICAL`) through HAETSAL's canonical DB adapter |
+| Database | Neon Postgres (pooled via Hyperdrive, no containers) |
 | Session state | Cloudflare Durable Objects (McpAgent) |
 | Operational metadata | Cloudflare D1 |
-| Semantic search | Cloudflare Vectorize |
+| Semantic search | Postgres pgvector (T1) via the 7-mode retrieval broker; Vectorize binding present but unused |
 | Artifact storage | Cloudflare R2 |
 | Async jobs | Cloudflare Queues + Workflows |
 | AI routing | Cloudflare AI Gateway (haetsal-brain-gateway) |
@@ -71,31 +73,27 @@ Enforced structurally in `brain_v1_retain` middleware - not by prompt.
 
 ---
 
-## Hindsight Version Pin
+## Canonical Memory Substrate
+
+Post-Hindsight (mission Phase 3, 2026-07): the Hindsight engines (API
+container + dedicated worker containers) have been removed. Canonical Neon
+Postgres, reached through Hyperdrive, is now the only memory substrate.
 
 ```
-Image: ghcr.io/vectorize-io/hindsight-api:0.5.2
-Upstream commit: 712a862
-Date: 2026-04-17
-Reason: API-only runtime for HAETSAL, paired with dedicated Hindsight worker
-        containers and direct Neon. This is the production shape for the
-        repaired async retain/recall/reflect path.
+Binding: HYPERDRIVE_CANONICAL
+Schema: haetsal_canonical
+Access: HAETSAL's canonical DB adapter, inside the Worker only
+Retrieval: 7-mode broker (raw | lexical | semantic | graph | temporal | compiled | composed)
+Embeddings: Workers AI @cf/baai/bge-base-en-v1.5 via AI Gateway (collectLog: false),
+            stored in Postgres pgvector
 ```
 
-**Before any Hindsight upgrade:**
-1. Diff migration files against current Neon schema
-2. Test on a Neon branch
-3. Update the pin above with date and reason
-
-## Current Hindsight Topology
-
-- API service: Cloudflare Container on port `8888`
-- Background processing: dedicated `hindsight-worker` container instances on `8889`
-- Database: direct `NEON_CONNECTION_STRING`
-- LLM routing: Cloudflare AI Gateway (`haetsal-brain-gateway`)
-- Interactive writes: direct Hindsight `async=true` retain with HAETSAL-side
-  operation tracking in D1
-- External and bulk ingestion: HAETSAL queues feeding the canonical retain pipeline
+Historical D1 tables (`hindsight_operations`, `hindsight_bank_config`,
+`tenants.hindsight_tenant_id`) remain in the schema as inert history and are
+not written to. Consolidation passes and weekly synthesis are parked pending
+the Phase 8 dream cycle. See `ARCHITECTURE.md` for the full migration note
+and `LESSONS.md` for historical Hindsight-era lessons (retained for
+archaeology, no longer operative).
 
 ---
 

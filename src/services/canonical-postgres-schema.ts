@@ -1,4 +1,11 @@
-import type { CanonicalGraphIdentityMapping } from '../types/canonical-graph-projection'
+/** Graph identity mapping — inlined from retired canonical-graph-projection types (mission Phase 3). */
+export type CanonicalGraphIdentityKind = 'episode' | 'entity' | 'edge'
+export interface CanonicalGraphIdentityMapping {
+  canonicalKey: string
+  graphRef: string
+  graphKind: CanonicalGraphIdentityKind
+}
+
 import type {
   CanonicalAuthorKind,
   CanonicalMemoryClass,
@@ -11,11 +18,10 @@ import type { CanonicalEventRecord } from '../types/canonical-governance-records
 export const CANONICAL_POSTGRES_SCHEMA = 'haetsal_canonical'
 
 /**
- * 'hindsight' remains in the union so historical projection rows stay
- * readable; new hindsight projections are rejected (write path severed,
- * HAETSAL_MISSION.md Phase 1).
+ * Historical row values include 'hindsight' and 'graphiti' (both retired in mission Phase 3).
+ * Type is string to remain readable for historical rows while accepting future canonical projections.
  */
-export type CanonicalProjectionKind = 'hindsight' | 'graphiti'
+export type CanonicalProjectionKind = string
 export type CanonicalProjectionStatus = 'accepted' | 'queued' | 'completed' | 'failed'
 
 export interface CanonicalCaptureRecord {
@@ -237,52 +243,7 @@ export interface CanonicalProjectionStateWriteInput {
   graphMappings?: CanonicalGraphIdentityMapping[]
 }
 
-export interface CanonicalHindsightProjectionLookupRow {
-  capture_id: string
-  document_id: string
-  operation_id: string
-  projection_job_id: string
-  projection_result_id: string
-  projection_status: CanonicalProjectionStatus
-  result_status: CanonicalProjectionStatus
-  engine_document_id: string | null
-  engine_operation_id: string | null
-  target_ref: string | null
-}
 
-export interface CanonicalSemanticLinkbackRow {
-  capture_id: string
-  document_id: string
-  operation_id: string
-  projection_job_id: string
-  projection_result_id: string
-  scope: string
-  source_system: string
-  source_ref: string | null
-  title: string | null
-  captured_at: number
-  projection_status: CanonicalProjectionStatus
-  result_status: CanonicalProjectionStatus
-  target_ref: string | null
-  engine_document_id: string | null
-  engine_operation_id: string | null
-}
-
-export interface CanonicalGraphEdgeObservationRow {
-  canonical_key: string
-  graph_ref: string
-  projection_job_id: string
-  projection_result_id: string | null
-  target_ref: string | null
-  operation_id: string
-  capture_id: string
-  document_id: string
-  scope: string
-  source_system: string
-  source_ref: string | null
-  title: string | null
-  captured_at: number | null
-}
 
 /** Row shape returned by the Phase 2 retrieval store methods (lexical/semantic/temporal). */
 export interface CanonicalRetrievalRow {

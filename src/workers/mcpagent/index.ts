@@ -100,8 +100,6 @@ app.get('/ws', async (c) => {
 })
 
 export { McpAgentDO }
-export { GraphitiContainer } from './do/GraphitiContainer'
-export { HindsightContainer, HindsightWorkerContainer } from './do/HindsightContainer'
 export { BootstrapWorkflow } from '../../workflows/bootstrap'
 export default {
   fetch: app.fetch,

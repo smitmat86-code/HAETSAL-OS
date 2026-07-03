@@ -1,6 +1,5 @@
 import type { Hono } from 'hono'
 import type { Env } from '../../types/env'
-import { runConsolidationPasses } from '../../cron/consolidation'
 
 type Variables = {
   tenantId: string
@@ -47,24 +46,6 @@ export function registerPublicWebhooks(
       }
     } catch (err) {
       console.error('TG_FLOW: FAILED:', err instanceof Error ? err.message : String(err))
-    }
-    return c.json({ ok: true })
-  })
-
-  app.post('/hindsight/webhook', async (c) => {
-    const sig = c.req.header('X-Hindsight-Signature')
-    const body = await c.req.text()
-    const key = await crypto.subtle.importKey(
-      'raw', new TextEncoder().encode(c.env.HINDSIGHT_WEBHOOK_SECRET),
-      { name: 'HMAC', hash: 'SHA-256' }, false, ['sign'],
-    )
-    const expected = btoa(String.fromCharCode(
-      ...new Uint8Array(await crypto.subtle.sign('HMAC', key, new TextEncoder().encode(body))),
-    ))
-    if (sig !== expected) return c.json({}, 403)
-    const payload = JSON.parse(body) as { event_type?: string; bank_id?: string }
-    if (payload.event_type === 'consolidation.completed' && payload.bank_id) {
-      c.executionCtx.waitUntil(runConsolidationPasses(payload.bank_id, c.env, c.executionCtx))
     }
     return c.json({ ok: true })
   })

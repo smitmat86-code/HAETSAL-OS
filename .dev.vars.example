@@ -2,7 +2,8 @@
 # Copy this file to .dev.vars and fill in real values
 # .dev.vars is gitignored — never commit secrets
 
-# Neon Postgres connection string (used directly by the Hindsight container)
+# Neon Postgres connection string (legacy direct-connection var; the retired
+# engine container used it — kept until the prod secret is retired in Phase 13)
 # Format: postgresql://user:password@host:5432/dbname?sslmode=require
 NEON_CONNECTION_STRING=postgresql://user:password@localhost:5432/brain_dev
 

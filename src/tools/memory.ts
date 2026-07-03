@@ -15,7 +15,6 @@ interface MemoryToolContext {
   getEnv: () => Env
   getTenantId: () => string
   getTmk: () => CryptoKey | null
-  getHindsightTenantId: () => string
   getExecutionContext: () => Pick<ExecutionContext, 'waitUntil'>
 }
 

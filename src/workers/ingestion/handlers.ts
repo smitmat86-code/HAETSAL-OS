@@ -20,56 +20,23 @@ export async function handleSmsInbound(
   const text = payload.text as string
   const occurredAt = payload.occurredAt as number
   const from = payload.from as string
-  const channel = payload.channel === 'sendblue' ? 'sendblue' as const : 'sms' as const
-
+  const rawChannel = payload.channel
+  const channel: 'sms' | 'sendblue' | 'telegram' =
+    rawChannel === 'sendblue' ? 'sendblue' : rawChannel === 'telegram' ? 'telegram' : 'sms'
+  const metadata: Record<string, unknown> = channel === 'telegram'
+    ? { telegram_chat_id: from }
+    : { from_phone: from }
   await retainContent(
     {
-      tenantId,
-      source: channel,
-      content: text,
-      occurredAt,
-      provenance: channel,
-      metadata: { from_phone: from },
+      tenantId, source: channel, content: text, occurredAt, provenance: channel,
+      metadata,
       governance: { authorKind: 'user', legacyMemoryType: 'episodic' },
     },
-    tmk,
-    env,
-    ctx,
+    tmk, env, ctx,
   )
 }
 
-/** Sendblue photo capture (mission Phase 4 / WS8): vision description + R2 artifact ref. */
-export async function handleSendblueMedia(
-  tenantId: string,
-  payload: Record<string, unknown>,
-  tmk: CryptoKey,
-  env: Env,
-  ctx: ExecutionContext,
-): Promise<void> {
-  const description = payload.description as string
-  const caption = (payload.caption as string | null) ?? null
-  const storageKey = payload.storageKey as string
-  const mediaType = (payload.mediaType as string) ?? 'image/jpeg'
-  const byteLength = (payload.byteLength as number) ?? null
-  const occurredAt = payload.occurredAt as number
-  const from = payload.from as string
-
-  await retainContent(
-    {
-      tenantId,
-      source: 'sendblue',
-      content: caption ? `${caption}\n\nPhoto: ${description}` : `Photo: ${description}`,
-      occurredAt,
-      provenance: 'sendblue_photo',
-      artifactRef: { mode: 'stored_r2', storageKey, mediaType, byteLength },
-      metadata: { from_phone: from, media_storage_key: storageKey },
-      governance: { authorKind: 'user', legacyMemoryType: 'episodic', provenanceNote: 'sendblue_photo' },
-    },
-    tmk,
-    env,
-    ctx,
-  )
-}
+export { handleSendblueMedia, handleTelegramMedia } from './media-handlers'
 
 export async function handleGmailThread(
   tenantId: string,

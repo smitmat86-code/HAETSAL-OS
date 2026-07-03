@@ -11,6 +11,7 @@ import { processCanonicalProjectionDispatch } from './canonical-projection-consu
 import { processQueuedRetainArtifact } from './retain-consumer'
 import {
   handleSendblueMedia,
+  handleTelegramMedia,
   handleSmsInbound,
   handleGmailThread,
   handleCalendarEvent,
@@ -91,6 +92,9 @@ async function processIngestionMessage(
       break
     case 'sendblue_media':
       await handleSendblueMedia(tenantId, payload, tmk, env, ctx)
+      break
+    case 'telegram_media':
+      await handleTelegramMedia(tenantId, payload, tmk, env, ctx)
       break
     case 'gmail_thread':
       await handleGmailThread(tenantId, payload, tmk, env, ctx)

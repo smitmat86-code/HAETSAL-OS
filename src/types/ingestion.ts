@@ -3,6 +3,7 @@ import type { CanonicalArtifactRef, CanonicalCaptureGovernanceInput, CanonicalCa
 export type IngestionSource =
   | 'sms'
   | 'sendblue'
+  | 'telegram'
   | 'gmail'
   | 'calendar'
   | 'drive'
@@ -53,6 +54,7 @@ export type IngestionQueueMessageType =
   | 'retain_artifact'
   | 'sms_inbound'
   | 'sendblue_media'
+  | 'telegram_media'
   | 'gmail_thread'
   | 'calendar_event'
   | 'obsidian_note'

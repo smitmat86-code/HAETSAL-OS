@@ -1,7 +1,7 @@
 import type { Hono } from 'hono'
 import type { Env } from '../../types/env'
 import { processSendblueInbound, type SendblueInboundBody } from '../../services/sendblue-inbound'
-import { runGatewayChat } from '../../services/workers-ai-chat'
+import { processTelegramInbound, type TelegramUpdate } from '../../services/telegram-inbound'
 
 type Variables = {
   tenantId: string
@@ -61,33 +61,18 @@ export function registerPublicWebhooks(
   app.post('/telegram/webhook', async (c) => {
     const secret = c.req.header('X-Telegram-Bot-Api-Secret-Token')
     if (secret !== c.env.TELEGRAM_WEBHOOK_SECRET) return c.json({}, 403)
-
+    let update: TelegramUpdate
+    try { update = await c.req.json<TelegramUpdate>() } catch { return c.json({ ok: true }) }
+    let ctx: Pick<ExecutionContext, 'waitUntil'>
+    try { ctx = c.executionCtx } catch {
+      ctx = { waitUntil: (p: Promise<unknown>) => { void p.catch(() => {}) } }
+    }
     try {
-      const body = await c.req.json() as { message?: { chat?: { id: number }; text?: string } }
-      const chatId = body.message?.chat?.id
-      const text = body.message?.text
-      if (!chatId) return c.json({ ok: true })
-
-      await c.env.KV_SESSION.put('telegram_chat_id:default', String(chatId))
-      if (text && !text.startsWith('/')) {
-        const aiResponse = await runGatewayChat(c.env, [
-          {
-            role: 'system',
-            content: 'You are Haetsal (해살), a warm and capable personal AI assistant. You communicate via Telegram. Keep responses concise and conversational — this is a chat, not email. Be helpful, natural, and brief. If asked to do something you can\'t do yet, be honest about it.',
-          },
-          { role: 'user', content: text },
-        ])
-        await fetch(`https://api.telegram.org/bot${c.env.TELEGRAM_BOT_TOKEN}/sendMessage`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            chat_id: chatId,
-            text: aiResponse ?? "I'm having trouble thinking right now. Try again in a moment.",
-          }),
-        })
-      }
+      await processTelegramInbound(update, c.env, ctx)
     } catch (err) {
-      console.error('TG_FLOW: FAILED:', err instanceof Error ? err.message : String(err))
+      console.error('TELEGRAM_WEBHOOK_FAILED', {
+        error: err instanceof Error ? err.message : String(err),
+      })
     }
     return c.json({ ok: true })
   })

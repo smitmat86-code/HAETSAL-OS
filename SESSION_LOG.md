@@ -5,6 +5,31 @@
 
 ---
 
+## Mission Phase 4.1 - Telegram channel parity with Sendblue - 2026-07-03
+
+**Trigger:** Sendblue Free Tier stopped delivering inbound webhooks live. Sendblue account/webhook config is healthy; primer outbounds arrive at Matt's iPhone (blue) but no inbound webhook fires over ~20min. Diagnosed as Sendblue-side (see phase-4-live-gate-blocker below). Matt confirmed the existing basic Telegram bot handler DOES reply in prod after the model hotfix, so we lifted that channel to Phase 4 parity as a working live-fire path.
+**Built:**
+- Migration 1022_telegram_chats.sql (mirror of tenant_phone_numbers keyed on chat_id INTEGER; unique index on chat_id, index on tenant_id)
+- src/services/messaging-helpers.ts (extracted buildGroundedReply + describeInboundPhoto, shared by Sendblue and Telegram — one place to change reply behavior across channels)
+- src/services/telegram-inbound.ts — resolveTelegramTenant, processTelegramInbound with bot-echo/unknown-chat/slash-command ignores; text -> QUEUE_HIGH sms_inbound {channel:'telegram'} + grounded reply; photo -> getFile (largest by file_size) -> R2 telegram-media/<tenant>/... -> vision description -> QUEUE_HIGH telegram_media + confirmation reply
+- src/services/delivery/telegram.ts — added sendTelegramReply(chatId,...) for direct-reply path used by inbound handler; sendTelegramMessage(tenantId,...) now falls back to D1 telegram_chats after KV (backwards-compat for morning brief)
+- src/workers/ingestion/media-handlers.ts (new) — extracted handleSendblueMedia and added handleTelegramMedia; both go through retainContent with governed capture (source telegram|sendblue, provenance <channel>_photo, authorKind user, legacyMemoryType episodic)
+- src/workers/ingestion/handlers.ts trimmed: handleSmsInbound now handles sms|sendblue|telegram channels; metadata differs (from_phone vs telegram_chat_id); media handlers re-exported from media-handlers.ts
+- src/workers/ingestion/consumer.ts dispatches telegram_media
+- src/workers/mcpagent/public-webhooks.ts — Telegram route rewritten to call processTelegramInbound (drop-in TG_FLOW block replaced); ctx fallback for tests
+- src/workers/mcpagent/index.ts GET / gains ?telegram_chat_id=<int> self-registration (writes to D1 + KV for morning-brief compat)
+- src/services/sendblue-inbound.ts refactored onto messaging-helpers (drops ~40 lines of local reply/vision code)
+- src/types/ingestion.ts: IngestionSource +'telegram'; IngestionQueueMessageType +'telegram_media'
+- tests/mission-4.1-telegram-channel.test.ts (7 contracts): wrong secret 403, unknown chat ignored, bot-echo ignored, slash-command skipped, text -> queue+reply+chat_id echo, photo -> largest-by-file_size + R2 telegram-media + telegram_media queue, handleTelegramMedia governed capture with telegram_photo provenance
+**Decisions:**
+- Sendblue not removed - still deployed; both channels coexist. Live-fire gate proceeds via Telegram; Sendblue lands the same commit shape and remains ready if their Free Tier delivery ever unblocks.
+- Slash commands skipped rather than replied (Phase 6 will add /register, /help, etc.); slash-command return kind is 'command' distinct from 'ignored' to allow future analytics
+- Telegram media-fetch failure returns ignored (no crash path); getFile against largest photo (highest file_size) to catch full-resolution
+**Verification:** 4.1 suite 7/7; full checkout; redeploy; live gate with Matt (chat_id self-register + text + photo)
+**Next:** live gate, then Phase 5 real action executors
+
+---
+
 ## Mission Phase 4 hotfix - deprecated Workers AI models - 2026-07-03
 
 **Trigger:** post-deploy e2e smoke failed both flows with Workers AI error 5028: `@cf/meta/llama-3.1-8b-instruct` (and the 3.2-11b vision model) removed from the catalog 2026-05-30. Six prod call sites were silently dead (Sendblue reply+vision, Telnyx SMS reply, Telegram, agent router, write-policy classifier) - earlier phase smokes missed it because retrieval uses bge embeddings, which survive.

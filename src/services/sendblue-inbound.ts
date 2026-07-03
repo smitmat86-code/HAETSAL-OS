@@ -8,7 +8,7 @@
 import type { Env } from '../types/env'
 import type { IngestionQueueMessage } from '../types/ingestion'
 import { sendSendblueMessage } from './delivery/sendblue'
-import { buildGroundedReply, describeInboundPhoto, warmCanonicalPostgres } from './messaging-helpers'
+import { buildGroundedReply, describeInboundPhoto } from './messaging-helpers'
 
 export interface SendblueInboundBody {
   content?: string
@@ -42,7 +42,6 @@ export async function processSendblueInbound(
     console.warn('SENDBLUE_UNKNOWN_SENDER', { suffix: body.from_number.slice(-4) })
     return { handled: false, kind: 'ignored' }
   }
-  warmCanonicalPostgres(env, ctx)
   const occurredAt = body.date_sent ? Date.parse(body.date_sent) || Date.now() : Date.now()
 
   if (body.media_url) {

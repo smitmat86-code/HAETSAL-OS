@@ -10,22 +10,19 @@ import { createCanonicalPostgresSql } from './postgres-sql'
 
 /**
  * Warm the canonical Postgres connection so the retrieval query that follows
- * doesn't eat a 2-5s Neon cold-start. Called at the top of every inbound
- * webhook — cost is one round-trip per real user message (not per cron
- * tick), which keeps the "pay for what you use" side of serverless honest.
- * Failures are swallowed; the reply pipeline continues.
+ * doesn't eat a 2-5s Neon cold-start. No-op on hot connections; ~3s the first
+ * message after ~5 min idle. Runs synchronously against the Hyperdrive pool
+ * so the following real query reuses the warmed connection.
  */
-export function warmCanonicalPostgres(env: Env, ctx: Pick<ExecutionContext, 'waitUntil'>): void {
-  ctx.waitUntil((async () => {
-    try {
-      const sql = createCanonicalPostgresSql(env)
-      await sql`SELECT 1`
-    } catch (error) {
-      console.warn('NEON_WARM_FAILED', {
-        error: error instanceof Error ? error.message : String(error),
-      })
-    }
-  })())
+export async function warmCanonicalPostgres(env: Env): Promise<void> {
+  try {
+    const sql = createCanonicalPostgresSql(env)
+    await sql`SELECT 1`
+  } catch (error) {
+    console.warn('NEON_WARM_FAILED', {
+      error: error instanceof Error ? error.message : String(error),
+    })
+  }
 }
 
 /** Race a promise against a timeout so slow retrieval never blocks the reply. */
@@ -47,11 +44,12 @@ export async function buildGroundedReply(
   channel: string,
 ): Promise<string> {
   let contextBlock = ''
-  // Retrieval budget: 10s. Neon auto-suspends after ~5 min idle and cold-
-  // start latency runs 5-8s; Hyperdrive doesn't cache (Law 2). Lexical FTS
-  // is fast once warm. Timeout still fires so the reply always ships; the
-  // long-term fix (a keepalive ping or a warm-connection pool) belongs in
-  // Phase 10/11 broker tuning.
+  // Warm the pool FIRST so the retrieval query reuses a hot connection.
+  // Doing this in parallel races both queries against the same cold-start;
+  // running it serially costs 3s on cold but 0ms once Neon is warm.
+  await warmCanonicalPostgres(env)
+  // Retrieval budget: 10s post-warm. Lexical FTS on a hot connection returns
+  // in tens of milliseconds; the timeout is a safety net for the unusual case.
   const context = await withTimeout(
     searchCanonicalMemory({ tenantId, query: text, mode: 'lexical', limit: 5 }, env, tenantId),
     10000, 'RETRIEVAL',

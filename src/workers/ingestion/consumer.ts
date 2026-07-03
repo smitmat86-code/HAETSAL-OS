@@ -7,6 +7,7 @@
 import type { Env } from '../../types/env'
 import type { IngestionQueueMessage } from '../../types/ingestion'
 import { getMcpAgentObjectId } from '../mcpagent/do/identity'
+import { fetchAndValidateKek } from '../../cron/kek'
 import { processCanonicalProjectionDispatch } from './canonical-projection-consumer'
 import { processQueuedRetainArtifact } from './retain-consumer'
 import {
@@ -66,7 +67,10 @@ async function processIngestionMessage(
     return
   }
 
-  // Get TMK from DO — if cold (null), re-enqueue with delay
+  // Get TMK from DO first. If cold (evicted between initTenant and consumer),
+  // fall back to the KEK-from-KV path used by crons: same raw bytes, cached
+  // for 24h after any authenticated session initTenant. This lets captures
+  // land without depending on DO warmth, which the queue can't force.
   const doId = getMcpAgentObjectId(env.MCPAGENT, tenantId)
   const stub = env.MCPAGENT.get(doId)
 
@@ -77,10 +81,12 @@ async function processIngestionMessage(
   } catch {
     tmk = null
   }
+  if (!tmk) {
+    tmk = await fetchAndValidateKek(tenantId, env)
+  }
 
   if (!tmk) {
-    // Cold DO — re-enqueue with 30s delay
-    // Cannot process without TMK for encryption (Law 2)
+    // Neither DO memory nor KV KEK — retry with 30s delay
     console.warn('INGESTION_RETRY_WAITING_FOR_TMK', { tenantId, type, messageId: msg.id })
     msg.retry({ delaySeconds: 30 })
     return

@@ -5,7 +5,7 @@
 // LESSON: Tests import service functions directly (agents SDK bundling issue)
 
 import { env } from 'cloudflare:test'
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, vi } from 'vitest'
 import { runAuthorizationGate, computePreferenceHmac } from '../src/services/action/authorization'
 import { hashPayload, verifyPayloadHash } from '../src/services/action/toctou'
 import { processAction } from '../src/workers/action/index'
@@ -143,10 +143,19 @@ describe('1.3 Action Layer', () => {
   describe('Queue Consumer', () => {
     it('GREEN action executes and writes completed state', async () => {
       await ensureTestTenant()
+      // act_search is now a real executor (Brave); mock the upstream call so
+      // the GREEN auto-execute path runs to completion.
+      vi.stubGlobal('fetch', async () => new Response(
+        JSON.stringify({ web: { results: [{ title: 'r', url: 'https://r', description: 'd' }] } }),
+        { status: 200 },
+      ))
+      const searchEnv = { ...env, BRAVE_API_KEY: 'test-brave-key' }
       const msg = await buildMessageWithHash({
         capability_class: 'READ', tool_name: 'brain_v1_act_search',
+        payload_stub: JSON.stringify({ query: 'atlas' }),
       })
-      await processAction(msg, env)
+      await processAction(msg, searchEnv as typeof env)
+      vi.unstubAllGlobals()
 
       const row = await env.D1_US.prepare(
         'SELECT state FROM pending_actions WHERE id = ?'
@@ -154,7 +163,7 @@ describe('1.3 Action Layer', () => {
       expect(row!.state).toBe('completed')
 
       const audit = await env.D1_US.prepare(
-        `SELECT event FROM action_audit WHERE action_id = ? AND event = 'action.executed_stub'`
+        `SELECT event FROM action_audit WHERE action_id = ? AND event = 'action.executed'`
       ).bind(msg.action_id).first()
       expect(audit).not.toBeNull()
     })
@@ -215,7 +224,9 @@ describe('1.3 Action Layer', () => {
 
     it('INSERT OR IGNORE — redelivered message is no-op', async () => {
       await ensureTestTenant()
-      const msg = await buildMessageWithHash({ capability_class: 'READ' })
+      // Infra test — tool is incidental; use a synthetic name that routes to
+      // the stub path so no real integration is exercised.
+      const msg = await buildMessageWithHash({ capability_class: 'READ', tool_name: 'brain_v1_act_test_stub' })
       await processAction(msg, env)
       await processAction(msg, env)  // Redeliver
 
@@ -230,6 +241,7 @@ describe('1.3 Action Layer', () => {
       const sensitiveContent = 'SENSITIVE_CONTENT_NEVER_IN_D1'
       const msg = await buildMessageWithHash({
         capability_class: 'READ',
+        tool_name: 'brain_v1_act_test_stub',
         payload_stub: sensitiveContent,
       })
       await processAction(msg, env)

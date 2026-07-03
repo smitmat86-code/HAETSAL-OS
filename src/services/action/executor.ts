@@ -1,58 +1,30 @@
 // src/services/action/executor.ts
-// Real execution dispatch — browse + calendar tools wired; remaining tools stub
-// Episodic memory written on successful execution via waitUntil()
+// Real execution: dispatch by tool_name (tool-dispatch.ts) then write the
+// atomic state/audit batch, episodic memory, and WS broadcast.
 // LESSON: db.batch() for atomic state UPDATE + audit INSERT
 
 import type { Env } from '../../types/env'
 import type { ActionQueueMessage } from '../../types/action'
 import { UNDO_WINDOW_MS } from '../../types/action'
-import { executeBrowse } from './integrations/browser'
-import { executeCreateEvent, executeModifyEvent } from './integrations/calendar'
+import { dispatchTool } from './tool-dispatch'
 import { writeActionEpisodicMemory } from './integrations/episodic'
 import { getMcpAgentObjectId } from '../../workers/mcpagent/do/identity'
 
 /**
- * Execute a real action — dispatches by tool_name to the correct integration
- * Remaining tools (send-message, draft, search, remind) stay as stubs
+ * Execute a real action — dispatches by tool_name, then records state + audit +
+ * episodic memory. Tools with no real executor fall through to executeStub.
  */
 export async function executeAction(
   msg: ActionQueueMessage, tmk: CryptoKey | null, env: Env, ctx: ExecutionContext, now: number,
 ): Promise<void> {
   const isReversible = msg.capability_class === 'WRITE_EXTERNAL_REVERSIBLE'
-  let resultSummary = ''
-  let externalId: string | undefined
-  let htmlLink: string | undefined
 
-  switch (msg.tool_name) {
-    case 'brain_v1_act_browse': {
-      const payload = JSON.parse(msg.payload_stub) as { url: string }
-      const result = await executeBrowse(payload.url, env)
-      resultSummary = `browsed:${result.title.slice(0, 80)}`
-      break
-    }
-    case 'brain_v1_act_create_event': {
-      if (!tmk) throw new Error('TMK required for calendar integration')
-      const payload = JSON.parse(msg.payload_stub)
-      const result = await executeCreateEvent(payload, msg.tenant_id, tmk, env)
-      resultSummary = `created_event:${result.eventId}`
-      externalId = result.eventId
-      htmlLink = result.htmlLink
-      break
-    }
-    case 'brain_v1_act_modify_event': {
-      if (!tmk) throw new Error('TMK required for calendar integration')
-      const payload = JSON.parse(msg.payload_stub)
-      const result = await executeModifyEvent(payload, msg.tenant_id, tmk, env)
-      resultSummary = `modified_event:${result.eventId}`
-      externalId = result.eventId
-      htmlLink = result.htmlLink
-      break
-    }
-    default: {
-      await executeStub(msg, env, now)
-      return
-    }
+  const dispatched = await dispatchTool(msg, tmk, env, ctx)
+  if (dispatched === 'stub') {
+    await executeStub(msg, env, now)
+    return
   }
+  const { resultSummary, externalId, htmlLink } = dispatched
 
   const newState = isReversible ? 'completed_reversible' : 'completed'
   const db = env.D1_US

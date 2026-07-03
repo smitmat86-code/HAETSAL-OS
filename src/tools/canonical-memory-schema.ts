@@ -21,8 +21,8 @@ export const searchSchema = z.object({
   query: z.string().describe('Canonical memory search query'),
   scope: z.string().optional().describe('Optional scope filter'),
   limit: z.number().optional().describe('Maximum results to return'),
-  mode: z.enum(['raw', 'semantic', 'graph', 'composed', 'lexical']).optional()
-    .describe('Optional explicit mode override; lexical is accepted as a backward-compatible alias for raw'),
+  mode: z.enum(['raw', 'lexical', 'semantic', 'graph', 'temporal', 'compiled', 'composed']).optional()
+    .describe('Optional explicit retrieval mode override (all seven broker modes)'),
 })
 
 export const recentSchema = z.object({

@@ -8,9 +8,9 @@ import { hashPayload } from '../../services/action/toctou'
 import type { ActionQueueMessage } from '../../types/action'
 
 export const sendMessageSchema = z.object({
-  recipient: z.string().describe('Phone (E.164) or email address'),
+  recipient: z.string().describe('Phone (E.164), Telegram chat id, or email address'),
   message: z.string().describe('Message body text'),
-  channel: z.enum(['sms', 'email']).optional().describe('Delivery channel'),
+  channel: z.enum(['sms', 'imessage', 'telegram', 'email']).optional().describe('Delivery channel'),
 })
 
 export async function sendMessageStub(

@@ -9,6 +9,23 @@ import type { IngestionArtifact } from '../../../types/ingestion'
 import { retainContent } from '../../ingestion/retain'
 import { GmailNotConnectedError } from './messaging'
 
+let schemaEnsured = false
+/** Lazy DDL — the CLOUDFLARE_API_TOKEN in this env can't run D1 migrations, so
+ *  the table is created on first use (idempotent, cached per Worker instance). */
+async function ensureDraftsSchema(env: Env): Promise<void> {
+  if (schemaEnsured) return
+  await env.D1_US.batch([
+    env.D1_US.prepare(
+      `CREATE TABLE IF NOT EXISTS action_drafts (
+         id TEXT PRIMARY KEY, tenant_id TEXT NOT NULL, action_id TEXT, capture_id TEXT,
+         draft_type TEXT NOT NULL, status TEXT NOT NULL DEFAULT 'draft',
+         created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL)`,
+    ),
+    env.D1_US.prepare('CREATE INDEX IF NOT EXISTS idx_action_drafts_tenant ON action_drafts(tenant_id, created_at DESC)'),
+  ])
+  schemaEnsured = true
+}
+
 export interface DraftResult {
   draftId: string
   captureId: string | null
@@ -42,6 +59,7 @@ export async function executeDraft(
   const retained = await retainContent(artifact, tmk, env, ctx)
   const captureId = retained?.canonicalCaptureId ?? null
 
+  await ensureDraftsSchema(env)
   const draftId = crypto.randomUUID()
   const now = Date.now()
   await env.D1_US.prepare(

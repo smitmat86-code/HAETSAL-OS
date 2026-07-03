@@ -5,6 +5,28 @@
 
 ---
 
+## Mission Phase 5 - Real action executors - 2026-07-03
+
+**Spec:** HAETSAL_MISSION.md Phase 5. Built on the native primitives the SDK 0.17 upgrade unlocked.
+**Built:**
+- src/config already had model registry; executors:
+  - act_search -> Brave Search API (web-search.ts; READ/GREEN, X-Subscription-Token header)
+  - act_draft -> note/plan drafts as canonical captures (drafts.ts; provenance 'draft', authorKind user; Law 2: only an action_drafts POINTER row in D1, lazy-DDL'd; Gmail email draft -> GmailNotConnectedError S5)
+  - act_send_message -> messaging.ts routes imessage->Sendblue, telegram->Telegram, sms->Telnyx; email->GmailNotConnectedError (S5 honest fail, no silent stub). send-message schema channel enum expanded to sms|imessage|telegram|email.
+  - act_remind -> this.schedule() on the DO (mission-mandated primitive). reminder.ts computes fire time -> DO.scheduleReminder; DO encrypts message with TMK before it enters cf_agents_schedules (Law 2); DO.fireReminder decrypts + delivers via deliverReminder (Telegram first, SMS fallback). DO helpers in do/action-scheduling.ts to keep McpAgent.ts <=150.
+- executor.ts refactored to tool-dispatch.ts (dispatchTool). 
+- CORE GAP FIXED — approved IRREVERSIBLE actions now execute: previously YELLOW->awaiting_approval->approve set state 'queued' and NOTHING ran it (the "send-delay poller" was never built). Now: processAction persists the payload TMK-encrypted to R2 for YELLOW actions; the /approve route re-derives the TMK (same identity that encrypted it) and calls executeApprovedAction (approved-execution.ts) which reads+decrypts R2 -> reconstructs the message -> executeAction. Human approval is the gate.
+- Migration 1023_action_drafts.sql (+ lazy DDL fallback since this env's CF token can't run D1 migrations).
+- S5 lessons: docs/lessons/phase-5-google-oauth-setup.md (6 Console steps + 2 secrets to connect Gmail).
+**Decisions / known limitations (documented, Phase 13):**
+- Approval executes immediately; the send-delay "cancel window" for irreversible actions is not yet a durable timer (human approval IS the gate). Full Workflow waitForApproval deferred.
+- Reminder delivery is Telegram-first (SMS fallback); per-channel routing preference is a later refinement.
+- GREEN actions with a custom send_delay still route to 'queued' without a timer (edge case; default GREEN delay is 0).
+**Verification:** mission-5.0 (8 tests: capability-class routing, Brave header, canonical draft capture, S5 boundary x2, Sendblue routing, act_remind DO scheduling, approved-execution decrypt+run) + updated 1.3 action-layer tests; full suite; postflight; prod deploy + smoke. Gate: demo clause 2 (Gmail draft->send) STOPS at S5 per mission.
+**Next:** Phase 6 - sub-agent spawn/cancel (native subAgent facets + runAgentTool; consider Project Think harness).
+
+---
+
 ## Modernization sweep (part 2) - Agents SDK 0.13.3 -> 0.17.0 - 2026-07-03
 
 **Context:** Full capability review complete (3 background research agents across Agents SDK primitives / core data+compute / AI+adjacent products; a 4th blog sweep running). Headline finding: upcoming phases have native SDK primitives now — Phase 5 durable approval = waitForApproval/AgentWorkflow, Phase 6 sub-agents = subAgent() facets + runAgentTool({detached}), Phase 8 consolidation = runFiber+stash+onFiberRecovered (survives the DO eviction we hand-patched today), keepAlive() retires that bug class. Our current models (gemma-4, bge, llama-3.3-70b-fast) are all retained/safe.

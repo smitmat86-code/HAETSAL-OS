@@ -8,6 +8,8 @@ import { env } from 'cloudflare:test'
 import { dispatchTool } from '../src/services/action/tool-dispatch'
 import { executeSendMessage, GmailNotConnectedError } from '../src/services/action/integrations/messaging'
 import { executeDraft } from '../src/services/action/integrations/drafts'
+import { executeApprovedAction } from '../src/services/action/approved-execution'
+import { encryptWithKek } from '../src/cron/kek'
 import { searchStub } from '../src/tools/act/search'
 import { draftStub } from '../src/tools/act/draft'
 import { sendMessageStub } from '../src/tools/act/send-message'
@@ -139,5 +141,60 @@ describe('mission 5.0 — channel send routing', () => {
       { recipient: '+19515225229', message: 'hi', channel: 'imessage' }, makeEnv(),
     )
     expect(result).toMatchObject({ channel: 'imessage', delivered: true, detail: 'sendblue' })
+  })
+})
+
+describe('mission 5.0 — act_remind (this.schedule)', () => {
+  it('schedules the reminder on the DO at the parsed future time', async () => {
+    const scheduled: { ms: number; message: string }[] = []
+    const remindEnv = {
+      ...makeEnv(),
+      MCPAGENT: {
+        idFromName: () => 'do-id',
+        get: () => ({
+          scheduleReminder: async (ms: number, message: string) => {
+            scheduled.push({ ms, message }); return { scheduledFor: ms }
+          },
+        }),
+      },
+    } as unknown as Env
+    const future = new Date(Date.now() + 3_600_000).toISOString()
+    const result = await dispatchTool(
+      msg({ tool_name: 'brain_v1_act_remind', capability_class: 'WRITE_INTERNAL',
+        payload_stub: JSON.stringify({ message: 'call the dentist', remind_at: future }) }),
+      null, remindEnv, noopCtx,
+    )
+    expect(scheduled[0].message).toBe('call the dentist')
+    expect(scheduled[0].ms).toBe(Date.parse(future))
+    expect((result as { resultSummary: string }).resultSummary).toContain('reminder:scheduled')
+  })
+})
+
+describe('mission 5.0 — approved IRREVERSIBLE execution', () => {
+  it('decrypts the persisted R2 payload and runs the send, marking completed', async () => {
+    const tmk = await deriveTmk()
+    const actionId = crypto.randomUUID()
+    const r2Key = `actions/${TENANT}/${actionId}`
+    await env.D1_US.prepare(
+      `INSERT INTO pending_actions
+       (id, tenant_id, proposed_at, proposed_by, capability_class, integration, action_type,
+        state, authorization_level, send_delay_seconds, payload_r2_key, payload_hash, retry_count, max_retries)
+       VALUES (?, ?, ?, 'agent', 'WRITE_EXTERNAL_IRREVERSIBLE', 'imessage', 'brain_v1_act_send_message',
+               'queued', 'YELLOW', 0, ?, 'h', 0, 3)`,
+    ).bind(actionId, TENANT, Date.now(), r2Key).run()
+    const payload = JSON.stringify({ recipient: '+19515225229', message: 'approved hi', channel: 'imessage' })
+    await env.R2_ARTIFACTS.put(r2Key, await encryptWithKek(payload, tmk))
+
+    let sent = false
+    vi.stubGlobal('fetch', async (input: RequestInfo | URL) => {
+      if (input.toString().includes('api.sendblue.co')) sent = true
+      return new Response(JSON.stringify({ status: 'QUEUED' }), { status: 200 })
+    })
+    await executeApprovedAction(actionId, TENANT, tmk, makeEnv(), noopCtx)
+
+    expect(sent).toBe(true)
+    const row = await env.D1_US.prepare('SELECT state FROM pending_actions WHERE id = ?')
+      .bind(actionId).first<{ state: string }>()
+    expect(row!.state).toBe('completed')
   })
 })

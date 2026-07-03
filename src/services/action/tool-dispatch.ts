@@ -10,6 +10,7 @@ import { executeCreateEvent, executeModifyEvent } from './integrations/calendar'
 import { executeWebSearch } from './integrations/web-search'
 import { executeDraft } from './integrations/drafts'
 import { executeSendMessage } from './integrations/messaging'
+import { executeReminder } from './integrations/reminder'
 
 export interface ToolExecutionResult {
   resultSummary: string
@@ -45,6 +46,11 @@ export async function dispatchTool(
       const input = JSON.parse(msg.payload_stub) as { recipient: string; message: string; channel?: string }
       const sent = await executeSendMessage(input, env)
       return { resultSummary: `sent:${sent.channel}:${sent.detail}` }
+    }
+    case 'brain_v1_act_remind': {
+      const input = JSON.parse(msg.payload_stub) as { message: string; remind_at: string; channel?: string }
+      const result = await executeReminder(input, msg.tenant_id, env)
+      return { resultSummary: `reminder:scheduled:${new Date(result.scheduledFor).toISOString()}` }
     }
     case 'brain_v1_act_create_event': {
       if (!tmk) throw new Error('TMK required for calendar integration')

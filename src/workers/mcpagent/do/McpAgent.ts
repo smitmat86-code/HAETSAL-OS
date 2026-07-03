@@ -10,6 +10,7 @@ import { registerMemoryTools } from '../../../tools/memory'
 import { processInboundMessage } from './inbound-message'
 import { registerActTools, registerLegacyMemoryTools } from './register-tools'
 import { ensureSessionTable, readPersistedSession, writePersistedSession } from './session-store'
+import { deliverReminder, scheduleReminder, type ReminderSchedulePayload } from './action-scheduling'
 
 interface McpAgentProps extends Record<string, unknown> { tenantId?: string; jwtSub?: string }
 export class McpAgentDO extends BaseMcpAgent<Env, unknown, McpAgentProps> {
@@ -23,11 +24,8 @@ export class McpAgentDO extends BaseMcpAgent<Env, unknown, McpAgentProps> {
     this.ensureSessionTable()
     await this.hydrateSessionState()
     registerLegacyMemoryTools({
-      env: this.env,
-      server: this.server,
-      getTenantId: () => this._tenantId!,
-      getTmk: () => this.tmk,
-      waitUntil: (promise) => this.ctx.waitUntil(promise),
+      env: this.env, server: this.server, getTenantId: () => this._tenantId!,
+      getTmk: () => this.tmk, waitUntil: (promise) => this.ctx.waitUntil(promise),
     })
     registerActTools({ env: this.env, server: this.server, getTenantId: () => this._tenantId! })
     const ctx = { getEnv: () => this.env, getTenantId: () => this._tenantId!, getTmk: () => this.tmk,
@@ -35,13 +33,9 @@ export class McpAgentDO extends BaseMcpAgent<Env, unknown, McpAgentProps> {
     registerBrainMemorySurface(this.server, ctx)
     registerMemoryTools(this.server, ctx)
     registerBootstrapTools(this.server, {
-      getEnv: () => this.env, getTenantId: () => this._tenantId!,
-      getTmk: () => this.tmk,
+      getEnv: () => this.env, getTenantId: () => this._tenantId!, getTmk: () => this.tmk,
       getInterviewState: () => this.interviewState,
-      setInterviewState: (s) => {
-        this.interviewState = s
-        this.persistSessionState({ interviewState: s })
-      },
+      setInterviewState: (s) => { this.interviewState = s; this.persistSessionState({ interviewState: s }) },
     })
   }
 
@@ -121,6 +115,15 @@ export class McpAgentDO extends BaseMcpAgent<Env, unknown, McpAgentProps> {
   }
 
   getTmk(): CryptoKey | null { return this.tmk }
+
+  // act_remind (Phase 5): schedule + fire via the Agents SDK alarm scheduler.
+  async scheduleReminder(remindAtMs: number, message: string, channel?: string): Promise<{ scheduledFor: number }> {
+    if (!this.tmk) throw new Error('TMK unavailable — reminder cannot be scheduled')
+    return scheduleReminder(this.schedule.bind(this) as never, this.tmk, remindAtMs, message, channel)
+  }
+  async fireReminder(payload: ReminderSchedulePayload): Promise<void> {
+    if (this.tmk && this._tenantId) await deliverReminder(this.env, this._tenantId, this.tmk, payload)
+  }
 
   async fetch(request: Request): Promise<Response> {
     await this.ensureTenantContext(request)

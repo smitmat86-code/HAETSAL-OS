@@ -18,20 +18,21 @@ Last updated: 2026-04-18 | Session: 7.1 (Hindsight Projection Adapter)
 
 | File | Lines | Key Exports | Status |
 |------|-------|------------|--------|
-| src\agents\base-agent.ts | 131 | — | ✅ |
+| src\agents\base-agent.ts | 132 | — | ✅ |
 | src\agents\career-coach.ts | 105 | CareerCoach | ✅ |
 | src\agents\chief-of-staff.ts | 69 | ChiefOfStaff | ✅ |
 | src\agents\helpers.ts | 49 | MODEL_CONTEXT_LIMIT, FLUSH_THRESHOLD, shouldFlush | ✅ |
 | src\agents\types.ts | 73 | EpistemicMemoryType, AgentType, AgentContext... | ✅ |
+| src\config\models.ts | 52 | MODEL_CHAT, MODEL_VISION, MODEL_DEEP... | ✅ |
 | src\cron\brief-sections.ts | 92 | — | ✅ |
 | src\cron\consolidation.ts | 69 | — | ✅ |
 | src\cron\heartbeat.ts | 62 | — | ✅ |
 | src\cron\kek.ts | 61 | — | ✅ |
-| src\cron\morning-brief.ts | 94 | — | ✅ |
+| src\cron\morning-brief.ts | 93 | — | ✅ |
 | src\cron\obsidian-poll.ts | 41 | — | ✅ |
 | src\cron\passes\pass1-contradiction.ts | 13 | — | ✅ |
-| src\cron\passes\pass2-bridges.ts | 98 | — | ✅ |
-| src\cron\passes\pass3-patterns.ts | 63 | — | ✅ |
+| src\cron\passes\pass2-bridges.ts | 99 | — | ✅ |
+| src\cron\passes\pass3-patterns.ts | 64 | — | ✅ |
 | src\cron\passes\pass4-gaps.ts | 13 | — | ✅ |
 | src\cron\weekly-synthesis.ts | 20 | WEEKLY_SYNTHESIS_REFLECT_QUERY, WEEKLY_SYNTHESIS_REFLECT_TAGS_MATCH, WEEKLY_SYNTHESIS_REFLECT_BUDGET | ✅ |
 | src\middleware\audit.ts | 45 | auditMiddleware | ✅ |
@@ -39,15 +40,21 @@ Last updated: 2026-04-18 | Session: 7.1 (Hindsight Projection Adapter)
 | src\middleware\cf-access.ts | 58 | CfAccessJwtPayload, deriveAccessPrincipalId | ✅ |
 | src\middleware\dlp.ts | 17 | dlpMiddleware | ✅ |
 | src\services\action\approval-api.ts | 132 | clampPositiveInt | ✅ |
+| src\services\action\approved-execution.ts | 53 | — | ✅ |
 | src\services\action\authorization.ts | 131 | AuthGateResult | ✅ |
-| src\services\action\executor.ts | 117 | — | ✅ |
+| src\services\action\executor.ts | 89 | — | ✅ |
 | src\services\action\integrations\browser.ts | 39 | BrowseResult | ✅ |
 | src\services\action\integrations\calendar.ts | 101 | CalendarResult | ✅ |
+| src\services\action\integrations\drafts.ts | 72 | DraftResult | ✅ |
 | src\services\action\integrations\episodic.ts | 48 | — | ✅ |
+| src\services\action\integrations\messaging.ts | 65 | MessageChannel, MessagingResult, GmailNotConnectedError | ✅ |
+| src\services\action\integrations\reminder.ts | 30 | ReminderResult | ✅ |
+| src\services\action\integrations\web-search.ts | 57 | WebSearchHit, WebSearchResult | ✅ |
 | src\services\action\preference-model.ts | 98 | PreferenceSetting, TenantSettingsSnapshot, PreferenceUpdateInput... | ✅ |
 | src\services\action\preferences.ts | 146 | — | ✅ |
 | src\services\action\router.ts | 111 | — | ✅ |
 | src\services\action\toctou.ts | 23 | — | ✅ |
+| src\services\action\tool-dispatch.ts | 69 | ToolExecutionResult | ✅ |
 | src\services\agents\router.ts | 50 | — | ✅ |
 | src\services\bootstrap\historical-import.ts | 140 | historicalSalienceMultiplier | ✅ |
 | src\services\bootstrap\interview.ts | 76 | createInitialState, currentQuestion, currentDomain... | ✅ |
@@ -148,15 +155,15 @@ Last updated: 2026-04-18 | Session: 7.1 (Hindsight Projection Adapter)
 | src\services\ingestion\retain.ts | 109 | — | ✅ |
 | src\services\ingestion\salience.ts | 80 | scoreSalience | ✅ |
 | src\services\ingestion\write-policy.ts | 65 | WritePolicyResult | ✅ |
-| src\services\messaging-helpers.ts | 54 | — | ✅ |
+| src\services\messaging-helpers.ts | 90 | — | ✅ |
 | src\services\postgres-sql.ts | 95 | PostgresStatement, PostgresSql, createPostgresStatement... | ✅ |
 | src\services\retrieval-modes.ts | 149 | resolveTemporalWindow | ✅ |
-| src\services\retrieval-support.ts | 121 | CANONICAL_EMBEDDING_MODEL, citationOf, toRetrievalItem... | ✅ |
+| src\services\retrieval-support.ts | 122 | CANONICAL_EMBEDDING_MODEL, citationOf, toRetrievalItem... | ✅ |
 | src\services\sendblue-inbound.ts | 97 | SendblueInboundBody, generateGroundedReply | ✅ |
-| src\services\telegram-inbound.ts | 93 | TelegramPhotoSize, TelegramMessage, TelegramUpdate | ✅ |
+| src\services\telegram-inbound.ts | 123 | TelegramPhotoSize, TelegramMessage, TelegramUpdate | ✅ |
 | src\services\telnyx.ts | 35 | — | ✅ |
 | src\services\tenant.ts | 133 | — | ✅ |
-| src\services\workers-ai-chat.ts | 69 | CHAT_MODEL, ChatContentPart, ChatMessage... | ✅ |
+| src\services\workers-ai-chat.ts | 109 | CHAT_MODEL, ChatContentPart, ChatMessage... | ✅ |
 | src\services\working-session-capture-bridge.ts | 147 | WorkingSessionSummaryCaptureInput, WorkingSessionAdapter, WorkingSessionEvidenceCaptureMetadata... | ✅ |
 | src\services\working-session.ts | 145 | WORKING_SESSION_BOUNDARY, WorkingSessionRole, WorkingSessionTranscriptEntry... | ✅ |
 | src\tools\act\browse.ts | 31 | browseSchema | ✅ |
@@ -193,29 +200,31 @@ Last updated: 2026-04-18 | Session: 7.1 (Hindsight Projection Adapter)
 | src\types\ingestion.ts | 77 | IngestionSource, IngestionArtifact, SalienceResult... | ✅ |
 | src\types\tenant.ts | 30 | TenantContext, TenantRow | ✅ |
 | src\types\tools.ts | 59 | RetainInput, RetainOutput, RecallInput... | ✅ |
-| src\workers\action\index.ts | 105 | — | ✅ |
+| src\workers\action\index.ts | 113 | — | ✅ |
 | src\workers\ingestion\bootstrap-handlers.ts | 91 | — | ✅ |
 | src\workers\ingestion\canonical-projection-consumer.ts | 28 | — | ✅ |
-| src\workers\ingestion\consumer.ts | 123 | — | ✅ |
+| src\workers\ingestion\consumer.ts | 134 | — | ✅ |
 | src\workers\ingestion\handlers.ts | 112 | — | ✅ |
 | src\workers\ingestion\media-handlers.ts | 74 | — | ✅ |
 | src\workers\ingestion\retain-consumer.ts | 21 | — | ✅ |
+| src\workers\mcpagent\debug-inventory.ts | 64 | — | ✅ |
+| src\workers\mcpagent\do\action-scheduling.ts | 52 | ReminderSchedulePayload | ✅ |
 | src\workers\mcpagent\do\identity.ts | 13 | MCP_STREAMABLE_HTTP_PREFIX, getMcpAgentObjectName, getMcpAgentObjectId | ✅ |
 | src\workers\mcpagent\do\inbound-message.ts | 35 | — | ✅ |
-| src\workers\mcpagent\do\McpAgent.ts | 145 | McpAgentDO | ✅ |
+| src\workers\mcpagent\do\McpAgent.ts | 148 | McpAgentDO | ✅ |
 | src\workers\mcpagent\do\register-tools.ts | 87 | registerLegacyMemoryTools, registerActTools | ✅ |
 | src\workers\mcpagent\do\session-store.ts | 57 | PersistedSessionRow, ensureSessionTable, readPersistedSession... | ✅ |
-| src\workers\mcpagent\index.ts | 141 | — | ✅ |
+| src\workers\mcpagent\index.ts | 144 | — | ✅ |
 | src\workers\mcpagent\public-webhooks.ts | 80 | registerPublicWebhooks | ✅ |
-| src\workers\mcpagent\routes\actions.ts | 80 | actions | ✅ |
-| src\workers\mcpagent\routes\approval.ts | 73 | approval | ✅ |
+| src\workers\mcpagent\routes\actions.ts | 79 | actions | ✅ |
+| src\workers\mcpagent\routes\approval.ts | 82 | approval | ✅ |
 | src\workers\mcpagent\routes\audit.ts | 51 | audit | ✅ |
 | src\workers\mcpagent\routes\auth.ts | 45 | — | ✅ |
 | src\workers\mcpagent\routes\canary.ts | 15 | canary, hasCanonicalHyperdriveBinding | ✅ |
 | src\workers\mcpagent\routes\ingest.ts | 130 | — | ✅ |
 | src\workers\mcpagent\routes\settings.ts | 73 | settings | ✅ |
 | src\workers\mcpagent\runtime.ts | 44 | — | ✅ |
-| src\workers\mcpagent\self-registration.ts | 37 | — | ✅ |
+| src\workers\mcpagent\self-registration.ts | 39 | — | ✅ |
 | src\workflows\bootstrap.ts | 110 | BootstrapWorkflow | ✅ |
 
 ### pages/src/

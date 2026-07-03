@@ -5,6 +5,8 @@ import {
   listTenantActions,
   rejectPendingAction,
 } from '../../../services/action/approval-api'
+import { executeApprovedAction } from '../../../services/action/approved-execution'
+import { deriveTmk } from '../../../middleware/auth'
 import type { Env } from '../../../types/env'
 
 type Variables = { tenantId: string; jwtSub: string; traceId: string }
@@ -35,12 +37,19 @@ approval.get('/', async (c) => {
 
 approval.post('/:id/approve', async (c) => {
   try {
-    return c.json(await approvePendingAction(
+    const result = await approvePendingAction(
       c.req.param('id'),
       c.get('tenantId'),
       c.get('jwtSub'),
       c.env,
-    ))
+    )
+    // Human approval is the gate — now actually run it. TMK is re-derived from
+    // the same identity that encrypted the persisted payload, so it matches.
+    const tmk = await deriveTmk(c.get('jwtSub'), c.env.CF_ACCESS_AUD)
+    c.executionCtx.waitUntil(
+      executeApprovedAction(result.action_id, c.get('tenantId'), tmk, c.env, c.executionCtx),
+    )
+    return c.json(result)
   } catch (error) {
     if (!(error instanceof Error)) throw error
     if (error.message === 'ACTION_NOT_FOUND') return c.json({ error: 'Action not found' }, 404)

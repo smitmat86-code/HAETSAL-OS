@@ -7,6 +7,7 @@ import type { Env } from '../../types/env'
 import type { ActionQueueMessage } from '../../types/action'
 import { runAuthorizationGate } from '../../services/action/authorization'
 import { verifyPayloadHash } from '../../services/action/toctou'
+import { encryptWithKek } from '../../cron/kek'
 import { broadcastEvent } from '../../services/action/executor'
 import { routeGreen, routeYellow, routeRed, writeAnomalyAndAudit } from '../../services/action/router'
 
@@ -90,6 +91,14 @@ export async function processAction(
     const stub = env.MCPAGENT.get(doId)
     tmk = await stub.getTmk()
   } catch { /* tmk stays null */ }
+
+  // YELLOW actions are deferred to human approval; the queue message (and its
+  // plaintext payload_stub) is gone by then, so persist the payload TMK-
+  // encrypted in R2 for executeApprovedAction to re-read. Ciphertext in R2 is
+  // Law-2 safe.
+  if (auth.effectiveLevel === 'YELLOW' && tmk) {
+    await env.R2_ARTIFACTS.put(msg.payload_r2_key, await encryptWithKek(msg.payload_stub, tmk))
+  }
 
   switch (auth.effectiveLevel) {
     case 'GREEN':

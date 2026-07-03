@@ -61,6 +61,38 @@ llama-3.3-70b-instruct-fp8-fast (deep) are all explicitly retained. No fires.
 Current best-in-class if we tier up later: kimi-k2.7-code (agentic), glm-4.7-flash
 (cheap), qwen3-embedding-0.6b (long-context embed), bge-reranker-base (rerank).
 
+## Privacy model & scope decisions (2026-07-03, Matt)
+
+**Scope: single-user product.** HAETSAL is built and operated for one user (Matt
+= sole tenant/operator). Get it excellent single-user first; only then decide
+between (a) multi-user or (b) clone-the-setup per person (which keeps everyone
+their own single-user operator and sidesteps multi-tenant crypto entirely).
+
+**Vendor-blindness is explicitly NOT a goal for now — and is NOT achieved by the
+current build.** As-built, the operator can read any tenant's data two ways:
+(1) `canonical_chunks.chunk_text` (+ claims/facts) is **plaintext** in Neon and
+the operator holds the DB credentials; (2) the TMK is `HKDF(key=CF_ACCESS_AUD,
+salt='brain-tmk', info=jwtSub)` — both inputs are operator-known, so any user's
+TMK is re-derivable and their R2 bodies are decryptable. True vendor-blindness
+would require a user-held key the server never learns AND encrypted-at-rest
+retrieval (which breaks server-side FTS/pgvector) — a dedicated redesign, not a
+Phase-13 checkbox. Deferred until/unless the product goes multi-user.
+
+**Encryption (Law 2) is two separable things:**
+- **Part A — keep plaintext out of Worker logs / Analytics Engine / AI Gateway
+  payloads.** Cheap, high-value hygiene against sprawl (AI Gateway would
+  otherwise log every retrieved memory). **KEEP ALWAYS, regardless of scope.**
+- **Part B — TMK-encrypt content at rest in R2/D1.** Defends a narrow case (a
+  Cloudflare-storage breach that doesn't also capture Neon creds) while the same
+  content is plaintext-searchable in Neon; it's the source of the TMK/KEK-in-KV
+  complexity behind today's DO-eviction bug. Arguably over-built for single-user.
+  **Decision: keep as-is for now** (not broken post-KEK-fix; it's the foundation
+  for any future multi-user/vendor-blind path; ripping it out mid-mission is
+  regression risk for mostly "less code"). **Re-evaluate "keep or simplify" at
+  Phase 13** with the whole system in view. Modest argument to keep even
+  single-user: no single vendor holds the complete plaintext picture (CF =
+  ciphertext+metadata, Neon = searchable text).
+
 ## Validations from CF's own engineering posts
 Our proxy-Worker/AI-Gateway routing, DO-SQLite-over-D1 for per-user state, and
 default-closed data access all match Cloudflare's internal patterns. Code Mode

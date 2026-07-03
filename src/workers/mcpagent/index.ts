@@ -12,6 +12,7 @@ import { approval } from './routes/approval'
 import { settings } from './routes/settings'
 import { audit } from './routes/audit'
 import { canary } from './routes/canary'
+import { mission } from './routes/mission'
 import type { Env } from '../../types/env'
 import { getMcpAgentObjectName } from './do/identity'
 import { registerPublicWebhooks } from './public-webhooks'
@@ -62,6 +63,7 @@ app.route('/api/actions', actions)
 app.route('/api/actions', approval)
 app.route('/api/settings', settings)
 app.route('/api/audit', audit)
+app.route('/api/mission', mission)
 
 // MCP Streamable HTTP — delegate to DO
 app.all('/mcp', async (c) => {

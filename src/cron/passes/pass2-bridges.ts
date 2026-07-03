@@ -6,6 +6,7 @@ import type { Env } from '../../types/env'
 import type { IngestionArtifact } from '../../types/ingestion'
 import { retainContent } from '../../services/ingestion/retain'
 import { getCanonicalGovernanceStore } from '../../services/canonical-governance-postgres'
+import { MODEL_DEEP } from '../../config/models'
 
 interface BridgeResult {
   memory_id_a: string
@@ -68,7 +69,7 @@ export async function runPass2(
     .join('\n')
 
   const result = await env.AI.run(
-    '@cf/meta/llama-3.3-70b-instruct-fp8-fast',
+    MODEL_DEEP,
     { messages: [{ role: 'user', content:
       `These entity pairs share indirect connections but no direct edge. Identify which reveal genuine cross-domain insight. Return JSON: {"bridges":[{"memory_id_a":"...","memory_id_b":"...","insight":"one sentence","domains":["...",".."]}]}. Max 5.\n\n${prompt}` }] },
     { gateway: { id: env.AI_GATEWAY_ID, collectLog: false } },

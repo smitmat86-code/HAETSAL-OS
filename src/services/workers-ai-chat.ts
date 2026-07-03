@@ -1,14 +1,14 @@
 // src/services/workers-ai-chat.ts
-// Shared Workers AI chat/vision helper. The 2026-05-30 catalog removals
-// killed @cf/meta/llama-3.1-8b-instruct and @cf/meta/llama-3.2-11b-vision-
-// instruct in prod (error 5028); @cf/google/gemma-4-26b-a4b-it is the CF-
-// recommended replacement and covers both text and vision with
-// OpenAI-shaped output (choices[].message.content).
+// Shared Workers AI chat/vision helper. Model ids come from the central
+// registry (src/config/models.ts) so a catalog deprecation is a one-line
+// change and the postflight scan can enforce currency. gemma-4 covers both
+// text and vision with OpenAI-shaped output (choices[].message.content).
 // G4: every call goes through the AI Gateway with collectLog: false.
 
 import type { Env } from '../types/env'
+import { MODEL_CHAT } from '../config/models'
 
-export const CHAT_MODEL = '@cf/google/gemma-4-26b-a4b-it'
+export const CHAT_MODEL = MODEL_CHAT
 
 export type ChatContentPart =
   | { type: 'text'; text: string }

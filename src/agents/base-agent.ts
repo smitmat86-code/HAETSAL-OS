@@ -5,6 +5,7 @@ import type { EpistemicMemoryType, AgentContext, DoomLoopState, ReasoningTrace, 
 import { enqueueRetainArtifact } from '../services/ingestion/enqueue'
 import { recallViaService } from '../tools/recall'
 import { checkDoomLoop, encryptForR2, writeAnomalySignal, MODEL_CONTEXT_LIMIT, FLUSH_THRESHOLD } from './helpers'
+import { MODEL_DEEP } from '../config/models'
 
 export { checkDoomLoop } from './helpers'
 export abstract class BaseAgent {
@@ -88,7 +89,7 @@ export abstract class BaseAgent {
     messages: Array<{ role: string; content: string }>,
   ): Promise<{ response: string; toolCall?: { name: string; input: unknown } }> {
     const result = await this.env.AI.run(
-      '@cf/meta/llama-3.3-70b-instruct-fp8-fast',
+      MODEL_DEEP,
       { messages: messages as RoleScopedChatInput[] },
       { gateway: { id: this.env.AI_GATEWAY_ID, collectLog: false } },
     ) as AiTextGenerationOutput & { usage?: { input_tokens: number; output_tokens: number } }

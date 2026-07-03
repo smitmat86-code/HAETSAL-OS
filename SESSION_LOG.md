@@ -5,6 +5,19 @@
 
 ---
 
+## Modernization sweep (part 1) - model registry + Vectorize cleanup - 2026-07-03
+
+**Context:** Matt paused Phase 5 to close unfinished items from the pre-mission Cloudflare modernization plan (docs/implementation-plans/cloudflare-modernization-execution-plan-2026-06-01.md, ~40% done then superseded by the mission) and to review current CF capabilities (3 background research agents). Decision recorded separately: full Agents SDK 0.13.3 -> 0.17.0 migration approved; NOT adopting Flue (its value is channel integrations we don't use + multi-cloud we don't want; fibers + native Agent Skills + waitForApproval are all first-class in the SDK we're already on).
+**Built (part 1):**
+- src/config/models.ts — single source of truth for Workers AI model ids. Named roles: MODEL_CHAT / MODEL_VISION (gemma-4-26b-a4b-it), MODEL_DEEP (llama-3.3-70b-fp8-fast, a retained -fast variant), MODEL_EMBEDDING (bge-base-en-v1.5). RETIRED_MODELS list = the 2026-05-30 catalog removals.
+- Rewired all runtime model literals to the registry: workers-ai-chat.ts (CHAT_MODEL), retrieval-support.ts (CANONICAL_EMBEDDING_MODEL), base-agent.ts + pass2-bridges.ts + pass3-patterns.ts (MODEL_DEEP). No @cf/ literal remains in runtime code outside the registry.
+- scripts/postflight-check.ts — new checkRetiredModels() scan: fails the build if any RETIRED_MODELS id appears in src/ outside config/models.ts (the guardrail that was MISSING when llama-3.1/3.2 removal reached prod and caused the Phase 4 outage).
+- wrangler.toml — removed the orphaned VECTORIZE binding (zero runtime callers since mission Phase 2 moved semantic retrieval to Neon pgvector).
+**Verification:** postflight green (retired-model scan runs, registry exempt, no violations); mission-4.0/4.1 channel tests 15/15 (registry wiring intact).
+**Next (part 2):** synthesize 3-agent CF capability scan, then execute Agents SDK 0.17.0 migration; consider quick wins (KV bulk reads, Queues backlog metrics, Rate Limiting binding, AE cost instrumentation) per findings.
+
+---
+
 ## Mission Phase 4.1 - Telegram channel parity with Sendblue - 2026-07-03
 
 **Trigger:** Sendblue Free Tier stopped delivering inbound webhooks live. Sendblue account/webhook config is healthy; primer outbounds arrive at Matt's iPhone (blue) but no inbound webhook fires over ~20min. Diagnosed as Sendblue-side (see phase-4-live-gate-blocker below). Matt confirmed the existing basic Telegram bot handler DOES reply in prod after the model hotfix, so we lifted that channel to Phase 4 parity as a working live-fire path.

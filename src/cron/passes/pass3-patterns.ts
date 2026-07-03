@@ -7,6 +7,7 @@ import type { Env } from '../../types/env'
 import type { IngestionArtifact } from '../../types/ingestion'
 import { recallViaService } from '../../tools/recall'
 import { retainContent } from '../../services/ingestion/retain'
+import { MODEL_DEEP } from '../../config/models'
 
 interface PatternResult {
   pattern: string; confidence: number; domain: string; evidence_count: number
@@ -43,7 +44,7 @@ export async function runPass3(
     .join('\n---\n')
 
   const llmResult = await env.AI.run(
-    '@cf/meta/llama-3.3-70b-instruct-fp8-fast',
+    MODEL_DEEP,
     { messages: [{ role: 'user', content:
       `Extract behavioral patterns from these session memories. A behavioral pattern is a recurring tendency visible across multiple sessions. Return JSON: {"patterns":[{"pattern":"1-2 sentences","confidence":0.0-1.0,"domain":"string","evidence_count":number}]}. Only confidence > 0.6. Max 3.\n\n${sessionContent}` }] },
     { gateway: { id: env.AI_GATEWAY_ID, collectLog: false } },

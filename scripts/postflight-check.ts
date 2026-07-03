@@ -17,6 +17,7 @@
 import { readFileSync, readdirSync, existsSync } from 'fs';
 import { join, relative, extname, dirname } from 'path';
 import { fileURLToPath } from 'url';
+import { RETIRED_MODELS } from '../src/config/models';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = join(__dirname, '..');
@@ -341,6 +342,40 @@ function checkRetiredEngines(): Violation[] {
     return violations;
 }
 
+/**
+ * Check 7: Retired Workers AI models stay out of runtime code.
+ * The 2026-05-30 catalog removals broke prod when a deprecated model id was
+ * hardcoded (llama-3.1-8b + the 3.2 vision model). Every model id must live in
+ * src/config/models.ts; any RETIRED_MODELS entry appearing elsewhere in a
+ * non-comment line fails the build. The registry file itself is exempt.
+ */
+function checkRetiredModels(): Violation[] {
+    const violations: Violation[] = [];
+    const registryRel = 'src/config/models.ts';
+    const files = walkFiles(SRC_DIR, ['.ts', '.tsx']);
+    for (const file of files) {
+        const rel = relative(ROOT, file).replace(/\\/g, '/');
+        if (rel === registryRel) continue;
+        if (file.endsWith('.d.ts')) continue;
+        const lines = readFileSync(file, 'utf-8').split('\n');
+        for (let i = 0; i < lines.length; i++) {
+            const trimmed = lines[i].trim();
+            if (trimmed.startsWith('//') || trimmed.startsWith('*')) continue;
+            for (const model of RETIRED_MODELS) {
+                if (lines[i].includes(model)) {
+                    violations.push({
+                        check: 'Retired Model',
+                        file: rel,
+                        line: i + 1,
+                        detail: `Deprecated Workers AI model '${model}' — route via src/config/models.ts`,
+                    });
+                }
+            }
+        }
+    }
+    return violations;
+}
+
 // ── Project-Specific Checks (Customize These) ──────────────────────
 
 // PROJECT: Add your framework-specific checks here. Examples:
@@ -376,6 +411,7 @@ const allViolations: Violation[] = [
     ...checkDuplicateTables(),
     ...checkSpecAsBuilt(),
     ...checkRetiredEngines(),
+    ...checkRetiredModels(),
     // PROJECT: Add your custom checks here:
     // ...checkFrameworkGenerics(),
     // ...checkPermissionCrossRef(),

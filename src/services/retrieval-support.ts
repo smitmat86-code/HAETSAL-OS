@@ -6,8 +6,9 @@ import type {
 } from '../types/canonical-memory-query'
 import type { CanonicalRetrievalRow } from './canonical-postgres-schema'
 import { buildCanonicalPreview } from './canonical-memory-read-model'
+import { MODEL_EMBEDDING } from '../config/models'
 
-export const CANONICAL_EMBEDDING_MODEL = '@cf/baai/bge-base-en-v1.5'
+export const CANONICAL_EMBEDDING_MODEL = MODEL_EMBEDDING
 
 /**
  * Embed texts through Workers AI via AI Gateway. Law 2 / G4: inputs contain

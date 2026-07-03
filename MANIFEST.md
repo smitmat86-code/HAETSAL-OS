@@ -128,6 +128,7 @@ Last updated: 2026-04-18 | Session: 7.1 (Hindsight Projection Adapter)
 | src\services\compiled-synthesis-utils.ts | 27 | trimRequired, normalizeJson, slugifyStableSegment... | ✅ |
 | src\services\compiled-synthesis.ts | 22 | — | ✅ |
 | src\services\delivery\obsidian-write.ts | 52 | — | ✅ |
+| src\services\delivery\sendblue.ts | 58 | SendblueSendResult, sendblueAuthHeaders | ✅ |
 | src\services\delivery\sms.ts | 35 | — | ✅ |
 | src\services\delivery\telegram.ts | 31 | — | ✅ |
 | src\services\external-brain-contract.ts | 123 | EXTERNAL_BRAIN_SURFACES, EXTERNAL_BRAIN_CLIENT_MAPPINGS, EXTERNAL_CLIENT_FIXTURES... | ✅ |
@@ -150,6 +151,7 @@ Last updated: 2026-04-18 | Session: 7.1 (Hindsight Projection Adapter)
 | src\services\postgres-sql.ts | 95 | PostgresStatement, PostgresSql, createPostgresStatement... | ✅ |
 | src\services\retrieval-modes.ts | 149 | resolveTemporalWindow | ✅ |
 | src\services\retrieval-support.ts | 121 | CANONICAL_EMBEDDING_MODEL, citationOf, toRetrievalItem... | ✅ |
+| src\services\sendblue-inbound.ts | 146 | SENDBLUE_VISION_MODEL, SendblueInboundBody | ✅ |
 | src\services\telnyx.ts | 35 | — | ✅ |
 | src\services\tenant.ts | 133 | — | ✅ |
 | src\services\working-session-capture-bridge.ts | 147 | WorkingSessionSummaryCaptureInput, WorkingSessionAdapter, WorkingSessionEvidenceCaptureMetadata... | ✅ |
@@ -180,27 +182,27 @@ Last updated: 2026-04-18 | Session: 7.1 (Hindsight Projection Adapter)
 | src\types\canonical-memory.ts | 71 | CanonicalProjectionKind, CanonicalArtifactMode, CanonicalArtifactRef... | ✅ |
 | src\types\chief-of-staff-context.ts | 81 | ContextBundleIntent, ContextConfidenceLevel, PrepareContextForAgentInput... | ✅ |
 | src\types\cloudflare-env.generated.d.ts | 42 | — | ✅ |
-| src\types\env.ts | 21 | Env | ✅ |
+| src\types\env.ts | 25 | Env | ✅ |
 | src\types\external-brain.ts | 89 | BrainSurfaceId, BrainSurfaceStatus, BrainRiskLevel... | ✅ |
 | src\types\external-client-memory.ts | 73 | ExternalClientCaptureMode, BrainMemorySurfaceProfile, ExternalClientCaptureInput... | ✅ |
 | src\types\google-source-read.ts | 29 | GoogleSourceKind, GoogleSourceRef, GoogleSourceReadAttribution... | ✅ |
 | src\types\google.ts | 53 | GoogleOAuthTokens, GoogleThread, GoogleMessage... | ✅ |
-| src\types\ingestion.ts | 73 | IngestionSource, IngestionArtifact, SalienceResult... | ✅ |
+| src\types\ingestion.ts | 75 | IngestionSource, IngestionArtifact, SalienceResult... | ✅ |
 | src\types\tenant.ts | 30 | TenantContext, TenantRow | ✅ |
 | src\types\tools.ts | 59 | RetainInput, RetainOutput, RecallInput... | ✅ |
 | src\workers\action\index.ts | 105 | — | ✅ |
 | src\workers\ingestion\bootstrap-handlers.ts | 91 | — | ✅ |
 | src\workers\ingestion\canonical-projection-consumer.ts | 28 | — | ✅ |
-| src\workers\ingestion\consumer.ts | 115 | — | ✅ |
-| src\workers\ingestion\handlers.ts | 110 | — | ✅ |
+| src\workers\ingestion\consumer.ts | 119 | — | ✅ |
+| src\workers\ingestion\handlers.ts | 145 | — | ✅ |
 | src\workers\ingestion\retain-consumer.ts | 21 | — | ✅ |
 | src\workers\mcpagent\do\identity.ts | 13 | MCP_STREAMABLE_HTTP_PREFIX, getMcpAgentObjectName, getMcpAgentObjectId | ✅ |
 | src\workers\mcpagent\do\inbound-message.ts | 38 | — | ✅ |
 | src\workers\mcpagent\do\McpAgent.ts | 145 | McpAgentDO | ✅ |
 | src\workers\mcpagent\do\register-tools.ts | 87 | registerLegacyMemoryTools, registerActTools | ✅ |
 | src\workers\mcpagent\do\session-store.ts | 57 | PersistedSessionRow, ensureSessionTable, readPersistedSession... | ✅ |
-| src\workers\mcpagent\index.ts | 128 | — | ✅ |
-| src\workers\mcpagent\public-webhooks.ts | 53 | registerPublicWebhooks | ✅ |
+| src\workers\mcpagent\index.ts | 149 | — | ✅ |
+| src\workers\mcpagent\public-webhooks.ts | 100 | registerPublicWebhooks | ✅ |
 | src\workers\mcpagent\routes\actions.ts | 80 | actions | ✅ |
 | src\workers\mcpagent\routes\approval.ts | 73 | approval | ✅ |
 | src\workers\mcpagent\routes\audit.ts | 51 | audit | ✅ |

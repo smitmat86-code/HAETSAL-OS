@@ -10,6 +10,7 @@ import { getMcpAgentObjectId } from '../mcpagent/do/identity'
 import { processCanonicalProjectionDispatch } from './canonical-projection-consumer'
 import { processQueuedRetainArtifact } from './retain-consumer'
 import {
+  handleSendblueMedia,
   handleSmsInbound,
   handleGmailThread,
   handleCalendarEvent,
@@ -87,6 +88,9 @@ async function processIngestionMessage(
   switch (type) {
     case 'sms_inbound':
       await handleSmsInbound(tenantId, payload, tmk, env, ctx)
+      break
+    case 'sendblue_media':
+      await handleSendblueMedia(tenantId, payload, tmk, env, ctx)
       break
     case 'gmail_thread':
       await handleGmailThread(tenantId, payload, tmk, env, ctx)

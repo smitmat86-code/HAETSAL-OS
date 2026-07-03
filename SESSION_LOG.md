@@ -5,6 +5,26 @@
 
 ---
 
+## Mission Phase 4 - 2026-07-03
+
+**Spec:** HAETSAL_MISSION.md Phase 4 (Sendblue iMessage Channel)
+**Built:**
+- `src/services/delivery/sendblue.ts` - outbound client (POST api.sendblue.co/api/send-message, sb-api-key auth headers); returns {success,status,errorCode} without throwing so reply-window rejections are skips, not retries
+- `POST /webhooks/sendblue/:pathSecret` (public-webhooks.ts) - constant-time path-secret compare (timingSafeEqual), to_number line check, unknown-sender ignore (shared Free Tier line), outbound-echo ignore; 404 on bad secret
+- `src/services/sendblue-inbound.ts` - text flow: canonical capture queued via sms_inbound {channel:'sendblue'} (TMK stays in DO/consumer) + memory-grounded reply (composed broker search -> context block -> llama-3.1-8b via gateway collectLog:false); photo flow: media -> R2 raw artifact (sendblue-media/<tenant>/...) -> llama-3.2-11b-vision description -> sendblue_media queue capture with artifactRef + sendblue_photo provenance -> confirmation reply
+- Queue consumer: new sendblue_media handler; sms handler channel-aware (source/provenance 'sendblue'; inbound messages governed authorKind 'user', episodic)
+- GET / gains ?phone=%2B1... self-registration (E.164 validated, first-registration-wins) mapping the authenticated tenant in tenant_phone_numbers
+- env types: SENDBLUE_* secrets declared; IngestionSource +'sendblue'; queue type +'sendblue_media'
+- tests/mission-4.0-sendblue-channel.test.ts (8 contracts: path-secret auth, line check, unknown sender, outbound echo, text flow + client payload shape, photo flow R2+vision+queue, handleSendblueMedia governed capture, client failure metadata)
+**Decisions:**
+- Replies grounded via composed retrieval from day one; honest about unconnected sources (Gmail/calendar citation in demo clause 1 blocked on Google OAuth - S5 lessons file lands at Phase 5 per mission)
+- Unknown senders never trusted or replied to (shared line); tenant mapping only via authenticated self-registration
+**Verification:** suite + prod deploy + webhook registration + live text/photo gate: see phase gate report
+**Blockers:** live gate requires Matt: register phone via /?phone=..., text the line, send a photo
+**Next:** Phase 5 - real action executors (act_search/act_remind real; Gmail send/draft stop at S5 pending Google OAuth)
+
+---
+
 ## Mission Phase 3 - 2026-07-03
 
 **Spec:** HAETSAL_MISSION.md Phase 3 (Hindsight + Graphiti Removal)

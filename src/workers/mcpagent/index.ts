@@ -76,11 +76,32 @@ app.get('/', async (c) => {
   })
   // @ts-expect-error — DO RPC method
   await stub.initTenant(jwtSub, tenantId)
+
+  // Optional one-click phone registration for the messaging channels:
+  // /?phone=%2B15551234567 maps the caller's tenant to that E.164 number so
+  // inbound iMessage/SMS from it resolves to this tenant. Authenticated via
+  // CF Access like everything else on this route.
+  let phoneNote = ''
+  const phone = c.req.query('phone')?.trim()
+  if (phone) {
+    if (/^\+[1-9]\d{6,14}$/.test(phone)) {
+      await c.env.D1_US.prepare(
+        `INSERT INTO tenant_phone_numbers (id, tenant_id, phone_e164, label, created_at)
+         SELECT ?, ?, ?, 'primary', ?
+         WHERE NOT EXISTS (SELECT 1 FROM tenant_phone_numbers WHERE phone_e164 = ?)`,
+      ).bind(crypto.randomUUID(), tenantId, phone, Date.now(), phone).run()
+      phoneNote = `<p>Phone <code>&hellip;${phone.slice(-4)}</code> is registered to your tenant for iMessage/SMS.</p>`
+    } else {
+      phoneNote = '<p>Phone must be E.164 format, e.g. ?phone=%2B15551234567 (use %2B for +).</p>'
+    }
+  }
+
   return c.html(`<!doctype html><html><head><title>HAETSAL</title></head>
 <body style="font-family:system-ui;max-width:36rem;margin:4rem auto;line-height:1.6">
 <h1>HAETSAL brain is running</h1>
 <p>Session refreshed for tenant <code>${tenantId.slice(0, 8)}&hellip;</code> —
 the cron key is now valid for 24 hours. You can close this tab.</p>
+${phoneNote}
 </body></html>`)
 })
 

@@ -4,7 +4,6 @@ import type { IngestionArtifact } from '../types/ingestion'
 import type { EpistemicMemoryType, AgentContext, DoomLoopState, ReasoningTrace, ReasoningTraceEntry } from './types'
 import { enqueueRetainArtifact } from '../services/ingestion/enqueue'
 import { recallViaService } from '../tools/recall'
-import { fetchMentalModel } from '../services/hindsight'
 import { checkDoomLoop, encryptForR2, writeAnomalySignal, MODEL_CONTEXT_LIMIT, FLUSH_THRESHOLD } from './helpers'
 
 export { checkDoomLoop } from './helpers'
@@ -31,24 +30,10 @@ export abstract class BaseAgent {
   }
 
   protected async open(): Promise<void> {
-    // Mental model from Hindsight API (plaintext — synthesized, no KEK needed)
-    const mentalModel = await fetchMentalModel(
-      this.hindsightTenantId,
-      `mental-model-${this.domain}`,
-      this.env,
-    )
-    if (mentalModel?.content) {
-      this.context.memories.push({
-        memory_id: `mental-model-${this.domain}`,
-        content: mentalModel.content,
-        memory_type: 'semantic',
-        confidence: 1,
-        relevance: 1,
-      })
-    }
+    // Mental models retired with Hindsight Phase 2 read cutover.
     const episodic = await recallViaService(
       { query: `recent events decisions ${this.domain}`, domain: this.domain, limit: 5 },
-      this.hindsightTenantId, this.tmk, this.env,
+      this.tenantId, this.tmk, this.env,
     )
     this.context.memories = [...this.context.memories, ...episodic.results]
     const pending = await this.env.D1_US.prepare(
@@ -107,7 +92,7 @@ export abstract class BaseAgent {
     const result = await this.env.AI.run(
       '@cf/meta/llama-3.3-70b-instruct-fp8-fast',
       { messages: messages as RoleScopedChatInput[] },
-      { gateway: { id: this.env.AI_GATEWAY_ID } },
+      { gateway: { id: this.env.AI_GATEWAY_ID, collectLog: false } },
     ) as AiTextGenerationOutput & { usage?: { input_tokens: number; output_tokens: number } }
     const response = typeof result === 'string' ? result
       : (result as { response?: string }).response ?? ''

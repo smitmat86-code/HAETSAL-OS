@@ -284,6 +284,24 @@ export interface CanonicalGraphEdgeObservationRow {
   captured_at: number | null
 }
 
+/** Row shape returned by the Phase 2 retrieval store methods (lexical/semantic/temporal). */
+export interface CanonicalRetrievalRow {
+  capture_id: string
+  document_id: string
+  chunk_id: string | null
+  title: string | null
+  scope: string
+  source_system: string
+  source_ref: string | null
+  captured_at: number
+  chunk_text: string | null
+  score: number | null
+  trust_state: string | null
+  use_policy: string | null
+  memory_class: string | null
+  author_kind: string | null
+}
+
 export interface CanonicalStatsRow {
   captureCount: number
   documentCount: number

@@ -141,8 +141,8 @@ describe('10.0 canonical Postgres source-of-truth cutover', () => {
     ).bind(id, result.capture.captureId).first<Record<string, string | null>>()
 
     expect(capture?.id).toBe(result.capture.captureId)
-    expect(result.capture.projectionKinds).toEqual(['graphiti'])
-    expect(projection?.result_status).toBe('completed')
+    expect(result.capture.projectionKinds).toEqual([])
+    expect(projection).toBeNull()
     expect(d1Mirror).toBeNull()
   })
 
@@ -235,8 +235,9 @@ describe('10.0 canonical Postgres source-of-truth cutover', () => {
     expect(document?.artifact_id).toBeTruthy()
     expect(document?.body_r2_key).toBeTruthy()
     expect(hindsight?.result_status).toBe('completed')
-    expect(graph?.result_status).toBe('completed')
-    expect(mappings.length).toBeGreaterThan(0)
+    // Graphiti engine retired in Phase 2: live captures create no graphiti projection job.
+    expect(graph).toBeNull()
+    // mappings are populated only by graphiti projection runs; none exist for retired engine.
     expect(d1Artifact).toBeNull()
   })
 })

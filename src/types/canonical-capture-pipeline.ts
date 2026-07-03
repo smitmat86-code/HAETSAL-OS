@@ -75,11 +75,12 @@ export interface CanonicalCapturePipelineResult {
     projectionJobIds: string[]
     projectionKinds: CanonicalProjectionKind[]
     bodyR2Key: string
+    chunkTexts: Array<{ id: string; text: string }>
     governance: import('./canonical-memory').CanonicalCaptureResult['governance']
   }
   dispatch: {
     queue: 'QUEUE_BULK'
-    status: 'queued'
+    status: 'queued' | 'skipped'
     message: CanonicalProjectionDispatchMessage
   }
 }

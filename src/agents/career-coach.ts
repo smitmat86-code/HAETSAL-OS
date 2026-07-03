@@ -26,11 +26,11 @@ export class CareerCoach extends BaseAgent {
     await super.open()
     const relationships = await recallViaService(
       { query: 'professional relationships colleagues managers clients', domain: 'career', limit: 8 },
-      this.hindsightTenantId, this.tmk, this.env,
+      this.tenantId, this.tmk, this.env,
     )
     const decisions = await recallViaService(
       { query: 'career decisions commitments agreed', domain: 'career', limit: 5 },
-      this.hindsightTenantId, this.tmk, this.env,
+      this.tenantId, this.tmk, this.env,
     )
     this.context.careerRelationships = relationships.results
     this.context.recentDecisions = decisions.results

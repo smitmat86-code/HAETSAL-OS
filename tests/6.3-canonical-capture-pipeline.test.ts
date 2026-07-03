@@ -119,14 +119,12 @@ describe('6.3 canonical capture pipeline', () => {
     const store = getCanonicalMemoryStore(testEnv)
     const operation = await store.getOperationById(TENANT_A, result.capture.operationId)
     const capture = await store.getCapture(TENANT_A, result.capture.captureId)
-    const message = sendSpy.mock.calls[0]?.[0]
     const status = await getCanonicalMemoryStatus({ tenantId: TENANT_A, operationId: result.capture.operationId }, testEnv, TENANT_A)
 
-    expect(result.dispatch.status).toBe('queued')
-    expect(operation?.status).toBe('queued')
-    expect(JSON.stringify(message)).not.toContain(input.body)
-    expect(JSON.stringify(message)).not.toContain(input.bodyEncrypted!)
-    expect(status.projections.map(item => item.kind)).toEqual(['graphiti'])
+    expect(result.dispatch.status).toBe('skipped')
+    expect(operation?.status).toBe('accepted')
+    expect(sendSpy).not.toHaveBeenCalled()
+    expect(status.projections).toEqual([])
     expect(capture?.memory_class).toBe('episode')
     expect(capture?.trust_state).toBe('evidence')
     expect(capture?.salience_tier).toBe(3)
@@ -144,11 +142,11 @@ describe('6.3 canonical capture pipeline', () => {
     }, testEnv, TENANT_A)
 
     const document = await getCanonicalMemoryStore(testEnv).getDocument(TENANT_A, result.capture.documentId)
-    const message = sendSpy.mock.calls[0]?.[0] as { payload: { projectionKinds: string[] } }
 
     expect(result.capture.chunkIds.length).toBeGreaterThan(1)
     expect(document?.chunk_count).toBe(result.capture.chunkIds.length)
-    expect(message.payload.projectionKinds).toEqual(['graphiti'])
+    expect(sendSpy).not.toHaveBeenCalled()
+    expect(result.capture.projectionKinds).toEqual([])
   })
 
   it('preserves encrypted artifact handling and keeps queue payloads metadata-only', async () => {
@@ -162,13 +160,12 @@ describe('6.3 canonical capture pipeline', () => {
     }, testEnv, TENANT_A)
 
     const artifact = await getCanonicalMemoryStore(testEnv).getDocument(TENANT_A, result.capture.documentId)
-    const messageJson = JSON.stringify(sendSpy.mock.calls[0]?.[0])
 
     expect(artifact?.filename).toBe('brief.txt')
     expect(artifact?.media_type).toBe('text/plain')
     expect(artifact?.r2_key).toContain('canonical/')
-    expect(messageJson).not.toContain(input.body)
-    expect(messageJson).not.toContain('artifact-artifact')
+    expect(sendSpy).not.toHaveBeenCalled()
+    expect(result.dispatch.status).toBe('skipped')
   })
 
   it('retains through the canonical pipeline with no Hindsight work at all', async () => {
@@ -196,11 +193,11 @@ describe('6.3 canonical capture pipeline', () => {
     )
 
     expect(result?.canonicalCaptureId).toBeTruthy()
-    expect(result?.canonicalDispatchStatus).toBe('queued')
+    expect(result?.canonicalDispatchStatus).toBe('skipped')
     expect(result?.governance?.trustState).toBe('evidence')
-    expect(sendSpy).toHaveBeenCalledTimes(1)
+    expect(sendSpy).not.toHaveBeenCalled()
     expect(hindsightOp).toBeNull()
-    expect(status.projections.map(item => item.kind)).toEqual(['graphiti'])
+    expect(status.projections).toEqual([])
   })
 
   it('still blocks procedural writes before canonical capture is created', async () => {

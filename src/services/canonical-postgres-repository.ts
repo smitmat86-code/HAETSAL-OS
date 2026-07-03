@@ -22,6 +22,7 @@ import type {
   CanonicalProjectionResultRecord,
   CanonicalProjectionStateRow,
   CanonicalProjectionStateWriteInput,
+  CanonicalRetrievalRow,
   CanonicalSemanticLinkbackRow,
   CanonicalStatsRow,
 } from './canonical-postgres-schema'
@@ -29,6 +30,12 @@ import type {
 export interface CanonicalMemoryStore {
   writeCapture(input: CanonicalCaptureWrite): Promise<void>
   listRecentEvents(tenantId: string, limit: number): Promise<NonNullable<CanonicalCaptureWrite['event']>[]>
+  /** Phase 2 retrieval surface. */
+  searchChunksLexical(tenantId: string, query: string, scope: string | null, limit: number): Promise<CanonicalRetrievalRow[]>
+  searchChunksSemantic(tenantId: string, embedding: number[], scope: string | null, limit: number): Promise<CanonicalRetrievalRow[]>
+  updateChunkEmbeddings(tenantId: string, updates: Array<{ chunkId: string; embedding: number[] }>): Promise<void>
+  listCapturesBetween(tenantId: string, fromMs: number, toMs: number, scope: string | null, limit: number): Promise<CanonicalRetrievalRow[]>
+  vectorSearchAvailable(): Promise<boolean>
   getCapture(tenantId: string, captureId: string): Promise<CanonicalCaptureRecord | null>
   getCaptureBodyKey(tenantId: string, captureId: string): Promise<string | null>
   listRecentDocuments(tenantId: string, scope: string | null, limit: number): Promise<CanonicalListRow[]>
@@ -180,6 +187,7 @@ export class InMemoryCanonicalMemoryStore implements CanonicalMemoryStore {
   private readonly projectionResults = new Map<string, CanonicalProjectionResultRecord>()
   private readonly graphIdentityMappings = new Map<string, CanonicalGraphIdentityMappingRecord>()
   private readonly events = new Map<string, NonNullable<CanonicalCaptureWrite['event']>>()
+  private readonly chunkEmbeddings = new Map<string, number[]>()
 
   async writeCapture(input: CanonicalCaptureWrite): Promise<void> {
     this.captures.set(input.capture.id, { ...input.capture })
@@ -197,6 +205,108 @@ export class InMemoryCanonicalMemoryStore implements CanonicalMemoryStore {
       .sort((left, right) => right.occurred_at - left.occurred_at || right.id.localeCompare(left.id))
       .slice(0, limit)
       .map((event) => ({ ...event }))
+  }
+
+  private retrievalRow(
+    chunk: CanonicalCaptureWrite['chunks'][number] | null,
+    capture: CanonicalCaptureRecord,
+    document: CanonicalCaptureWrite['document'],
+    score: number | null,
+  ): CanonicalRetrievalRow {
+    return {
+      capture_id: capture.id,
+      document_id: document.id,
+      chunk_id: chunk?.id ?? null,
+      title: capture.title,
+      scope: capture.scope,
+      source_system: capture.source_system,
+      source_ref: capture.source_ref,
+      captured_at: capture.captured_at,
+      chunk_text: chunk?.chunk_text ?? null,
+      score,
+      trust_state: capture.trust_state,
+      use_policy: capture.use_policy,
+      memory_class: capture.memory_class,
+      author_kind: capture.author_kind,
+    }
+  }
+
+  private chunkJoin(tenantId: string, scope: string | null): Array<{
+    chunk: CanonicalCaptureWrite['chunks'][number]
+    capture: CanonicalCaptureRecord
+    document: CanonicalCaptureWrite['document']
+  }> {
+    const joined: Array<{ chunk: CanonicalCaptureWrite['chunks'][number]; capture: CanonicalCaptureRecord; document: CanonicalCaptureWrite['document'] }> = []
+    for (const chunk of this.chunks.values()) {
+      if (chunk.tenant_id !== tenantId) continue
+      const document = this.documents.get(chunk.document_id)
+      if (!document) continue
+      const capture = this.captures.get(document.capture_id)
+      if (!capture || (scope && capture.scope !== scope)) continue
+      joined.push({ chunk, capture, document })
+    }
+    return joined
+  }
+
+  async searchChunksLexical(tenantId: string, query: string, scope: string | null, limit: number): Promise<CanonicalRetrievalRow[]> {
+    const terms = query.toLowerCase().split(/\W+/).filter((term) => term.length > 1)
+    if (terms.length === 0) return []
+    return this.chunkJoin(tenantId, scope)
+      .map(({ chunk, capture, document }) => {
+        const text = (chunk.chunk_text ?? '').toLowerCase()
+        if (!text) return null
+        const matched = terms.filter((term) => text.includes(term)).length
+        return matched > 0 ? this.retrievalRow(chunk, capture, document, matched / terms.length) : null
+      })
+      .filter((row): row is CanonicalRetrievalRow => row !== null)
+      .sort((left, right) => (right.score ?? 0) - (left.score ?? 0) || right.captured_at - left.captured_at)
+      .slice(0, limit)
+  }
+
+  async searchChunksSemantic(tenantId: string, embedding: number[], scope: string | null, limit: number): Promise<CanonicalRetrievalRow[]> {
+    const cosine = (left: number[], right: number[]): number => {
+      let dot = 0, normLeft = 0, normRight = 0
+      const length = Math.min(left.length, right.length)
+      for (let i = 0; i < length; i++) {
+        dot += left[i]! * right[i]!
+        normLeft += left[i]! * left[i]!
+        normRight += right[i]! * right[i]!
+      }
+      return normLeft && normRight ? dot / (Math.sqrt(normLeft) * Math.sqrt(normRight)) : 0
+    }
+    return this.chunkJoin(tenantId, scope)
+      .map(({ chunk, capture, document }) => {
+        const stored = this.chunkEmbeddings.get(chunk.id)
+        return stored ? this.retrievalRow(chunk, capture, document, cosine(embedding, stored)) : null
+      })
+      .filter((row): row is CanonicalRetrievalRow => row !== null)
+      .sort((left, right) => (right.score ?? 0) - (left.score ?? 0) || right.captured_at - left.captured_at)
+      .slice(0, limit)
+  }
+
+  async updateChunkEmbeddings(tenantId: string, updates: Array<{ chunkId: string; embedding: number[] }>): Promise<void> {
+    for (const update of updates) {
+      const chunk = this.chunks.get(update.chunkId)
+      if (chunk?.tenant_id === tenantId) this.chunkEmbeddings.set(update.chunkId, [...update.embedding])
+    }
+  }
+
+  async listCapturesBetween(tenantId: string, fromMs: number, toMs: number, scope: string | null, limit: number): Promise<CanonicalRetrievalRow[]> {
+    const rows: CanonicalRetrievalRow[] = []
+    for (const document of this.documents.values()) {
+      if (document.tenant_id !== tenantId) continue
+      const capture = this.captures.get(document.capture_id)
+      if (!capture || capture.captured_at < fromMs || capture.captured_at > toMs) continue
+      if (scope && capture.scope !== scope) continue
+      rows.push(this.retrievalRow(null, capture, document, null))
+    }
+    return rows
+      .sort((left, right) => right.captured_at - left.captured_at)
+      .slice(0, limit)
+  }
+
+  async vectorSearchAvailable(): Promise<boolean> {
+    return true
   }
 
   async getCapture(tenantId: string, captureId: string): Promise<CanonicalCaptureRecord | null> {
@@ -690,6 +800,94 @@ export class PostgresCanonicalMemoryStore implements CanonicalMemoryStore {
       FROM haetsal_canonical.canonical_events
       WHERE tenant_id = ${tenantId}
       ORDER BY occurred_at DESC, id DESC
+      LIMIT ${limit}
+    `)
+  }
+
+  private vectorReadyPromise: Promise<boolean> | null = null
+
+  /**
+   * Probes pgvector availability and provisions the embedding column lazily.
+   * Neon and the pgvector dev image support it; environments without the
+   * extension degrade semantic search to lexical (never fail captures).
+   */
+  async vectorSearchAvailable(): Promise<boolean> {
+    if (!this.vectorReadyPromise) {
+      this.vectorReadyPromise = (async () => {
+        await this.ensureSchema()
+        try {
+          await this.sql.query('CREATE EXTENSION IF NOT EXISTS vector')
+          await this.sql.query(`ALTER TABLE ${CANONICAL_POSTGRES_SCHEMA}.canonical_chunks
+            ADD COLUMN IF NOT EXISTS embedding vector(768)`)
+          return true
+        } catch (error) {
+          console.warn('CANONICAL_VECTOR_UNAVAILABLE', {
+            error: error instanceof Error ? error.message : String(error),
+          })
+          return false
+        }
+      })()
+    }
+    return this.vectorReadyPromise
+  }
+
+  async searchChunksLexical(tenantId: string, query: string, scope: string | null, limit: number): Promise<CanonicalRetrievalRow[]> {
+    return this.rows<CanonicalRetrievalRow>(this.sql`
+      SELECT c.id AS capture_id, d.id AS document_id, ch.id AS chunk_id, c.title, c.scope,
+             c.source_system, c.source_ref, c.captured_at, ch.chunk_text,
+             ts_rank(to_tsvector('english', COALESCE(ch.chunk_text, '')), websearch_to_tsquery('english', ${query}))::float8 AS score,
+             c.trust_state, c.use_policy, c.memory_class, c.author_kind
+      FROM haetsal_canonical.canonical_chunks ch
+      INNER JOIN haetsal_canonical.canonical_documents d ON d.id = ch.document_id
+      INNER JOIN haetsal_canonical.canonical_captures c ON c.id = d.capture_id
+      WHERE ch.tenant_id = ${tenantId}
+        AND ch.chunk_text IS NOT NULL
+        AND to_tsvector('english', COALESCE(ch.chunk_text, '')) @@ websearch_to_tsquery('english', ${query})
+        AND (${scope}::text IS NULL OR c.scope = ${scope})
+      ORDER BY score DESC, c.captured_at DESC
+      LIMIT ${limit}
+    `)
+  }
+
+  async searchChunksSemantic(tenantId: string, embedding: number[], scope: string | null, limit: number): Promise<CanonicalRetrievalRow[]> {
+    if (!(await this.vectorSearchAvailable())) return []
+    const vector = `[${embedding.join(',')}]`
+    return this.rows<CanonicalRetrievalRow>(this.sql`
+      SELECT c.id AS capture_id, d.id AS document_id, ch.id AS chunk_id, c.title, c.scope,
+             c.source_system, c.source_ref, c.captured_at, ch.chunk_text,
+             (1 - (ch.embedding <=> ${vector}::vector))::float8 AS score,
+             c.trust_state, c.use_policy, c.memory_class, c.author_kind
+      FROM haetsal_canonical.canonical_chunks ch
+      INNER JOIN haetsal_canonical.canonical_documents d ON d.id = ch.document_id
+      INNER JOIN haetsal_canonical.canonical_captures c ON c.id = d.capture_id
+      WHERE ch.tenant_id = ${tenantId}
+        AND ch.embedding IS NOT NULL
+        AND (${scope}::text IS NULL OR c.scope = ${scope})
+      ORDER BY ch.embedding <=> ${vector}::vector ASC
+      LIMIT ${limit}
+    `)
+  }
+
+  async updateChunkEmbeddings(tenantId: string, updates: Array<{ chunkId: string; embedding: number[] }>): Promise<void> {
+    if (updates.length === 0 || !(await this.vectorSearchAvailable())) return
+    await this.sql.transaction(updates.map((update) => this.sql.prepare`
+      UPDATE haetsal_canonical.canonical_chunks
+      SET embedding = ${`[${update.embedding.join(',')}]`}::vector
+      WHERE tenant_id = ${tenantId} AND id = ${update.chunkId}
+    `))
+  }
+
+  async listCapturesBetween(tenantId: string, fromMs: number, toMs: number, scope: string | null, limit: number): Promise<CanonicalRetrievalRow[]> {
+    return this.rows<CanonicalRetrievalRow>(this.sql`
+      SELECT c.id AS capture_id, d.id AS document_id, NULL AS chunk_id, c.title, c.scope,
+             c.source_system, c.source_ref, c.captured_at, NULL AS chunk_text, NULL::float8 AS score,
+             c.trust_state, c.use_policy, c.memory_class, c.author_kind
+      FROM haetsal_canonical.canonical_captures c
+      INNER JOIN haetsal_canonical.canonical_documents d ON d.capture_id = c.id
+      WHERE c.tenant_id = ${tenantId}
+        AND c.captured_at >= ${fromMs} AND c.captured_at <= ${toMs}
+        AND (${scope}::text IS NULL OR c.scope = ${scope})
+      ORDER BY c.captured_at DESC
       LIMIT ${limit}
     `)
   }

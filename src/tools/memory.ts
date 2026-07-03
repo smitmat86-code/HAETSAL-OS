@@ -37,7 +37,7 @@ export function registerMemoryTools(server: McpServer, ctx: MemoryToolContext): 
       const { query, domain, limit } = input as z.infer<typeof searchSchema>
       const result = await recallViaService(
         { query, domain, limit: limit ?? 10 },
-        ctx.getHindsightTenantId(), ctx.getTmk(), ctx.getEnv(),
+        ctx.getTenantId(), ctx.getTmk(), ctx.getEnv(),
       )
       return { content: [{ type: 'text' as const, text: JSON.stringify(result) }] }
     },

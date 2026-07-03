@@ -5,6 +5,34 @@
 
 ---
 
+## Mission Phase 2 - 2026-07-03
+
+**Spec:** HAETSAL_MISSION.md Phase 2 (Retrieval Broker, hard cutover)
+**Built:**
+- Seven retrieval modes through one stable `search_memory` surface: raw | lexical | semantic | graph | temporal | compiled | composed (`src/services/retrieval-modes.ts`, `retrieval-support.ts`, extended `canonical-memory-router.ts`/`canonical-memory-dispatch.ts`)
+- Semantic = Postgres pgvector over chunk embeddings (`@cf/baai/bge-base-en-v1.5` via AI Gateway with collectLog:false); lazily provisions the vector extension/column; degrades to lexical ('partial') when unavailable. Lexical = Postgres FTS (websearch_to_tsquery + GIN index). Temporal = window queries. Compiled = compiled-synthesis views by stable key. Composed = deduplicated semantic+lexical+graph+compiled bundle with citations.
+- Citations + evidence contract on every item (`CanonicalRetrievalCitation`); title/scope/source-authority/freshness/trust-state boosts (`applyRetrievalBoosts`)
+- Postgres-native graph: `canonical-graph-query.ts` rewritten onto canonical_entities/canonical_edges (one-hop + two-hop), provenance projectionKind 'canonical'; governance store gained findEntitiesByName + listEdgesWithEntities
+- Broker writes canonical_recall_traces per query; chunk embeddings written best-effort at capture time (waitUntil hook)
+- READ severance: recallViaService + memory_search + base-agent routed to canonical broker; fetchMentalModel retired; McpAgent prewarm removed; hindsight operations cron tick unwired; canonical-memory-status reflection/compatibility now null; hindsight debug tool deleted; ops snapshot webhook health 'retired'; consolidation pass1/pass4/weekly-synthesis parked as logged no-ops pending Phase 8 (pass2 runs on canonical edges)
+- WRITE severance (Graphiti): CANONICAL_PROJECTION_KINDS = []; both engine kinds throw; captures create zero projection jobs; dispatch status 'skipped'; projection consumer inert (future projections re-enter there)
+- G4 hygiene: collectLog:false added to all content-bearing env.AI.run gateway calls
+- Deleted: canonical-semantic-recall.ts, canonical-semantic-linkback.ts, tools/hindsight-debug.ts, services/canonical-hindsight-debug.ts, tests 7.2/8.1/8.2/9.6/9.7
+- Tests: mission-2.0-retrieval-broker.test.ts (13 eval fixtures: named-thing, relationship 1+2-hop, contradiction/trust ranking, hard negatives, routing, recall traces, engine isolation); ~20 existing files updated to post-engine reality
+- Local dev substrate: pgvector/pgvector:pg17 container `brain-dev-pg` on port 5433 (5432 held by fold-postgres); scripts/mission-phase2-live-smoke.ts
+**Decisions:**
+- Graphiti write severance pulled into Phase 2 (mission Phase 3 preamble expects engines unwired by end of Phase 2); projection jobs framework retained for future AI Search projection
+- Unmatched queries default to semantic (was raw); lexical is a real mode (no longer aliased to raw)
+- Entity/edge extraction at capture time deliberately NOT added - Phase 8 dream cycle owns extraction; graph mode reads seeded/accumulated canonical edges until then
+**Verification:**
+- Live smoke: PHASE2_LIVE_SMOKE_OK - all 7 modes retrieved a governed capture against real Postgres (pgvector semantic query real, not fallback)
+- npm run checkout / Law-2 audit / CF-docs / fresh verifier: see phase gate report
+**Hindsight Pin:** engines fully unwired from runtime; corpses (containers, facades, crons, wrangler config) deleted in Phase 3
+**Blockers:** none
+**Next:** Phase 3 - Hindsight + Graphiti removal (R2 TMK-encrypted export first per G7, then delete code/config/bindings, DO deletion migrations, docs updates, postflight guards, prod deploy)
+
+---
+
 ## Mission Phase 1 - 2026-07-03
 
 **Spec:** HAETSAL_MISSION.md Phase 1 (Canonical Governed Write Path, hard cutover)

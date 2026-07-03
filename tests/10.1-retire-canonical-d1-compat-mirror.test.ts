@@ -262,12 +262,13 @@ describe('10.1 retire canonical D1 compatibility mirror', () => {
       memoryType: 'semantic',
     }, testEnv, id)
     const store = getCanonicalMemoryStore(testEnv)
+    // Graphiti engine retired in Phase 2: live captures create no graphiti projection job.
     const projection = await store.getLatestProjectionResultForOperation(id, result.capture.operationId, 'graphiti')
     const mappings = await store.listGraphIdentityMappings(id)
 
-    expect(projection?.result_status).toBe('completed')
-    expect(projection?.target_ref).toContain('graphiti://episodes/')
-    expect(mappings.length).toBeGreaterThan(0)
+    expect(projection).toBeNull()
+    // No graphiti projection runs means no identity mappings either.
+    expect(mappings).toHaveLength(0)
     expect(await readD1Count(testEnv, 'canonical_graph_identity_mappings', id)).toBe(0)
   })
 

@@ -9,6 +9,7 @@ import {
   installCanonicalGovernanceStore,
   type CanonicalClaimRecord,
   type CanonicalEdgeRecord,
+  type CanonicalEdgeWithEntities,
   type CanonicalEntityRecord,
   type CanonicalEventRecord,
   type CanonicalFactRecord,
@@ -76,6 +77,27 @@ export class PostgresCanonicalGovernanceStore implements CanonicalGovernanceStor
     const rows = await this.rows<CanonicalEntityRecord>(this.sql`SELECT * FROM haetsal_canonical.canonical_entities
       WHERE tenant_id = ${tenantId} AND id = ${entityId} LIMIT 1`)
     return rows[0] ?? null
+  }
+
+  async findEntitiesByName(tenantId: string, name: string, limit: number): Promise<CanonicalEntityRecord[]> {
+    const needle = `%${name.trim().toLowerCase()}%`
+    return this.rows<CanonicalEntityRecord>(this.sql`SELECT * FROM haetsal_canonical.canonical_entities
+      WHERE tenant_id = ${tenantId}
+        AND (normalized_name LIKE ${needle} OR LOWER(COALESCE(aliases_json, '')) LIKE ${needle})
+      ORDER BY authority DESC, last_seen_at DESC LIMIT ${limit}`)
+  }
+
+  async listEdgesWithEntities(tenantId: string, limit: number): Promise<CanonicalEdgeWithEntities[]> {
+    return this.rows<CanonicalEdgeWithEntities>(this.sql`
+      SELECT e.*,
+             src.kind AS src_kind, src.name AS src_name, src.normalized_name AS src_normalized_name, src.aliases_json AS src_aliases_json,
+             dst.kind AS dst_kind, dst.name AS dst_name, dst.normalized_name AS dst_normalized_name, dst.aliases_json AS dst_aliases_json
+      FROM haetsal_canonical.canonical_edges e
+      INNER JOIN haetsal_canonical.canonical_entities src ON src.id = e.src_entity_id
+      INNER JOIN haetsal_canonical.canonical_entities dst ON dst.id = e.dst_entity_id
+      WHERE e.tenant_id = ${tenantId}
+      ORDER BY e.updated_at DESC
+      LIMIT ${limit}`)
   }
 
   async insertClaim(claim: CanonicalClaimRecord): Promise<void> {

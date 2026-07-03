@@ -270,7 +270,7 @@ describe('11.4 connector-driven compilation triggers', () => {
 
     expect(result.capture.captureId).toBeTruthy()
     expect(result.capture.documentId).toBeTruthy()
-    expect(result.dispatch.status).toBe('queued')
+    expect(result.dispatch.status).toBe('skipped')
     expect(await readCompiledDossier(tenantId, 'dossier:project:aurora-anchor', env)).toBeNull()
   })
 })

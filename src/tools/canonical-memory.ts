@@ -25,8 +25,6 @@ import {
   traceRelationshipSchema,
   traceSchema,
 } from './canonical-memory-schema'
-import { registerHindsightDebugTool } from './hindsight-debug'
-
 interface CanonicalMemoryToolContext {
   getEnv: () => Env
   getTenantId: () => string
@@ -119,8 +117,4 @@ export function registerCanonicalMemoryTools(server: McpServer, ctx: CanonicalMe
       brainMemoryProfile: BRAIN_MEMORY_SURFACE_PROFILE,
     }))
 
-  registerHindsightDebugTool(server, {
-    getEnv: ctx.getEnv,
-    getTenantId: ctx.getTenantId,
-  })
 }

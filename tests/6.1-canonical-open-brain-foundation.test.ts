@@ -75,7 +75,7 @@ describe('6.1 canonical open-brain foundation', () => {
     expect(capture!.source_system).toBe('mcp_retain')
     expect(capture!.scope).toBe('general')
     expect(document!.chunk_count).toBe(result.chunkIds.length)
-    expect(projections.map((row) => row.projection_kind)).toEqual(['graphiti'])
+    expect(projections).toHaveLength(0)
     expect(audit.results.map(row => row.operation)).toEqual(['memory.capture.accepted'])
   })
 
@@ -130,6 +130,6 @@ describe('6.1 canonical open-brain foundation', () => {
     const after = await store.getStats(fixture.tenantId)
 
     expect(after.captureCount).toBe(before.captureCount + 1)
-    expect(after.pendingProjectionCount).toBeGreaterThanOrEqual(before.pendingProjectionCount + 1)
+    expect(after.pendingProjectionCount).toBe(before.pendingProjectionCount)
   })
 })

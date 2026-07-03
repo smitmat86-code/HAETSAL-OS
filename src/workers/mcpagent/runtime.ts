@@ -1,6 +1,5 @@
 import { handleMorningBrief } from '../../cron/morning-brief'
 import { handleObsidianPoll } from '../../cron/obsidian-poll'
-import { handleHindsightOperationsTick } from '../../cron/hindsight-operations'
 import { runPredictiveHeartbeat } from '../../cron/heartbeat'
 import { runWeeklySynthesis } from '../../cron/weekly-synthesis'
 import { handleNightlyConsolidation } from '../../cron/consolidation'
@@ -29,11 +28,7 @@ export async function handleBrainScheduled(
 ): Promise<void> {
   switch (event.cron) {
     case '*/1 * * * *':
-      await Promise.allSettled([
-        handleObsidianPoll(event, env, ctx),
-        handleHindsightOperationsTick(env, ctx),
-      ])
-      return
+      return handleObsidianPoll(event, env, ctx)
     case '*/15 * * * *':
       return handleObsidianPoll(event, env, ctx)
     case '0 7 * * *':

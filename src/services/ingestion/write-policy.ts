@@ -58,7 +58,7 @@ export async function runWritePolicyValidator(
           },
         ],
       },
-      { gateway: { id: env.AI_GATEWAY_ID } },
+      { gateway: { id: env.AI_GATEWAY_ID, collectLog: false } },
     )
 
     const text = typeof response === 'string'

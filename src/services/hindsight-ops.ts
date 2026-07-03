@@ -1,5 +1,4 @@
 import type { Env } from '../types/env'
-import { getWebhookHealth, type HindsightWebhookHealth } from './hindsight-ops-webhooks'
 
 export const HINDSIGHT_PENDING_SLOW_MS = 2 * 60 * 1000
 export const HINDSIGHT_PENDING_STUCK_MS = 10 * 60 * 1000
@@ -49,7 +48,7 @@ export interface HindsightMemoryOpsSnapshot {
     lastRequestedAt: number | null
     lastCompletedAt: number | null
     lastFailedAt: number | null
-    webhookHealth: HindsightWebhookHealth
+    webhookHealth: { status: 'retired' }
   }
   recent: {
     operationId: string
@@ -101,8 +100,6 @@ export async function getHindsightMemoryOpsSnapshot(
      LIMIT 20`,
   ).bind(tenantId).all<RecentRow>()
 
-  const webhookHealth = await getWebhookHealth(env, summary?.bank_id ?? null)
-
   return {
     summary: {
       totalCount: summary?.total_count ?? 0,
@@ -116,7 +113,8 @@ export async function getHindsightMemoryOpsSnapshot(
       lastRequestedAt: summary?.last_requested_at ?? null,
       lastCompletedAt: summary?.last_completed_at ?? null,
       lastFailedAt: summary?.last_failed_at ?? null,
-      webhookHealth,
+      // Phase 2: Hindsight webhook health retired
+      webhookHealth: { status: 'retired' as const },
     },
     recent: (recent.results ?? []).map((row) => ({
       operationId: row.operation_id,

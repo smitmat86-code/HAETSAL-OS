@@ -32,7 +32,28 @@ const SEMANTIC_PATTERNS = [
   /\btell me about\b/i,
   /\bremember\b/i,
   /\brecall\b/i,
-  /^\s*(?:who|what|when|where|why|how)\b/i,
+  /^\s*(?:who|what|where|why|how)\b/i,
+]
+const TEMPORAL_PATTERNS = [
+  /\btoday\b/i,
+  /\byesterday\b/i,
+  /\b(?:last|past|this) (?:week|month)\b/i,
+  /\b(?:last|past) \d+ days?\b/i,
+  /\bwhat (?:did i|happened)\b/i,
+  /\bsince (?:monday|tuesday|wednesday|thursday|friday|saturday|sunday|yesterday)\b/i,
+  /^\s*when\b/i,
+]
+const COMPILED_PATTERNS = [
+  /\bdossier\b/i,
+  /\bcontext pack\b/i,
+  /\bcompiled\b/i,
+  /\bwhat changed (?:in|on|for)\b/i,
+]
+const LEXICAL_PATTERNS = [
+  /"[^"]+"/,
+  /\bcontaining\b/i,
+  /\bmentioning\b/i,
+  /\bkeyword\b/i,
 ]
 const RAW_EXTRACTORS = [
   /(?:exactly|verbatim).*?\b(?:said|wrote|captured)\b(?:\s+about)?\s+(?<focus>.+)$/i,
@@ -68,8 +89,7 @@ function extractFocus(query: string, extractors: RegExp[]): string {
 export function normalizeMemoryQueryMode(
   mode?: MemoryQueryModePreference | null,
 ): MemoryQueryMode | null {
-  if (!mode) return null
-  return mode === 'lexical' ? 'raw' : mode
+  return mode ?? null
 }
 
 export function decideCanonicalMemoryRoute(
@@ -98,10 +118,13 @@ function inferMemoryQueryMode(query: string): MemoryQueryMode {
   const text = cleaned(query)
   if (!text) return 'raw'
   if (COMPOSED_PATTERNS.some((pattern) => pattern.test(text))) return 'composed'
+  if (COMPILED_PATTERNS.some((pattern) => pattern.test(text))) return 'compiled'
   if (GRAPH_PATTERNS.some((pattern) => pattern.test(text))) return 'graph'
+  if (TEMPORAL_PATTERNS.some((pattern) => pattern.test(text))) return 'temporal'
+  if (LEXICAL_PATTERNS.some((pattern) => pattern.test(text))) return 'lexical'
   if (RAW_PATTERNS.some((pattern) => pattern.test(text))) return 'raw'
   if (SEMANTIC_PATTERNS.some((pattern) => pattern.test(text))) return 'semantic'
-  return 'raw'
+  return 'semantic'
 }
 
 function extractDispatchQuery(query: string, mode: MemoryQueryMode): string {
@@ -113,7 +136,10 @@ function extractDispatchQuery(query: string, mode: MemoryQueryMode): string {
 
 function inferredReason(mode: MemoryQueryMode): string {
   if (mode === 'composed') return 'Broader context-building phrasing favored composed retrieval.'
+  if (mode === 'compiled') return 'Compiled-view phrasing favored compiled retrieval.'
   if (mode === 'graph') return 'Relationship or timeline phrasing favored graph retrieval.'
+  if (mode === 'temporal') return 'Time-window phrasing favored temporal retrieval.'
+  if (mode === 'lexical') return 'Quoted or keyword phrasing favored lexical retrieval.'
   if (mode === 'semantic') return 'Concept or fact phrasing favored semantic retrieval.'
-  return 'Exact or keyword-style phrasing favored raw retrieval.'
+  return 'Exact or document-style phrasing favored raw retrieval.'
 }

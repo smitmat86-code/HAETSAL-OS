@@ -20,11 +20,25 @@ export type {
   CanonicalReviewRecord,
 } from '../types/canonical-governance-records'
 
+/** Edge joined with both endpoint entities — the Phase 2 graph traversal row. */
+export interface CanonicalEdgeWithEntities extends CanonicalEdgeRecord {
+  src_kind: string
+  src_name: string
+  src_normalized_name: string
+  src_aliases_json: string | null
+  dst_kind: string
+  dst_name: string
+  dst_normalized_name: string
+  dst_aliases_json: string | null
+}
+
 export interface CanonicalGovernanceStore {
   appendEvent(event: CanonicalEventRecord): Promise<void>
   listRecentEvents(tenantId: string, limit: number): Promise<CanonicalEventRecord[]>
   upsertEntity(entity: CanonicalEntityRecord): Promise<CanonicalEntityRecord>
   getEntity(tenantId: string, entityId: string): Promise<CanonicalEntityRecord | null>
+  findEntitiesByName(tenantId: string, name: string, limit: number): Promise<CanonicalEntityRecord[]>
+  listEdgesWithEntities(tenantId: string, limit: number): Promise<CanonicalEdgeWithEntities[]>
   insertClaim(claim: CanonicalClaimRecord): Promise<void>
   getClaim(tenantId: string, claimId: string): Promise<CanonicalClaimRecord | null>
   updateClaimTrust(

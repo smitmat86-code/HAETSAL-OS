@@ -31,6 +31,8 @@ export const CANONICAL_GOVERNANCE_DDL: string[] = [
     ON ${S}.canonical_captures(tenant_id, memory_class, trust_state, created_at DESC)`,
   // Searchable plaintext for Phase 2 FTS (authorized boundary)
   `ALTER TABLE ${S}.canonical_chunks ADD COLUMN IF NOT EXISTS chunk_text TEXT`,
+  `CREATE INDEX IF NOT EXISTS idx_pg_canonical_chunks_fts
+    ON ${S}.canonical_chunks USING GIN (to_tsvector('english', COALESCE(chunk_text, '')))`,
   // Append-only event ledger
   `CREATE TABLE IF NOT EXISTS ${S}.canonical_events (
     id TEXT PRIMARY KEY,

@@ -15,7 +15,8 @@ export interface EntityTimelineInput {
 }
 
 export interface CanonicalProjectionProvenance {
-  projectionKind: 'hindsight' | 'graphiti'
+  /** 'canonical' = Postgres-native edges (Phase 2+); engine kinds are historical. */
+  projectionKind: 'hindsight' | 'graphiti' | 'canonical'
   captureId?: string | null
   documentId?: string | null
   canonicalOperationId?: string | null

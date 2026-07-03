@@ -4,12 +4,13 @@ import type {
   CanonicalPipelineCaptureInput,
 } from '../types/canonical-capture-pipeline'
 import { maybeTriggerCompiledRefresh } from './canonical-compiled-refresh-trigger'
-import { materializeGraphitiProjectionPayload } from './canonical-graphiti-projection'
 import { captureCanonicalMemory } from './canonical-memory'
+import { getCanonicalMemoryStore } from './canonical-postgres'
 import {
   enqueueCanonicalProjectionDispatch,
   markCanonicalProjectionDispatchFailed,
 } from './canonical-projection-dispatch'
+import { embedTexts } from './retrieval-support'
 import { processCanonicalProjectionDispatch } from '../workers/ingestion/canonical-projection-consumer'
 
 export async function captureThroughCanonicalPipeline(
@@ -39,6 +40,26 @@ export async function captureThroughCanonicalPipeline(
     },
   }, env, tenantId)
 
+  // Chunk embeddings for pgvector semantic retrieval (Phase 2). Best-effort:
+  // failures never block the capture; missing embeddings degrade semantic
+  // search to lexical until a backfill runs.
+  const embedTask = (async () => {
+    const embeddings = await embedTexts(env, capture.chunkTexts.map((chunk) => chunk.text))
+    if (!embeddings) return
+    await getCanonicalMemoryStore(env).updateChunkEmbeddings(tenantId, capture.chunkTexts.map((chunk, index) => ({
+      chunkId: chunk.id,
+      embedding: embeddings[index]!,
+    })))
+  })().catch((error) => {
+    console.warn('CANONICAL_CHUNK_EMBEDDING_FAILED', {
+      tenantId,
+      captureId: capture.captureId,
+      error: error instanceof Error ? error.message : String(error),
+    })
+  })
+  if (ctx?.waitUntil) ctx.waitUntil(embedTask)
+  else await embedTask
+
   const message = {
     type: 'canonical_projection_dispatch' as const,
     tenantId,
@@ -51,32 +72,21 @@ export async function captureThroughCanonicalPipeline(
     enqueuedAt: Date.now(),
   }
 
-  const projectionInput = {
-    ...input,
-    canonicalCaptureId: capture.captureId,
-    canonicalDocumentId: capture.documentId,
-    canonicalOperationId: capture.operationId,
-  }
-  if (capture.projectionKinds.includes('graphiti')) {
+  // Projection engines are retired (Hindsight: Phase 1, Graphiti: Phase 2).
+  // With no projection kinds there is nothing to materialize or dispatch;
+  // future projections (e.g. AI Search) re-enter through this seam.
+  let dispatchStatus: 'queued' | 'skipped' = 'skipped'
+  if (capture.projectionKinds.length > 0) {
     try {
-      await materializeGraphitiProjectionPayload(projectionInput, capture.captureId, env)
+      await enqueueCanonicalProjectionDispatch(message, env)
+      dispatchStatus = 'queued'
+      if (input.eagerProjectionDispatch) {
+        await processCanonicalProjectionDispatch(message.tenantId, message.payload, env, ctx)
+      }
     } catch (error) {
-      console.error('GRAPHITI_PROJECTION_PAYLOAD_MATERIALIZE_FAILED', {
-        tenantId,
-        captureId: capture.captureId,
-        error: error instanceof Error ? error.message : String(error),
-      })
+      await markCanonicalProjectionDispatchFailed(message, env, error)
+      throw error
     }
-  }
-
-  try {
-    await enqueueCanonicalProjectionDispatch(message, env)
-    if (input.eagerProjectionDispatch) {
-      await processCanonicalProjectionDispatch(message.tenantId, message.payload, env, ctx)
-    }
-  } catch (error) {
-    await markCanonicalProjectionDispatchFailed(message, env, error)
-    throw error
   }
 
   await maybeTriggerCompiledRefresh({
@@ -100,7 +110,7 @@ export async function captureThroughCanonicalPipeline(
     },
     dispatch: {
       queue: 'QUEUE_BULK',
-      status: 'queued',
+      status: dispatchStatus,
       message,
     },
   }

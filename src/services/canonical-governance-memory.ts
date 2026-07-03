@@ -5,6 +5,7 @@ import {
   installCanonicalGovernanceStore,
   type CanonicalClaimRecord,
   type CanonicalEdgeRecord,
+  type CanonicalEdgeWithEntities,
   type CanonicalEntityRecord,
   type CanonicalEventRecord,
   type CanonicalFactRecord,
@@ -55,6 +56,32 @@ export class InMemoryCanonicalGovernanceStore implements CanonicalGovernanceStor
   async getEntity(tenantId: string, entityId: string): Promise<CanonicalEntityRecord | null> {
     const row = this.entities.get(entityId)
     return row?.tenant_id === tenantId ? { ...row } : null
+  }
+
+  async findEntitiesByName(tenantId: string, name: string, limit: number): Promise<CanonicalEntityRecord[]> {
+    const needle = name.trim().toLowerCase()
+    return [...this.entities.values()]
+      .filter((row) => row.tenant_id === tenantId
+        && (row.normalized_name.includes(needle) || (row.aliases_json ?? '').toLowerCase().includes(needle)))
+      .sort((left, right) => right.authority - left.authority || right.last_seen_at - left.last_seen_at)
+      .slice(0, limit)
+      .map((row) => ({ ...row }))
+  }
+
+  async listEdgesWithEntities(tenantId: string, limit: number): Promise<CanonicalEdgeWithEntities[]> {
+    const rows: CanonicalEdgeWithEntities[] = []
+    for (const edge of this.edges.values()) {
+      if (edge.tenant_id !== tenantId) continue
+      const src = this.entities.get(edge.src_entity_id)
+      const dst = this.entities.get(edge.dst_entity_id)
+      if (!src || !dst) continue
+      rows.push({
+        ...edge,
+        src_kind: src.kind, src_name: src.name, src_normalized_name: src.normalized_name, src_aliases_json: src.aliases_json,
+        dst_kind: dst.kind, dst_name: dst.name, dst_normalized_name: dst.normalized_name, dst_aliases_json: dst.aliases_json,
+      })
+    }
+    return rows.sort((left, right) => right.updated_at - left.updated_at).slice(0, limit)
   }
 
   async insertClaim(claim: CanonicalClaimRecord): Promise<void> {

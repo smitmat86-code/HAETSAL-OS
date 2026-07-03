@@ -12,7 +12,6 @@ export const BRAIN_MEMORY_TOOL_NAMES = [
   'get_recent_memories',
   'get_document',
   'memory_status',
-  'debug_hindsight_bank_state',
   'memory_stats',
 ] as const
 

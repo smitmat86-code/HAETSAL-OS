@@ -8,34 +8,27 @@ const SAFE_VALUE = /^[a-z0-9:_-]{2,80}$/i
 const CHUNK_LIMIT = 240
 
 /**
- * 'hindsight' removed from the active set — the Hindsight write path is
- * severed (HAETSAL_MISSION.md Phase 1). Existing rows keep the historical
- * value; new captures may not request it.
+ * Both engine projections are retired: Hindsight writes were severed in
+ * mission Phase 1 and Graphiti writes in Phase 2 (Postgres-native retrieval
+ * replaced both). Canonical Postgres IS the memory substrate; future
+ * projections (e.g. AI Search) register here when adopted.
  */
-export const CANONICAL_PROJECTION_KINDS: CanonicalProjectionKind[] = [
-  'graphiti',
-]
+export const CANONICAL_PROJECTION_KINDS: CanonicalProjectionKind[] = []
 
 export function resolveCanonicalProjectionKinds(
   projectionKinds?: readonly CanonicalProjectionKind[] | null,
 ): CanonicalProjectionKind[] {
-  if (projectionKinds == null) return [...CANONICAL_PROJECTION_KINDS]
-
-  const allowedKinds = new Set<CanonicalProjectionKind>(CANONICAL_PROJECTION_KINDS)
-  const resolved: CanonicalProjectionKind[] = []
+  if (projectionKinds == null || projectionKinds.length === 0) return [...CANONICAL_PROJECTION_KINDS]
   for (const kind of projectionKinds) {
-    if (!allowedKinds.has(kind)) {
-      if (kind === 'hindsight') {
-        throw new Error('Hindsight projections are retired: the write path was severed in mission Phase 1')
-      }
-      throw new Error(`Invalid canonical projection kind: ${String(kind)}`)
+    if (kind === 'hindsight') {
+      throw new Error('Hindsight projections are retired: the write path was severed in mission Phase 1')
     }
-    if (!resolved.includes(kind)) resolved.push(kind)
+    if (kind === 'graphiti') {
+      throw new Error('Graphiti projections are retired: Postgres-native graph replaced them in mission Phase 2')
+    }
+    throw new Error(`Invalid canonical projection kind: ${String(kind)}`)
   }
-  if (resolved.length === 0) {
-    throw new Error('Canonical capture requires at least one projection kind')
-  }
-  return resolved
+  return []
 }
 
 export function normalizeCanonicalBody(body: string): string {

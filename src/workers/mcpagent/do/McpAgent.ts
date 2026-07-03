@@ -3,7 +3,6 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import type { Env } from '../../../types/env'
 import { deriveTenantId, deriveTmk } from '../../../middleware/auth'
 import { getOrCreateTenant, provisionOrRenewKek } from '../../../services/tenant'
-import { ensureHindsightWorkersRunning, prewarmHindsight } from '../../../services/hindsight'
 import { registerBrainMemorySurface } from '../../../tools/brain-memory-surface'
 import type { InterviewState } from '../../../types/bootstrap'
 import { registerBootstrapTools } from '../../../tools/bootstrap'
@@ -80,8 +79,6 @@ export class McpAgentDO extends BaseMcpAgent<Env, unknown, McpAgentProps> {
     this.persistSessionState({ tenantId, jwtSub })
     const { tenant } = await getOrCreateTenant(tenantId, jwtSub, this.env)
     await provisionOrRenewKek(tenant, this.tmk, this.env)
-    this.ctx.waitUntil(prewarmHindsight(tenantId, this.env).catch(() => {}))
-    this.ctx.waitUntil(ensureHindsightWorkersRunning(this.env).catch(() => {}))
   }
   private async ensureTenantContext(request: Request): Promise<void> {
     const propTenantId = typeof this.props?.tenantId === 'string' && this.props.tenantId.length > 0

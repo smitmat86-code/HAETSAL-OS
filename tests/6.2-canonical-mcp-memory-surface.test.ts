@@ -2,7 +2,6 @@ import { beforeAll, describe, expect, it, vi } from 'vitest'
 import { env } from 'cloudflare:test'
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { captureCanonicalMemory } from '../src/services/canonical-memory'
-import { getCanonicalMemoryStore } from '../src/services/canonical-postgres'
 import { encryptContentForArchive } from '../src/services/ingestion/encryption'
 import { registerCanonicalMemoryTools } from '../src/tools/canonical-memory'
 import type { CanonicalCaptureInput } from '../src/types/canonical-memory'
@@ -86,23 +85,6 @@ async function encryptFixture(
   }
 }
 
-async function markGraphitiProjectionCompleted(operationId: string): Promise<void> {
-  const store = getCanonicalMemoryStore(env)
-  const jobs = await store.listProjectionJobsForOperation(TENANT_A, operationId)
-  const graphitiJob = jobs.find(job => job.projection_kind === 'graphiti')
-  if (!graphitiJob) return
-  const now = Date.now()
-  await store.recordProjectionState({
-    tenantId: TENANT_A,
-    jobId: graphitiJob.id,
-    operationId,
-    jobStatus: 'completed',
-    resultStatus: 'completed',
-    targetRef: `graphiti://projection/${operationId}`,
-    updatedAt: now,
-  })
-}
-
 function createToolRegistry(tmk: CryptoKey | null, tenantId = TENANT_A, testEnv: typeof env = env): ToolRegistry {
   const handlers = new Map<string, ToolHandler>()
   const pending: Promise<unknown>[] = []
@@ -135,7 +117,6 @@ beforeAll(async () => {
     artifact: await captureCanonicalMemory(await encryptFixture(artifactFixture as CanonicalCaptureInput, TENANT_A, 'artifact'), env, TENANT_A),
   }
   await captureCanonicalMemory(await encryptFixture(noteFixture as CanonicalCaptureInput, TENANT_B, 'foreign'), env, TENANT_B)
-  await markGraphitiProjectionCompleted(seeded.note.operationId)
 })
 
 describe('6.2 canonical MCP memory surface', () => {
@@ -149,7 +130,6 @@ describe('6.2 canonical MCP memory surface', () => {
 
     expect(Array.from(registry.handlers.keys()).sort()).toEqual([
       'capture_memory',
-      'debug_hindsight_bank_state',
       'get_document',
       'get_entity_timeline',
       'get_memory_trace',
@@ -208,9 +188,12 @@ describe('6.2 canonical MCP memory surface', () => {
       { ...statusQueryFixture, operation_id: seeded.note.operationId },
     )
 
-    expect(result.operation.status).toBe('completed')
-    expect(result.projections.map(item => item.kind)).toEqual(['graphiti'])
-    expect(result.projections.find(item => item.kind === 'graphiti')?.status).toBe('completed')
+    // Phase 2: both engine projections retired — operations remain in 'accepted'
+    // state (no projection jobs to advance them) and projections list is empty.
+    expect(result.operation.status).toBe('accepted')
+    expect(result.projections).toEqual([])
+    expect(result.compatibility).toBeNull()
+    expect(result.reflection).toBeNull()
   })
 
   // The raw-hindsight-bank debug case was removed with the Phase 1 write-path
@@ -227,8 +210,9 @@ describe('6.2 canonical MCP memory surface', () => {
     expect(result.captureCount).toBe(3)
     expect(result.documentCount).toBe(3)
     expect(result.operationCount).toBe(3)
-    expect(result.pendingProjectionCount).toBe(2)
-    expect(result.completedProjectionCount).toBe(1)
+    // Phase 2: projection engines retired — no pending or completed projection jobs
+    expect(result.pendingProjectionCount).toBe(0)
+    expect(result.completedProjectionCount).toBe(0)
     expect(result.scopes).toEqual([
       { scope: 'general', count: 2 },
       { scope: 'research', count: 1 },

@@ -1,59 +1,47 @@
 // src/tools/recall.ts
-// Hindsight recall via the official v1 API.
-// Queries are sent as plaintext; HAETSAL keeps encryption only for its own archives.
+// Canonical memory recall via the broker — rewired in Phase 2 to sever Hindsight reads.
+// Queries route through searchCanonicalMemory (mode: 'semantic').
 
 import type { RecallInput, RecallOutput } from '../types/tools'
 import type { Env } from '../types/env'
-import type { HindsightRecallResponse, HindsightRecallResult } from '../types/hindsight'
-import { buildHindsightTags, recallMemory } from '../services/hindsight'
-
-function normalizeRecallResults(data: HindsightRecallResponse): RecallOutput['results'] {
-  const rawResults = data.results ?? data.items ?? data.memories ?? []
-  return rawResults.map((raw: HindsightRecallResult, index) => ({
-    memory_id: String(raw.id ?? raw.memory_id ?? `hindsight-result-${index}`),
-    content: String(raw.text ?? raw.content ?? raw.content_preview ?? raw.summary ?? ''),
-    memory_type: String(
-      raw.type
-      ?? raw.fact_type
-      ?? raw.memory_type
-      ?? raw.metadata?.app_memory_type
-      ?? 'memory',
-    ),
-    confidence: Number(raw.confidence ?? raw.score ?? 0),
-    relevance: Number(raw.relevance ?? raw.score ?? raw.confidence ?? 0),
-  }))
-}
+import { searchCanonicalMemory } from '../services/canonical-memory-query'
 
 /**
- * Recall via Hindsight — called from DO where tenant context is already available.
+ * Recall via canonical memory broker — called from DO where tenant context is available.
+ * Phase 2: Hindsight recall retired; routes through searchCanonicalMemory (mode: 'semantic').
  */
 export async function recallViaService(
   input: RecallInput,
   tenantId: string,
-  _tmk: CryptoKey | null,
+  tmk: CryptoKey | null,
   env: Env,
 ): Promise<RecallOutput> {
-  const tags = input.domain
-    ? buildHindsightTags(tenantId, input.domain)
-    : buildHindsightTags(tenantId)
+  const result = await searchCanonicalMemory(
+    {
+      tenantId,
+      query: input.query,
+      scope: input.domain ?? null,
+      limit: input.limit ?? 10,
+      mode: 'semantic',
+    },
+    env,
+    tenantId,
+    { tmk },
+  )
 
-  const data = await recallMemory(tenantId, {
-    query: input.query,
-    budget: 'mid',
-    max_tokens: Math.max((input.limit ?? 10) * 512, 1024),
-    query_timestamp: new Date().toISOString(),
-    tags,
-    tags_match: 'all_strict',
-  }, env)
-
-  const results = normalizeRecallResults(data)
+  const results = result.items.map((item, index) => ({
+    memory_id: item.documentId ?? `canonical-result-${index}`,
+    content: item.preview ?? item.title ?? '',
+    memory_type: item.scope ?? 'memory',
+    confidence: 0,
+    relevance: 0,
+  }))
 
   return {
     results,
-    synthesis: data.text
-      ?? (results.length > 0
-        ? `Found ${results.length} relevant memories.`
-        : 'No matching memories found.'),
+    synthesis: results.length > 0
+      ? `Found ${results.length} relevant memories.`
+      : 'No matching memories found.',
   }
 }
 

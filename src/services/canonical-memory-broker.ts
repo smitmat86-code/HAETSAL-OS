@@ -6,6 +6,8 @@ import type {
 import type { CanonicalSearchInput } from '../types/canonical-memory-query'
 import { overlapOf, runShadowWithTimeout, shadowModeFor, shadowQueryOf, summaryOf, traceOf } from './canonical-broker-shadow'
 import { persistCanonicalBrokerTrace } from './canonical-broker-trace'
+import { getCanonicalGovernanceStore } from './canonical-governance-postgres'
+import { sha256Hex } from './canonical-memory-artifacts'
 import { executeCanonicalMemoryMode } from './canonical-memory-dispatch'
 import { decideCanonicalMemoryRoute } from './canonical-memory-router'
 import { type CanonicalMemoryReadOptions } from './canonical-memory-read-model'
@@ -63,6 +65,28 @@ export async function searchCanonicalMemoryWithBroker(
       createdAt: Date.now(),
     }
     await persistCanonicalBrokerTrace(detail, env, options.tmk ?? null)
+    // Canonical recall trace (Phase 2): query + result refs recorded in the
+    // canonical ledger (Postgres is the authorized content surface).
+    await getCanonicalGovernanceStore(env).insertRecallTrace({
+      id: queryId,
+      tenant_id: tenantId,
+      query_mode: route.mode,
+      query_hash: await sha256Hex(input.query),
+      request_json: JSON.stringify({ query: input.query, requestedMode: input.mode ?? null, scope: input.scope ?? null }),
+      result_refs_json: JSON.stringify(primary.items.map((item) => ({
+        captureId: item.captureId,
+        documentId: item.documentId,
+        mode: item.mode,
+        score: item.score ?? null,
+      }))),
+      created_at: Date.now(),
+    }).catch((error) => {
+      console.warn('CANONICAL_RECALL_TRACE_FAILED', {
+        tenantId,
+        queryId,
+        error: error instanceof Error ? error.message : String(error),
+      })
+    })
   }
 
   if (options.executionContext?.waitUntil) {

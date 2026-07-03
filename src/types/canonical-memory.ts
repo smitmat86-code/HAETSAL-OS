@@ -51,6 +51,8 @@ export interface CanonicalCaptureResult {
   projectionKinds: CanonicalProjectionKind[]
   /** R2 key of the encrypted archival body. */
   bodyR2Key: string
+  /** Chunk plaintext (in-memory only) for the post-capture embedding hook. */
+  chunkTexts: Array<{ id: string; text: string }>
   /** Provenance-tagged governance receipt for the write (Phase 1). */
   governance: {
     memoryClass: import('./canonical-governance').CanonicalMemoryClass

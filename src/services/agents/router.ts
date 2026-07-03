@@ -38,7 +38,7 @@ Request: "${input.slice(0, 300)}"
 Answer with exactly one category name.`,
         }],
       },
-      { gateway: { id: env.AI_GATEWAY_ID } },
+      { gateway: { id: env.AI_GATEWAY_ID, collectLog: false } },
     ) as AiTextGenerationOutput
 
     const response = typeof result === 'string' ? result

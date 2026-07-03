@@ -18,7 +18,7 @@ Last updated: 2026-04-18 | Session: 7.1 (Hindsight Projection Adapter)
 
 | File | Lines | Key Exports | Status |
 |------|-------|------------|--------|
-| src\agents\base-agent.ts | 148 | — | ✅ |
+| src\agents\base-agent.ts | 133 | — | ✅ |
 | src\agents\career-coach.ts | 105 | CareerCoach | ✅ |
 | src\agents\chief-of-staff.ts | 69 | ChiefOfStaff | ✅ |
 | src\agents\helpers.ts | 49 | MODEL_CONTEXT_LIMIT, FLUSH_THRESHOLD, shouldFlush | ✅ |
@@ -34,11 +34,11 @@ Last updated: 2026-04-18 | Session: 7.1 (Hindsight Projection Adapter)
 | src\cron\kek.ts | 61 | — | ✅ |
 | src\cron\morning-brief.ts | 94 | — | ✅ |
 | src\cron\obsidian-poll.ts | 41 | — | ✅ |
-| src\cron\passes\pass1-contradiction.ts | 68 | — | ✅ |
-| src\cron\passes\pass2-bridges.ts | 87 | — | ✅ |
+| src\cron\passes\pass1-contradiction.ts | 13 | — | ✅ |
+| src\cron\passes\pass2-bridges.ts | 98 | — | ✅ |
 | src\cron\passes\pass3-patterns.ts | 63 | — | ✅ |
-| src\cron\passes\pass4-gaps.ts | 55 | — | ✅ |
-| src\cron\weekly-synthesis.ts | 73 | WEEKLY_SYNTHESIS_REFLECT_QUERY, WEEKLY_SYNTHESIS_REFLECT_TAGS_MATCH, WEEKLY_SYNTHESIS_REFLECT_BUDGET | ✅ |
+| src\cron\passes\pass4-gaps.ts | 13 | — | ✅ |
+| src\cron\weekly-synthesis.ts | 20 | WEEKLY_SYNTHESIS_REFLECT_QUERY, WEEKLY_SYNTHESIS_REFLECT_TAGS_MATCH, WEEKLY_SYNTHESIS_REFLECT_BUDGET | ✅ |
 | src\middleware\audit.ts | 45 | auditMiddleware | ✅ |
 | src\middleware\auth.ts | 104 | authMiddleware | ✅ |
 | src\middleware\cf-access.ts | 58 | CfAccessJwtPayload, deriveAccessPrincipalId | ✅ |
@@ -60,47 +60,43 @@ Last updated: 2026-04-18 | Session: 7.1 (Hindsight Projection Adapter)
 | src\services\canonical-broker-trace-read.ts | 63 | — | ✅ |
 | src\services\canonical-broker-trace-view.ts | 139 | CanonicalBrokerTraceRow, BROKER_TRACE_SELECT, viewFromRow... | ✅ |
 | src\services\canonical-broker-trace.ts | 63 | — | ✅ |
-| src\services\canonical-capture-pipeline.ts | 108 | — | ✅ |
+| src\services\canonical-capture-pipeline.ts | 118 | — | ✅ |
 | src\services\canonical-compiled-refresh-trigger.ts | 54 | — | ✅ |
-| src\services\canonical-composed-graph-context.ts | 78 | — | ✅ |
-| src\services\canonical-governance-ddl.ts | 192 | CANONICAL_GOVERNANCE_DDL | ⚠️ OVER LIMIT |
-| src\services\canonical-governance-memory.ts | 164 | InMemoryCanonicalGovernanceStore, installCanonicalGovernanceTestStore | ⚠️ OVER LIMIT |
-| src\services\canonical-governance-postgres.ts | 193 | PostgresCanonicalGovernanceStore, getCanonicalGovernanceStore | ⚠️ OVER LIMIT |
-| src\services\canonical-governance-store.ts | 69 | CanonicalGovernanceStore, installCanonicalGovernanceStore, getInstalledCanonicalGovernanceStore | ✅ |
+| src\services\canonical-composed-graph-context.ts | 106 | — | ✅ |
+| src\services\canonical-governance-ddl.ts | 194 | CANONICAL_GOVERNANCE_DDL | ⚠️ OVER LIMIT |
+| src\services\canonical-governance-memory.ts | 191 | InMemoryCanonicalGovernanceStore, installCanonicalGovernanceTestStore | ⚠️ OVER LIMIT |
+| src\services\canonical-governance-postgres.ts | 215 | PostgresCanonicalGovernanceStore, getCanonicalGovernanceStore | ⚠️ OVER LIMIT |
+| src\services\canonical-governance-store.ts | 83 | CanonicalEdgeWithEntities, CanonicalGovernanceStore, installCanonicalGovernanceStore... | ✅ |
 | src\services\canonical-governance.ts | 115 | CONSOLIDATION_AGENT_IDENTITY, resolveCaptureGovernance | ✅ |
 | src\services\canonical-graph-body-facts.ts | 101 | BodyRelationCandidate, buildCanonicalGraphEntityKey, buildCanonicalGraphEdgeKey... | ✅ |
 | src\services\canonical-graph-projection-design.ts | 141 | GRAPHITI_DEPLOYMENT_POSTURE, GRAPHITI_RECONCILIATION_RULES, buildCanonicalGraphProjectionPlan... | ✅ |
 | src\services\canonical-graph-query-helpers.ts | 47 | parseCanonicalGraphEdgeKey, humanizeCanonicalGraphKey, labelCanonicalGraphEntity... | ✅ |
-| src\services\canonical-graph-query.ts | 53 | — | ✅ |
+| src\services\canonical-graph-query.ts | 150 | — | ✅ |
 | src\services\canonical-graphiti-payload.ts | 81 | GraphitiProjectionJobContext | ✅ |
 | src\services\canonical-graphiti-projection.ts | 103 | — | ✅ |
 | src\services\canonical-graphiti-reconcile.ts | 88 | — | ✅ |
-| src\services\canonical-hindsight-debug.ts | 105 | HindsightDebugInput | ✅ |
 | src\services\canonical-hindsight-projection-state.ts | 88 | HindsightProjectionJobRow | ✅ |
 | src\services\canonical-hindsight-reconcile.ts | 58 | — | ✅ |
 | src\services\canonical-hindsight-reflection-status.ts | 124 | — | ✅ |
 | src\services\canonical-hindsight-reflection.ts | 127 | CanonicalHindsightReflectionAuditAction, CanonicalHindsightReflectionRun | ✅ |
-| src\services\canonical-hindsight-status-refresh.ts | 107 | HindsightStatusRefreshRow | ✅ |
 | src\services\canonical-memory-artifacts.ts | 66 | PersistedCanonicalPayloads | ✅ |
 | src\services\canonical-memory-audit.ts | 132 | buildCanonicalCaptureAcceptedAuditBatch, buildCanonicalProjectionQueuedAuditBatch, buildCanonicalCaptureFailedAuditBatch... | ✅ |
-| src\services\canonical-memory-broker.ts | 88 | — | ✅ |
-| src\services\canonical-memory-dispatch.ts | 113 | toMemoryListItem | ✅ |
+| src\services\canonical-memory-broker.ts | 112 | — | ✅ |
+| src\services\canonical-memory-dispatch.ts | 123 | toMemoryListItem | ✅ |
 | src\services\canonical-memory-query.ts | 60 | — | ✅ |
 | src\services\canonical-memory-read-model.ts | 70 | CanonicalMemoryReadOptions, CanonicalListRow, CanonicalDocumentRow... | ✅ |
-| src\services\canonical-memory-router.ts | 120 | normalizeMemoryQueryMode, decideCanonicalMemoryRoute | ✅ |
-| src\services\canonical-memory-schema.ts | 101 | CANONICAL_PROJECTION_KINDS, resolveCanonicalProjectionKinds, normalizeCanonicalBody... | ✅ |
+| src\services\canonical-memory-router.ts | 146 | normalizeMemoryQueryMode, decideCanonicalMemoryRoute | ✅ |
+| src\services\canonical-memory-schema.ts | 94 | CANONICAL_PROJECTION_KINDS, resolveCanonicalProjectionKinds, normalizeCanonicalBody... | ✅ |
 | src\services\canonical-memory-stats.ts | 39 | — | ✅ |
-| src\services\canonical-memory-status.ts | 134 | — | ✅ |
+| src\services\canonical-memory-status.ts | 99 | — | ✅ |
 | src\services\canonical-memory-types.ts | 52 | CanonicalChunkPlan, CanonicalArtifactPlan, NormalizedCanonicalCapture... | ✅ |
-| src\services\canonical-memory.ts | 220 | — | ⚠️ OVER LIMIT |
+| src\services\canonical-memory.ts | 221 | — | ⚠️ OVER LIMIT |
 | src\services\canonical-postgres-base-ddl.ts | 121 | CANONICAL_BASE_DDL | ✅ |
-| src\services\canonical-postgres-repository.ts | 1052 | CanonicalMemoryStore, InMemoryCanonicalMemoryStore, PostgresCanonicalMemoryStore | ⚠️ OVER LIMIT |
-| src\services\canonical-postgres-schema.ts | 298 | CANONICAL_POSTGRES_SCHEMA, CanonicalProjectionKind, CanonicalProjectionStatus... | ⚠️ OVER LIMIT |
+| src\services\canonical-postgres-repository.ts | 1250 | CanonicalMemoryStore, InMemoryCanonicalMemoryStore, PostgresCanonicalMemoryStore | ⚠️ OVER LIMIT |
+| src\services\canonical-postgres-schema.ts | 316 | CANONICAL_POSTGRES_SCHEMA, CanonicalProjectionKind, CanonicalProjectionStatus... | ⚠️ OVER LIMIT |
 | src\services\canonical-postgres.ts | 34 | installCanonicalMemoryStore, installCanonicalMemoryTestStore, getCanonicalMemoryStore | ✅ |
 | src\services\canonical-projection-dispatch.ts | 51 | — | ✅ |
 | src\services\canonical-promotion.ts | 69 | PromoteClaimInput | ✅ |
-| src\services\canonical-semantic-linkback.ts | 108 | CanonicalSemanticLinkback, extractSemanticLookup | ✅ |
-| src\services\canonical-semantic-recall.ts | 155 | — | ⚠️ OVER LIMIT |
 | src\services\canonical-source-attribution.ts | 66 | buildCanonicalSourceAttribution, applyCanonicalRoute | ✅ |
 | src\services\chief-of-staff-compiled-context-bundle.ts | 127 | buildCompiledChiefOfStaffBundle | ✅ |
 | src\services\chief-of-staff-compiled-context-gaps.ts | 33 | addSkippedAssetGap, addReadErrorGap | ✅ |
@@ -161,7 +157,7 @@ Last updated: 2026-04-18 | Session: 7.1 (Hindsight Projection Adapter)
 | src\services\hindsight-client.ts | 115 | HindsightClient, createHindsightClient | ✅ |
 | src\services\hindsight-formatters.ts | 30 | buildHindsightDocumentId, buildHindsightTags, buildRetainContext | ✅ |
 | src\services\hindsight-ops-webhooks.ts | 37 | HindsightWebhookHealth | ✅ |
-| src\services\hindsight-ops.ts | 149 | HINDSIGHT_PENDING_SLOW_MS, HINDSIGHT_PENDING_STUCK_MS, HindsightQueueState... | ✅ |
+| src\services\hindsight-ops.ts | 147 | HINDSIGHT_PENDING_SLOW_MS, HINDSIGHT_PENDING_STUCK_MS, HindsightQueueState... | ✅ |
 | src\services\hindsight-transport.ts | 150 | jsonInit, getHindsightStub | ✅ |
 | src\services\hindsight.ts | 140 | — | ✅ |
 | src\services\ingestion\dedup.ts | 44 | — | ✅ |
@@ -172,6 +168,8 @@ Last updated: 2026-04-18 | Session: 7.1 (Hindsight Projection Adapter)
 | src\services\ingestion\salience.ts | 80 | scoreSalience | ✅ |
 | src\services\ingestion\write-policy.ts | 74 | WritePolicyResult | ✅ |
 | src\services\postgres-sql.ts | 95 | PostgresStatement, PostgresSql, createPostgresStatement... | ✅ |
+| src\services\retrieval-modes.ts | 150 | resolveTemporalWindow | ✅ |
+| src\services\retrieval-support.ts | 121 | CANONICAL_EMBEDDING_MODEL, citationOf, toRetrievalItem... | ✅ |
 | src\services\telnyx.ts | 35 | — | ✅ |
 | src\services\tenant.ts | 133 | — | ✅ |
 | src\services\working-session-capture-bridge.ts | 147 | WorkingSessionSummaryCaptureInput, WorkingSessionAdapter, WorkingSessionEvidenceCaptureMetadata... | ✅ |
@@ -185,23 +183,22 @@ Last updated: 2026-04-18 | Session: 7.1 (Hindsight Projection Adapter)
 | src\tools\act\search.ts | 33 | searchSchema | ✅ |
 | src\tools\act\send-message.ts | 33 | sendMessageSchema | ✅ |
 | src\tools\bootstrap.ts | 104 | registerBootstrapTools | ✅ |
-| src\tools\brain-memory-surface.ts | 32 | BRAIN_MEMORY_TOOL_NAMES, BrainMemoryToolName, BrainMemorySurfaceContext... | ✅ |
+| src\tools\brain-memory-surface.ts | 31 | BRAIN_MEMORY_TOOL_NAMES, BrainMemoryToolName, BrainMemorySurfaceContext... | ✅ |
 | src\tools\canonical-memory-schema.ts | 73 | captureSchema, searchSchema, recentSchema... | ✅ |
-| src\tools\canonical-memory.ts | 127 | registerCanonicalMemoryTools | ✅ |
-| src\tools\hindsight-debug.ts | 35 | registerHindsightDebugTool | ✅ |
+| src\tools\canonical-memory.ts | 121 | registerCanonicalMemoryTools | ✅ |
 | src\tools\memory.ts | 88 | registerMemoryTools | ✅ |
-| src\tools\recall.ts | 73 | — | ✅ |
+| src\tools\recall.ts | 61 | — | ✅ |
 | src\tools\retain.ts | 74 | — | ✅ |
 | src\types\action.ts | 105 | CapabilityClass, AuthorizationLevel, AUTH_LEVEL_ORDINAL... | ✅ |
 | src\types\bootstrap.ts | 76 | BootstrapStatus, BootstrapParams, InterviewDomain... | ✅ |
-| src\types\canonical-capture-pipeline.ts | 86 | CanonicalPipelineCaptureInput, CanonicalProjectionDispatchMessage, HindsightProjectionDispatchInput... | ✅ |
+| src\types\canonical-capture-pipeline.ts | 87 | CanonicalPipelineCaptureInput, CanonicalProjectionDispatchMessage, HindsightProjectionDispatchInput... | ✅ |
 | src\types\canonical-governance-records.ts | 109 | CanonicalEventRecord, CanonicalEntityRecord, CanonicalClaimRecord... | ✅ |
 | src\types\canonical-governance.ts | 80 | CANONICAL_MEMORY_CLASSES, CanonicalMemoryClass, CANONICAL_TRUST_STATES... | ✅ |
 | src\types\canonical-graph-projection.ts | 139 | GraphitiDeploymentPostureId, GraphProjectionEpisodeKind, GraphProjectionEntityKind... | ✅ |
-| src\types\canonical-graph-query.ts | 67 | TraceRelationshipInput, EntityTimelineInput, CanonicalProjectionProvenance... | ✅ |
+| src\types\canonical-graph-query.ts | 68 | TraceRelationshipInput, EntityTimelineInput, CanonicalProjectionProvenance... | ✅ |
 | src\types\canonical-memory-broker.ts | 106 | CanonicalBrokerBranchStatus, CanonicalBrokerOverlap, CanonicalBrokerDetailStatus... | ✅ |
-| src\types\canonical-memory-query.ts | 103 | MemoryQueryMode, MemoryQueryModePreference, CanonicalMemoryRouteDecision... | ✅ |
-| src\types\canonical-memory.ts | 64 | CanonicalProjectionKind, CanonicalArtifactMode, CanonicalArtifactRef... | ✅ |
+| src\types\canonical-memory-query.ts | 120 | MemoryQueryMode, MemoryQueryModePreference, CanonicalRetrievalCitation... | ✅ |
+| src\types\canonical-memory.ts | 66 | CanonicalProjectionKind, CanonicalArtifactMode, CanonicalArtifactRef... | ✅ |
 | src\types\chief-of-staff-context.ts | 81 | ContextBundleIntent, ContextConfidenceLevel, PrepareContextForAgentInput... | ✅ |
 | src\types\cloudflare-env.generated.d.ts | 47 | — | ✅ |
 | src\types\env.ts | 25 | Env | ✅ |
@@ -215,15 +212,15 @@ Last updated: 2026-04-18 | Session: 7.1 (Hindsight Projection Adapter)
 | src\types\tools.ts | 59 | RetainInput, RetainOutput, RecallInput... | ✅ |
 | src\workers\action\index.ts | 105 | — | ✅ |
 | src\workers\ingestion\bootstrap-handlers.ts | 91 | — | ✅ |
-| src\workers\ingestion\canonical-projection-consumer.ts | 45 | — | ✅ |
+| src\workers\ingestion\canonical-projection-consumer.ts | 28 | — | ✅ |
 | src\workers\ingestion\consumer.ts | 115 | — | ✅ |
 | src\workers\ingestion\handlers.ts | 110 | — | ✅ |
 | src\workers\ingestion\retain-consumer.ts | 21 | — | ✅ |
 | src\workers\mcpagent\do\GraphitiContainer.ts | 37 | GRAPHITI_HEALTH_ENDPOINT, GRAPHITI_READY_ENDPOINT, GraphitiContainer | ✅ |
 | src\workers\mcpagent\do\HindsightContainer.ts | 150 | HINDSIGHT_PING_ENDPOINT, HINDSIGHT_WORKER_PING_ENDPOINT, useDedicatedHindsightWorkers... | ✅ |
 | src\workers\mcpagent\do\identity.ts | 13 | MCP_STREAMABLE_HTTP_PREFIX, getMcpAgentObjectName, getMcpAgentObjectId | ✅ |
-| src\workers\mcpagent\do\inbound-message.ts | 37 | — | ✅ |
-| src\workers\mcpagent\do\McpAgent.ts | 149 | McpAgentDO | ✅ |
+| src\workers\mcpagent\do\inbound-message.ts | 38 | — | ✅ |
+| src\workers\mcpagent\do\McpAgent.ts | 146 | McpAgentDO | ✅ |
 | src\workers\mcpagent\do\register-tools.ts | 87 | registerLegacyMemoryTools, registerActTools | ✅ |
 | src\workers\mcpagent\do\session-store.ts | 57 | PersistedSessionRow, ensureSessionTable, readPersistedSession... | ✅ |
 | src\workers\mcpagent\index.ts | 109 | — | ✅ |
@@ -235,7 +232,7 @@ Last updated: 2026-04-18 | Session: 7.1 (Hindsight Projection Adapter)
 | src\workers\mcpagent\routes\canary.ts | 15 | canary, hasCanonicalHyperdriveBinding | ✅ |
 | src\workers\mcpagent\routes\ingest.ts | 133 | — | ✅ |
 | src\workers\mcpagent\routes\settings.ts | 73 | settings | ✅ |
-| src\workers\mcpagent\runtime.ts | 49 | — | ✅ |
+| src\workers\mcpagent\runtime.ts | 44 | — | ✅ |
 | src\workflows\bootstrap.ts | 110 | BootstrapWorkflow | ✅ |
 
 ### pages/src/

@@ -90,7 +90,7 @@ describe('1.4a Memory Audit Snapshot', () => {
         availablePendingCount: number
         completedCount: number
         failedCount: number
-        webhookHealth: { status: string; enabled: number }
+        webhookHealth: { status: string }
       }
       recent: Array<{ operationId: string; queueState: string }>
     }
@@ -100,10 +100,7 @@ describe('1.4a Memory Audit Snapshot', () => {
     expect(body.summary.availablePendingCount).toBe(1)
     expect(body.summary.completedCount).toBe(1)
     expect(body.summary.failedCount).toBe(0)
-    expect(['missing', 'unknown']).toContain(body.summary.webhookHealth.status)
-    if (body.summary.webhookHealth.status === 'missing') {
-      expect(body.summary.webhookHealth.enabled).toBe(0)
-    }
+    expect(body.summary.webhookHealth.status).toBe('retired')
     expect(body.recent.some((row) => row.operationId === 'op-audit-pending' && row.queueState === 'available')).toBe(true)
     expect(body.recent.some((row) => row.operationId === 'op-audit-completed' && row.queueState === 'completed')).toBe(true)
   })

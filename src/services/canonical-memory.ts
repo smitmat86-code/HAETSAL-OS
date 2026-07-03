@@ -191,6 +191,7 @@ export async function captureCanonicalMemory(
     projectionJobIds: projectionJobs.map(job => job.id),
     projectionKinds: capture.projectionKinds,
     bodyR2Key: payloads.documentR2Key,
+    chunkTexts: chunks.map(chunk => ({ id: chunk.id, text: chunk.text })),
     governance: {
       memoryClass: governance.memoryClass,
       trustState: governance.trustState,

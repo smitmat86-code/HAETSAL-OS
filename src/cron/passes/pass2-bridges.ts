@@ -1,13 +1,12 @@
 // src/cron/passes/pass2-bridges.ts
-// Bridge edge discovery seeds from Hindsight graph structure, then retains cross-domain insights.
+// Bridge edge discovery — Phase 2: seeds from canonical governance store instead of Hindsight graph.
+// Uses getCanonicalGovernanceStore(env).listEdgesWithEntities() to build adjacency map.
 
 import type { Env } from '../../types/env'
 import type { IngestionArtifact } from '../../types/ingestion'
 import { retainContent } from '../../services/ingestion/retain'
-import { fetchGraph } from '../../services/hindsight'
+import { getCanonicalGovernanceStore } from '../../services/canonical-governance-postgres'
 
-interface GraphNode { id: string; tags?: string[] }
-interface GraphEdge { source: string; target: string }
 interface BridgeResult {
   memory_id_a: string
   memory_id_b: string
@@ -16,35 +15,47 @@ interface BridgeResult {
 }
 
 export async function runPass2(
-  bankId: string, tenantId: string, kek: CryptoKey, env: Env,
+  _bankId: string, tenantId: string, kek: CryptoKey, env: Env,
 ): Promise<number> {
-  const graph = await fetchGraph<GraphNode, GraphEdge>(bankId, 200, env)
-  if (!graph?.nodes?.length || !graph.edges?.length) return 0
+  const edges = await getCanonicalGovernanceStore(env)
+    .listEdgesWithEntities(tenantId, 200)
+    .catch(() => [])
 
-  const { nodes, edges } = graph
+  if (!edges.length) return 0
 
+  // Build adjacency map: entity_id -> Set<entity_id>
   const adjacency = new Map<string, Set<string>>()
   for (const edge of edges) {
-    if (!adjacency.has(edge.source)) adjacency.set(edge.source, new Set())
-    if (!adjacency.has(edge.target)) adjacency.set(edge.target, new Set())
-    adjacency.get(edge.source)!.add(edge.target)
-    adjacency.get(edge.target)!.add(edge.source)
+    const src = edge.src_entity_id
+    const dst = edge.dst_entity_id
+    if (!adjacency.has(src)) adjacency.set(src, new Set())
+    if (!adjacency.has(dst)) adjacency.set(dst, new Set())
+    adjacency.get(src)!.add(dst)
+    adjacency.get(dst)!.add(src)
   }
 
-  const domainOf = (node: GraphNode) => node.tags?.find(tag => tag.startsWith('domain:'))?.slice(7) ?? 'general'
+  // Collect unique entity ids with their kind as "domain"
+  const entityKindMap = new Map<string, string>()
+  for (const edge of edges) {
+    entityKindMap.set(edge.src_entity_id, edge.src_kind)
+    entityKindMap.set(edge.dst_entity_id, edge.dst_kind)
+  }
+  const entityIds = [...entityKindMap.keys()]
+
   const candidates: Array<{ a: string; b: string; shared: number; domains: [string, string] }> = []
+  for (let i = 0; i < entityIds.length; i++) {
+    for (let j = i + 1; j < entityIds.length; j++) {
+      const a = entityIds[i]
+      const b = entityIds[j]
+      const domainA = entityKindMap.get(a) ?? 'general'
+      const domainB = entityKindMap.get(b) ?? 'general'
+      if (domainA === domainB) continue
+      if (adjacency.get(a)?.has(b)) continue
 
-  for (let i = 0; i < nodes.length; i++) {
-    for (let j = i + 1; j < nodes.length; j++) {
-      const a = nodes[i]
-      const b = nodes[j]
-      if (domainOf(a) === domainOf(b)) continue
-      if (adjacency.get(a.id)?.has(b.id)) continue
-
-      const neighborsA = adjacency.get(a.id) ?? new Set()
-      const neighborsB = adjacency.get(b.id) ?? new Set()
-      const shared = [...neighborsA].filter(neighbor => neighborsB.has(neighbor)).length
-      if (shared > 0) candidates.push({ a: a.id, b: b.id, shared, domains: [domainOf(a), domainOf(b)] })
+      const neighborsA = adjacency.get(a) ?? new Set()
+      const neighborsB = adjacency.get(b) ?? new Set()
+      const shared = [...neighborsA].filter(n => neighborsB.has(n)).length
+      if (shared > 0) candidates.push({ a, b, shared, domains: [domainA, domainB] })
     }
   }
 
@@ -53,14 +64,14 @@ export async function runPass2(
   if (!top.length) return 0
 
   const prompt = top
-    .map(candidate => `Pair: ${candidate.a} (${candidate.domains[0]}) <-> ${candidate.b} (${candidate.domains[1]}) - ${candidate.shared} shared neighbors`)
+    .map(c => `Pair: ${c.a} (${c.domains[0]}) <-> ${c.b} (${c.domains[1]}) - ${c.shared} shared neighbors`)
     .join('\n')
 
   const result = await env.AI.run(
     '@cf/meta/llama-3.3-70b-instruct-fp8-fast',
     { messages: [{ role: 'user', content:
-      `These memory pairs share indirect connections but no direct edge. Identify which reveal genuine cross-domain insight. Return JSON: {"bridges":[{"memory_id_a":"...","memory_id_b":"...","insight":"one sentence","domains":["...",".."]}]}. Max 5.\n\n${prompt}` }] },
-    { gateway: { id: env.AI_GATEWAY_ID } },
+      `These entity pairs share indirect connections but no direct edge. Identify which reveal genuine cross-domain insight. Return JSON: {"bridges":[{"memory_id_a":"...","memory_id_b":"...","insight":"one sentence","domains":["...",".."]}]}. Max 5.\n\n${prompt}` }] },
+    { gateway: { id: env.AI_GATEWAY_ID, collectLog: false } },
   ) as { response?: string }
 
   let bridges: BridgeResult[] = []

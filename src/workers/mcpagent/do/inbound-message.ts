@@ -17,9 +17,10 @@ export async function processInboundMessage(
       },
       { role: 'user' as const, content: text },
     ]
-    const response = await (env.AI as { run: (model: string, input: unknown) => Promise<unknown> }).run(
+    const response = await (env.AI as { run: (model: string, input: unknown, options?: unknown) => Promise<unknown> }).run(
       '@cf/meta/llama-3.1-8b-instruct',
       { messages, max_tokens: 300 },
+      { gateway: { id: env.AI_GATEWAY_ID, collectLog: false } },
     ) as { response?: string }
 
     const reply = response?.response ?? "I'm having trouble thinking right now. Try again in a moment."

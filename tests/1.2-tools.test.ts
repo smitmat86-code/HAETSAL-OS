@@ -5,7 +5,6 @@
 
 import { beforeEach, describe, it, expect, vi } from 'vitest'
 import { env } from 'cloudflare:test'
-import { getCanonicalMemoryStore } from '../src/services/canonical-postgres'
 import { retainViaService } from '../src/tools/retain'
 import { recallStub } from '../src/tools/recall'
 import { createHindsightTestEnv } from './support/hindsight-test-env'
@@ -108,7 +107,7 @@ describe('1.2 Tools - brain_v1_retain', () => {
     expect(result.salience_tier).toBeGreaterThan(0)
   })
 
-  it('lands interactive writes canonically with a governance receipt and no hindsight handoff', async () => {
+  it('lands interactive writes canonically with a governance receipt and no engine projection', async () => {
     const tenantId = `test-tenant-eager-${crypto.randomUUID()}`
     await ensureTenantWithKek(tenantId)
     const tmk = await crypto.subtle.generateKey(
@@ -133,15 +132,11 @@ describe('1.2 Tools - brain_v1_retain', () => {
       { governance: { authorKind: 'user', legacyMemoryType: 'episodic' } },
     )
 
-    const hindsightRow = await getCanonicalMemoryStore(testEnv)
-      .getLatestProjectionResultForOperation(tenantId, result.canonical_operation_id, 'hindsight')
-    const message = sendSpy.mock.calls[0]?.[0] as { payload: { projectionKinds: string[] } }
-
-    expect(sendSpy).toHaveBeenCalled()
+    // Phase 2: both engine projections retired — no queue dispatch, dispatch_status is 'skipped'
+    expect(sendSpy).not.toHaveBeenCalled()
     expect(result.status).toBe('queued')
     expect(result.canonical_operation_id).toBeTruthy()
-    expect(message.payload.projectionKinds).toEqual(['graphiti'])
-    expect(hindsightRow).toBeNull()
+    expect(result.dispatch_status).toBe('skipped')
     expect(result.governance?.memoryClass).toBe('episode')
     expect(result.governance?.trustState).toBe('user_confirmed')
   })

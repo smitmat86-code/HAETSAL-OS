@@ -3,8 +3,23 @@ import type { CanonicalProjectionProvenance } from './canonical-graph-query'
 import type { BrainMemoryRolloutAttribution } from './external-client-memory'
 import type { GoogleSourceReadAttribution } from './google-source-read'
 
-export type MemoryQueryMode = 'raw' | 'semantic' | 'graph' | 'composed'
-export type MemoryQueryModePreference = MemoryQueryMode | 'lexical'
+/** The seven retrieval broker modes (HAETSAL_MISSION.md Phase 2). */
+export type MemoryQueryMode = 'raw' | 'lexical' | 'semantic' | 'graph' | 'temporal' | 'compiled' | 'composed'
+export type MemoryQueryModePreference = MemoryQueryMode
+
+/** Evidence contract attached to every retrieval result item (Phase 2). */
+export interface CanonicalRetrievalCitation {
+  captureId: string | null
+  documentId: string | null
+  chunkId: string | null
+  sourceSystem: string | null
+  sourceRef: string | null
+  capturedAt: number | null
+  trustState: string | null
+  usePolicy: string | null
+  memoryClass: string | null
+  authorKind: string | null
+}
 
 export interface CanonicalMemoryRouteDecision { mode: MemoryQueryMode; reason: string; explicit: boolean; dispatchQuery: string }
 export interface CanonicalMemoryRouteMetadata {
@@ -30,6 +45,8 @@ export interface CanonicalMemoryListItem {
   score?: number | null; mode?: MemoryQueryMode; brainMemory?: BrainMemoryRolloutAttribution | null
   googleSource?: GoogleSourceReadAttribution | null
   recallText?: string | null; attribution?: CanonicalSourceAttribution | null; provenance?: CanonicalProjectionProvenance | null
+  citation?: CanonicalRetrievalCitation | null
+  trustState?: string | null
   semanticStatus?: {
     projectionKind: 'hindsight'
     projectionStatus: 'accepted' | 'queued' | 'completed' | 'failed' | 'unknown'

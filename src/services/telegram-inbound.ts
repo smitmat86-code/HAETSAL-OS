@@ -43,6 +43,18 @@ export async function resolveTelegramTenant(chatId: number, env: Env): Promise<s
   return row?.tenant_id ?? null
 }
 
+/** Infer an image mime from a Telegram file_path extension; the Bot File API
+ *  serves photos with content-type: application/octet-stream, which the
+ *  vision model rejects — trust the extension instead. */
+function mediaTypeFromPath(path: string): string {
+  const ext = path.split('.').pop()?.toLowerCase() ?? ''
+  if (ext === 'png') return 'image/png'
+  if (ext === 'webp') return 'image/webp'
+  if (ext === 'gif') return 'image/gif'
+  if (ext === 'heic') return 'image/heic'
+  return 'image/jpeg'
+}
+
 /** Given a Telegram file_id, fetch the raw bytes via the Bot File API. */
 async function fetchTelegramFile(fileId: string, env: Env): Promise<{ bytes: ArrayBuffer; mediaType: string } | null> {
   const meta = await fetch(`https://api.telegram.org/bot${env.TELEGRAM_BOT_TOKEN}/getFile?file_id=${encodeURIComponent(fileId)}`)
@@ -52,7 +64,9 @@ async function fetchTelegramFile(fileId: string, env: Env): Promise<{ bytes: Arr
   if (!path) return null
   const file = await fetch(`https://api.telegram.org/file/bot${env.TELEGRAM_BOT_TOKEN}/${path}`)
   if (!file.ok) return null
-  return { bytes: await file.arrayBuffer(), mediaType: file.headers.get('content-type') ?? 'image/jpeg' }
+  const headerType = file.headers.get('content-type')
+  const mediaType = headerType?.startsWith('image/') ? headerType : mediaTypeFromPath(path)
+  return { bytes: await file.arrayBuffer(), mediaType }
 }
 
 export async function processTelegramInbound(

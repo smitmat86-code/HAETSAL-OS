@@ -16,6 +16,7 @@ import type { Env } from '../../types/env'
 import { getMcpAgentObjectName } from './do/identity'
 import { registerPublicWebhooks } from './public-webhooks'
 import { registerPhoneQuery, registerTelegramQuery } from './self-registration'
+import { renderMemoryInventory } from './debug-inventory'
 import { handleBrainQueue, handleBrainScheduled } from './runtime'
 
 type Variables = {
@@ -63,6 +64,9 @@ app.route('/api/actions', actions)
 app.route('/api/actions', approval)
 app.route('/api/settings', settings)
 app.route('/api/audit', audit)
+
+// Read-only diagnostic view over the caller's own canonical memory (no bodies).
+app.get('/debug/memory-inventory', renderMemoryInventory)
 
 // Root status page — doubles as a browser-clickable session/KEK refresh.
 // Opening this URL after CF Access login initializes the tenant session in

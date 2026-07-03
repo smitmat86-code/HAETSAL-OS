@@ -65,7 +65,7 @@ export async function processTelegramInbound(
   if (!msg || typeof chatId !== 'number' || msg.from?.is_bot) return { handled: false, kind: 'ignored' }
   const tenantId = await resolveTelegramTenant(chatId, env)
   if (!tenantId) {
-    console.warn('TELEGRAM_UNKNOWN_CHAT', { suffix: String(chatId).slice(-4) })
+    console.warn('TELEGRAM_UNKNOWN_CHAT', { chatId })
     return { handled: false, kind: 'ignored' }
   }
   const occurredAt = typeof msg.date === 'number' ? msg.date * 1000 : Date.now()

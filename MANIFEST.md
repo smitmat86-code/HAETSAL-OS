@@ -12,7 +12,7 @@ Last updated: 2026-04-18 | Session: 7.1 (Hindsight Projection Adapter)
 
 <!-- AUTO-GENERATED MODULE REGISTRY - DO NOT EDIT -->
 
-*Auto-generated: 2026-04-23*
+*Auto-generated: 2026-07-03*
 
 ### src/
 
@@ -63,7 +63,7 @@ Last updated: 2026-04-18 | Session: 7.1 (Hindsight Projection Adapter)
 | src\services\canonical-broker-trace-view.ts | 139 | CanonicalBrokerTraceRow, BROKER_TRACE_SELECT, viewFromRow... | ✅ |
 | src\services\canonical-broker-trace.ts | 63 | — | ✅ |
 | src\services\canonical-capture-compat.ts | 45 | — | ✅ |
-| src\services\canonical-capture-pipeline.ts | 114 | — | ✅ |
+| src\services\canonical-capture-pipeline.ts | 117 | — | ✅ |
 | src\services\canonical-compiled-refresh-trigger.ts | 54 | — | ✅ |
 | src\services\canonical-composed-graph-context.ts | 78 | — | ✅ |
 | src\services\canonical-graph-body-facts.ts | 101 | BodyRelationCandidate, buildCanonicalGraphEntityKey, buildCanonicalGraphEdgeKey... | ✅ |
@@ -88,14 +88,14 @@ Last updated: 2026-04-18 | Session: 7.1 (Hindsight Projection Adapter)
 | src\services\canonical-memory-query.ts | 60 | — | ✅ |
 | src\services\canonical-memory-read-model.ts | 70 | CanonicalMemoryReadOptions, CanonicalListRow, CanonicalDocumentRow... | ✅ |
 | src\services\canonical-memory-router.ts | 120 | normalizeMemoryQueryMode, decideCanonicalMemoryRoute | ✅ |
-| src\services\canonical-memory-schema.ts | 75 | CANONICAL_PROJECTION_KINDS, normalizeCanonicalBody, assertCanonicalIdentity... | ✅ |
+| src\services\canonical-memory-schema.ts | 94 | CANONICAL_PROJECTION_KINDS, resolveCanonicalProjectionKinds, normalizeCanonicalBody... | ✅ |
 | src\services\canonical-memory-stats.ts | 39 | — | ✅ |
 | src\services\canonical-memory-status.ts | 134 | — | ✅ |
 | src\services\canonical-memory-types.ts | 52 | CanonicalChunkPlan, CanonicalArtifactPlan, NormalizedCanonicalCapture... | ✅ |
-| src\services\canonical-memory.ts | 160 | — | ⚠️ OVER LIMIT |
-| src\services\canonical-postgres-repository.ts | 1130 | CanonicalMemoryStore, InMemoryCanonicalMemoryStore, NeonCanonicalMemoryStore | ⚠️ OVER LIMIT |
+| src\services\canonical-memory.ts | 161 | — | ⚠️ OVER LIMIT |
+| src\services\canonical-postgres-repository.ts | 1129 | CanonicalMemoryStore, InMemoryCanonicalMemoryStore, PostgresCanonicalMemoryStore | ⚠️ OVER LIMIT |
 | src\services\canonical-postgres-schema.ts | 268 | CANONICAL_POSTGRES_SCHEMA, CanonicalProjectionKind, CanonicalProjectionStatus... | ⚠️ OVER LIMIT |
-| src\services\canonical-postgres.ts | 42 | installCanonicalMemoryStore, installCanonicalMemoryTestStore, getCanonicalMemoryStore | ✅ |
+| src\services\canonical-postgres.ts | 34 | installCanonicalMemoryStore, installCanonicalMemoryTestStore, getCanonicalMemoryStore | ✅ |
 | src\services\canonical-projection-dispatch.ts | 51 | — | ✅ |
 | src\services\canonical-semantic-linkback.ts | 108 | CanonicalSemanticLinkback, extractSemanticLookup | ✅ |
 | src\services\canonical-semantic-recall.ts | 152 | — | ⚠️ OVER LIMIT |
@@ -120,13 +120,13 @@ Last updated: 2026-04-18 | Session: 7.1 (Hindsight Projection Adapter)
 | src\services\compiled-synthesis-persist-outputs.ts | 82 | — | ✅ |
 | src\services\compiled-synthesis-persist-supporting.ts | 111 | PersistSupportingRowsResult | ✅ |
 | src\services\compiled-synthesis-persist.ts | 84 | — | ✅ |
-| src\services\compiled-synthesis-postgres.ts | 46 | installCompiledSynthesisStore, installCompiledSynthesisTestStore, getCompiledSynthesisStore | ✅ |
+| src\services\compiled-synthesis-postgres.ts | 38 | installCompiledSynthesisStore, installCompiledSynthesisTestStore, getCompiledSynthesisStore | ✅ |
 | src\services\compiled-synthesis-read-models.ts | 128 | buildCompiledSynthesisView | ✅ |
 | src\services\compiled-synthesis-read.ts | 90 | — | ✅ |
 | src\services\compiled-synthesis-records.ts | 93 | CompiledDocumentRecord, CompiledDocumentSourceRecord, CompiledDocumentArtifactRecord... | ✅ |
 | src\services\compiled-synthesis-render-markdown.ts | 71 | renderProjectDossierMarkdown, renderProjectContextPackMarkdown, renderWhatChangedMarkdown | ✅ |
 | src\services\compiled-synthesis-render.ts | 95 | renderProjectCompiledArtifacts | ✅ |
-| src\services\compiled-synthesis-repository.ts | 1237 | CompiledSynthesisStore, InMemoryCompiledSynthesisStore, NeonCompiledSynthesisStore | ⚠️ OVER LIMIT |
+| src\services\compiled-synthesis-repository.ts | 1231 | CompiledSynthesisStore, InMemoryCompiledSynthesisStore, PostgresCompiledSynthesisStore | ⚠️ OVER LIMIT |
 | src\services\compiled-synthesis-schema.ts | 22 | COMPILED_SYNTHESIS_SCHEMA, CompiledSynthesisBundle | ✅ |
 | src\services\compiled-synthesis-section-types.ts | 75 | CompiledFactSectionItem, CompiledRelationshipSectionItem, CompiledRecentChangeItem... | ✅ |
 | src\services\compiled-synthesis-service-types.ts | 127 | PersistCompiledEntityInput, PersistCompiledFactInput, PersistCompiledRelationshipInput... | ✅ |
@@ -171,8 +171,11 @@ Last updated: 2026-04-18 | Session: 7.1 (Hindsight Projection Adapter)
 | src\services\ingestion\retain.ts | 97 | — | ✅ |
 | src\services\ingestion\salience.ts | 80 | scoreSalience | ✅ |
 | src\services\ingestion\write-policy.ts | 74 | WritePolicyResult | ✅ |
+| src\services\postgres-sql.ts | 95 | PostgresStatement, PostgresSql, createPostgresStatement... | ✅ |
 | src\services\telnyx.ts | 35 | — | ✅ |
 | src\services\tenant.ts | 133 | — | ✅ |
+| src\services\working-session-capture-bridge.ts | 147 | WorkingSessionSummaryCaptureInput, WorkingSessionAdapter, WorkingSessionEvidenceCaptureMetadata... | ✅ |
+| src\services\working-session.ts | 145 | WORKING_SESSION_BOUNDARY, WorkingSessionRole, WorkingSessionTranscriptEntry... | ✅ |
 | src\tools\act\browse.ts | 31 | browseSchema | ✅ |
 | src\tools\act\create-event.ts | 34 | createEventSchema | ✅ |
 | src\tools\act\draft.ts | 33 | draftSchema | ✅ |
@@ -191,14 +194,15 @@ Last updated: 2026-04-18 | Session: 7.1 (Hindsight Projection Adapter)
 | src\tools\retain.ts | 73 | — | ✅ |
 | src\types\action.ts | 105 | CapabilityClass, AuthorizationLevel, AUTH_LEVEL_ORDINAL... | ✅ |
 | src\types\bootstrap.ts | 76 | BootstrapStatus, BootstrapParams, InterviewDomain... | ✅ |
-| src\types\canonical-capture-pipeline.ts | 92 | CanonicalCompatibilityMode, CanonicalPipelineCaptureInput, CanonicalProjectionDispatchMessage... | ✅ |
+| src\types\canonical-capture-pipeline.ts | 93 | CanonicalCompatibilityMode, CanonicalPipelineCaptureInput, CanonicalProjectionDispatchMessage... | ✅ |
 | src\types\canonical-graph-projection.ts | 139 | GraphitiDeploymentPostureId, GraphProjectionEpisodeKind, GraphProjectionEntityKind... | ✅ |
 | src\types\canonical-graph-query.ts | 67 | TraceRelationshipInput, EntityTimelineInput, CanonicalProjectionProvenance... | ✅ |
 | src\types\canonical-memory-broker.ts | 106 | CanonicalBrokerBranchStatus, CanonicalBrokerOverlap, CanonicalBrokerDetailStatus... | ✅ |
 | src\types\canonical-memory-query.ts | 103 | MemoryQueryMode, MemoryQueryModePreference, CanonicalMemoryRouteDecision... | ✅ |
-| src\types\canonical-memory.ts | 35 | CanonicalProjectionKind, CanonicalArtifactMode, CanonicalArtifactRef... | ✅ |
+| src\types\canonical-memory.ts | 37 | CanonicalProjectionKind, CanonicalArtifactMode, CanonicalArtifactRef... | ✅ |
 | src\types\chief-of-staff-context.ts | 81 | ContextBundleIntent, ContextConfidenceLevel, PrepareContextForAgentInput... | ✅ |
-| src\types\env.ts | 68 | Env | ✅ |
+| src\types\cloudflare-env.generated.d.ts | 47 | — | ✅ |
+| src\types\env.ts | 25 | Env | ✅ |
 | src\types\external-brain.ts | 89 | BrainSurfaceId, BrainSurfaceStatus, BrainRiskLevel... | ✅ |
 | src\types\external-client-memory.ts | 73 | ExternalClientCaptureMode, BrainMemorySurfaceProfile, ExternalClientCaptureInput... | ✅ |
 | src\types\google-source-read.ts | 29 | GoogleSourceKind, GoogleSourceRef, GoogleSourceReadAttribution... | ✅ |
@@ -219,13 +223,14 @@ Last updated: 2026-04-18 | Session: 7.1 (Hindsight Projection Adapter)
 | src\workers\mcpagent\do\inbound-message.ts | 37 | — | ✅ |
 | src\workers\mcpagent\do\McpAgent.ts | 149 | McpAgentDO | ✅ |
 | src\workers\mcpagent\do\register-tools.ts | 87 | registerLegacyMemoryTools, registerActTools | ✅ |
-| src\workers\mcpagent\do\session-store.ts | 55 | PersistedSessionRow, ensureSessionTable, readPersistedSession... | ✅ |
-| src\workers\mcpagent\index.ts | 107 | — | ✅ |
+| src\workers\mcpagent\do\session-store.ts | 57 | PersistedSessionRow, ensureSessionTable, readPersistedSession... | ✅ |
+| src\workers\mcpagent\index.ts | 109 | — | ✅ |
 | src\workers\mcpagent\public-webhooks.ts | 72 | registerPublicWebhooks | ✅ |
 | src\workers\mcpagent\routes\actions.ts | 80 | actions | ✅ |
 | src\workers\mcpagent\routes\approval.ts | 73 | approval | ✅ |
 | src\workers\mcpagent\routes\audit.ts | 59 | audit | ✅ |
 | src\workers\mcpagent\routes\auth.ts | 45 | — | ✅ |
+| src\workers\mcpagent\routes\canary.ts | 15 | canary, hasCanonicalHyperdriveBinding | ✅ |
 | src\workers\mcpagent\routes\ingest.ts | 133 | — | ✅ |
 | src\workers\mcpagent\routes\settings.ts | 73 | settings | ✅ |
 | src\workers\mcpagent\runtime.ts | 49 | — | ✅ |

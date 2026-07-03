@@ -5,6 +5,29 @@
 
 ---
 
+## Mission Phase 0 - 2026-07-02
+
+**Spec:** HAETSAL_MISSION.md Phase 0 (Mission Bootstrap & Baseline Reset)
+**Built:**
+- `docs/implementation-plans/mission-phase-0-inventory.md` - refreshed Hindsight/Graphiti reference inventory (75 files, ~815 refs classified by severance phase), wrangler binding dispositions, action-layer stub baseline, and test-suite dispositions; supersedes the stale inventory sections of the 2026-06-01 baseline report
+- `docs/lessons/phase-0-baseline-reset.md` - mission lessons directory seeded per HAETSAL_MISSION.md §11
+- Removed stale duplicate `specs/active/10.1-active-tree-reconciliation-and-test-hygiene.md` (completed copy with As-Built already in `specs/completed/`)
+- `MANIFEST.md` regenerated via checkout
+**Decisions:**
+- Mission runs on branch `haetsal-mission` (rollback tag `pre-haetsal-mission` = `a76c164` on master). One commit per phase gate.
+- `.omx/context/phase-11-6-*` session constraints ("do not adopt Sessions", "do not remove Hindsight") are superseded by HAETSAL_MISSION.md §5 for this run.
+**Verification:**
+- Branch/tag verified; `pre-haetsal-mission` tag exists on master
+- CF Access: `Haetsal` app (Allow Matt + haetsal-brain-shell-smoke service token) and `Webhook: Sendblue` bypass app (`05fd91af-e8f5-48f8-8a0b-43a419ff4f13`) both present, no drift
+- `wrangler secret list --name the-brain` confirms all four SENDBLUE_* secrets
+- vitest excludes for `gbrain/`, `OB1/`, `Second-Brain/`, `.codegraph/` already in place; package.json/package-lock reconciled (root deps match)
+- `npm run checkout` passed (postflight + full suite + manifest regen)
+**Hindsight Pin:** unchanged (removal begins Phase 1 write-path severance)
+**Blockers:** Google OAuth not provisioned (GOOGLE_CLIENT_ID/SECRET absent) - by design; Phase 5 Gmail clauses stop at S5 with a lessons file for Matt
+**Next:** Phase 1 - canonical governed write path (hard cutover): canonical Postgres schemas via HYPERDRIVE_CANONICAL, provenance envelope, epistemic classes/trust states/use policy, sever Hindsight write path
+
+---
+
 ## Session 11.4 - 2026-04-22
 
 **Spec:** Connector-Driven Compilation Triggers

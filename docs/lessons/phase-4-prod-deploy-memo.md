@@ -33,3 +33,14 @@ returns 404. Unknown senders are dropped without reply.
 ## Pre-deploy checks
 - Full suite 66 files / 387 passed / 1 skipped; postflight clean (checkout).
 - Dry-run build validated in Phase 3 config (no container surfaces).
+
+## Hotfix addendum (same day)
+First deploy (version 53f2fc72) failed the e2e smoke with Workers AI error
+5028 — the chosen models were removed from the catalog 2026-05-30. Hotfix
+commit 124e64a standardizes all chat/vision calls on
+`@cf/google/gemma-4-26b-a4b-it` via `src/services/workers-ai-chat.ts` and
+redeployed as version fe048559. Post-hotfix e2e smoke: text and photo flows
+both return `processed`; only expected delivery failures to the fake test
+number appear in logs (metadata only). Rollback target for the Phase 4 line
+remains the Phase 3 build `be33541d` (the intermediate 53f2fc72 has dead
+model references — do not roll back to it).

@@ -35,6 +35,28 @@ Date: 2026-07-03
    throws on rejection — callers treat outside-window rejections as skips
    (Phase 7 automations will log `skipped_outside_reply_window`, never retry).
 
-6. **Vision model:** `@cf/meta/llama-3.2-11b-vision-instruct` via the gateway,
-   `image: [...bytes]` + prompt input shape (CF-docs check at the gate).
-   Photo replies echo the extracted description so Matt sees what was stored.
+6. **Vision model:** `@cf/google/gemma-4-26b-a4b-it` via the gateway, image as
+   a data-URL `image_url` content part in an OpenAI-shaped messages array
+   (CF-docs schema check at the gate). Photo replies echo the extracted
+   description so Matt sees what was stored.
+
+7. **Workers AI models get REMOVED, not just deprecated — smoke every model
+   at every gate.** The post-deploy e2e smoke failed with error 5028: both
+   Phase 4 models (`llama-3.1-8b-instruct`, `llama-3.2-11b-vision-instruct`)
+   were purged from the catalog on 2026-05-30, along with six prod call sites
+   that had been silently dead for a month (Telnyx SMS replies, Telegram,
+   agent router, write-policy classifier). Earlier phase smokes missed it
+   because retrieval uses bge embeddings, which survived the purge. Fixes:
+   (a) one shared helper `src/services/workers-ai-chat.ts` owns the model
+   choice (`@cf/google/gemma-4-26b-a4b-it` — CF-recommended replacement,
+   text+vision, $0.10/M in / $0.30/M out) and the G4 gateway/collectLog
+   discipline, so the next deprecation is a one-line change; (b) its
+   `readChatText` parses both OpenAI `choices[]` and legacy `{response}`
+   shapes and strips think-tags; (c) the e2e smoke drives the real deployed
+   webhook with a registered fake number (+15005550006 → service-token
+   tenant), which is what caught this. Keep that smoke in every
+   messaging-phase gate.
+
+8. **Bonus Law-2/G4 wins from the hotfix:** the Telegram path now goes
+   through the gateway with `collectLog: false` (it never had either), and
+   ingest.ts no longer logs inbound SMS plaintext (`SMS_FLOW: step1`).

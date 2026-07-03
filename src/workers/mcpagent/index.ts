@@ -65,6 +65,27 @@ app.route('/api/settings', settings)
 app.route('/api/audit', audit)
 app.route('/api/mission', mission)
 
+// Root status page — doubles as a browser-clickable session/KEK refresh.
+// Opening this URL after CF Access login initializes the tenant session in
+// the DO, which provisions/renews the 24h Cron KEK (needed by the morning
+// brief, consolidation, and any cron that reads tenant-encrypted artifacts).
+app.get('/', async (c) => {
+  const tenantId = c.get('tenantId')
+  const jwtSub = c.get('jwtSub')
+  const namespace = c.env.MCPAGENT as unknown as DurableObjectNamespace<McpAgentDO>
+  const stub = await getAgentByName(namespace, getMcpAgentObjectName(tenantId), {
+    props: { tenantId, jwtSub },
+  })
+  // @ts-expect-error — DO RPC method
+  await stub.initTenant(jwtSub, tenantId)
+  return c.html(`<!doctype html><html><head><title>HAETSAL</title></head>
+<body style="font-family:system-ui;max-width:36rem;margin:4rem auto;line-height:1.6">
+<h1>HAETSAL brain is running</h1>
+<p>Session refreshed for tenant <code>${tenantId.slice(0, 8)}&hellip;</code> —
+the cron key is now valid for 24 hours. You can close this tab.</p>
+</body></html>`)
+})
+
 // MCP Streamable HTTP — delegate to DO
 app.all('/mcp', async (c) => {
   const tenantId = c.get('tenantId')

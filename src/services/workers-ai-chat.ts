@@ -39,7 +39,22 @@ export async function runGatewayChat(
     { messages, max_tokens: maxTokens },
     { gateway: { id: env.AI_GATEWAY_ID, collectLog: false } },
   )
-  return readChatText(result)
+  const text = readChatText(result)
+  if (text === null) {
+    // Diagnostic: when a chat call comes back empty, log only shape/lengths so
+    // we can tell think-only vs truly-empty vs unexpected schema. Never plaintext.
+    const r = (result ?? {}) as { response?: unknown; choices?: unknown[] }
+    const rawContent = (r.choices as Array<{ message?: { content?: unknown } }> | undefined)?.[0]?.message?.content
+    const rawResponse = r.response
+    console.warn('GATEWAY_CHAT_EMPTY', {
+      hasChoices: Array.isArray(r.choices),
+      choicesLen: Array.isArray(r.choices) ? r.choices.length : 0,
+      rawContentLen: typeof rawContent === 'string' ? rawContent.length : -1,
+      rawResponseLen: typeof rawResponse === 'string' ? rawResponse.length : -1,
+      thinkOnly: typeof rawContent === 'string' && /<think>[\s\S]*?<\/think>/.test(rawContent),
+    })
+  }
+  return text
 }
 
 function toBase64(bytes: ArrayBuffer): string {

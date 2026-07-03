@@ -4,6 +4,7 @@
 //   ?telegram_chat_id=12345      -> telegram_chats (+ KV for cron backwards-compat)
 
 import type { Env } from '../../types/env'
+import { ensureTelegramSchema } from '../../services/telegram-inbound'
 
 export async function registerPhoneQuery(
   env: Env, tenantId: string, phone: string,
@@ -26,6 +27,7 @@ export async function registerTelegramQuery(
   if (!Number.isInteger(chatId) || chatId === 0) {
     return '<p>telegram_chat_id must be an integer, e.g. ?telegram_chat_id=123456789.</p>'
   }
+  await ensureTelegramSchema(env)
   await env.D1_US.prepare(
     `INSERT INTO telegram_chats (id, tenant_id, chat_id, label, created_at)
      SELECT ?, ?, ?, 'primary', ?

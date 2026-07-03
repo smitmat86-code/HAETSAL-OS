@@ -20,7 +20,23 @@ export interface TelegramMessage {
 }
 export interface TelegramUpdate { message?: TelegramMessage }
 
+let schemaEnsured = false
+export async function ensureTelegramSchema(env: Env): Promise<void> {
+  if (schemaEnsured) return
+  await env.D1_US.batch([
+    env.D1_US.prepare(
+      `CREATE TABLE IF NOT EXISTS telegram_chats (
+         id TEXT PRIMARY KEY, tenant_id TEXT NOT NULL,
+         chat_id INTEGER NOT NULL, label TEXT, created_at INTEGER NOT NULL)`,
+    ),
+    env.D1_US.prepare('CREATE UNIQUE INDEX IF NOT EXISTS idx_telegram_chat_id ON telegram_chats(chat_id)'),
+    env.D1_US.prepare('CREATE INDEX IF NOT EXISTS idx_telegram_chat_tenant ON telegram_chats(tenant_id)'),
+  ])
+  schemaEnsured = true
+}
+
 export async function resolveTelegramTenant(chatId: number, env: Env): Promise<string | null> {
+  await ensureTelegramSchema(env)
   const row = await env.D1_US.prepare(
     'SELECT tenant_id FROM telegram_chats WHERE chat_id = ?',
   ).bind(chatId).first<{ tenant_id: string }>()

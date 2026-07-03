@@ -5,6 +5,19 @@
 
 ---
 
+## Modernization sweep (part 2) - Agents SDK 0.13.3 -> 0.17.0 - 2026-07-03
+
+**Context:** Full capability review complete (3 background research agents across Agents SDK primitives / core data+compute / AI+adjacent products; a 4th blog sweep running). Headline finding: upcoming phases have native SDK primitives now — Phase 5 durable approval = waitForApproval/AgentWorkflow, Phase 6 sub-agents = subAgent() facets + runAgentTool({detached}), Phase 8 consolidation = runFiber+stash+onFiberRecovered (survives the DO eviction we hand-patched today), keepAlive() retires that bug class. Our current models (gemma-4, bge, llama-3.3-70b-fast) are all retained/safe.
+**Built:**
+- Bumped agents 0.13.3 -> 0.17.0. Clean install — no peer-dep conflicts (already on zod ^4 + ai ^6; no react/vite frontend yet so those peers N/A). agents/mcp export path intact; McpAgentDO / getAgentByName / BootstrapWorkflow all resolve. No new DO migration needed (class name + sqlite backend unchanged).
+- 0.17 improved DO-stub typing made 5 @ts-expect-error suppressors dead (getTmk/broadcast/initTenant RPC calls); removed them in consumer.ts, action/index.ts, morning-brief.ts, mcpagent/index.ts, actions.ts. tsc error count 103 -> 98, zero new.
+- Fixed a real robustness bug in the Phase 4.1 KEK fallback (consumer.ts): a KEK-lookup error (e.g. transient D1 failure) now degrades to a retry via try/catch instead of throwing out of processIngestionMessage. This regressed tests/2.1c ("retries when TMK unavailable") which only ran channel tests after the Phase 4.1 change and missed it.
+**Verification:** full suite 67 files / 394 passed / 1 skipped; tsc 98 (down 5, no new); wrangler deploy --dry-run builds against 0.17 (Vectorize gone from bindings). Prod deploy + MCP/Telegram smoke: see gate.
+**Adopt-list from scan (batched next):** AI Gateway spend limits (cost cap; answers deferred cost-panel Q), KV bulk reads, Queues backlog metrics, Rate Limiting binding, bge-reranker, explicit placement hint to Neon region. Roadmap adds: Email channel (own address, NOT a Gmail-S5 workaround), voice (@cloudflare/voice), Images binding, Kimi K2.7 tier. Do NOT adopt Flue (channel integrations we don't use + multi-cloud we don't want).
+**Next:** resume Phase 5 on native waitForApproval.
+
+---
+
 ## Modernization sweep (part 1) - model registry + Vectorize cleanup - 2026-07-03
 
 **Context:** Matt paused Phase 5 to close unfinished items from the pre-mission Cloudflare modernization plan (docs/implementation-plans/cloudflare-modernization-execution-plan-2026-06-01.md, ~40% done then superseded by the mission) and to review current CF capabilities (3 background research agents). Decision recorded separately: full Agents SDK 0.13.3 -> 0.17.0 migration approved; NOT adopting Flue (its value is channel integrations we don't use + multi-cloud we don't want; fibers + native Agent Skills + waitForApproval are all first-class in the SDK we're already on).

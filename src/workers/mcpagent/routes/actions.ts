@@ -45,7 +45,6 @@ actions.post('/:id/undo', async (c) => {
   try {
     const doId = getMcpAgentObjectId(c.env.MCPAGENT, tenantId)
     const stub = c.env.MCPAGENT.get(doId)
-    // @ts-expect-error -- DO RPC method not in generic DurableObjectStub type
     tmk = await stub.getTmk()
   } catch { /* tmk stays null */ }
 

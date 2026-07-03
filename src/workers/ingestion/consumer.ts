@@ -76,13 +76,18 @@ async function processIngestionMessage(
 
   let tmk: CryptoKey | null = null
   try {
-    // @ts-expect-error -- DO RPC method not in generic DurableObjectStub type
     tmk = await stub.getTmk()
   } catch {
     tmk = null
   }
   if (!tmk) {
-    tmk = await fetchAndValidateKek(tenantId, env)
+    // A KEK-lookup error (e.g. transient D1 failure) must degrade to a retry,
+    // never crash the message — same contract as a cold DO.
+    try {
+      tmk = await fetchAndValidateKek(tenantId, env)
+    } catch {
+      tmk = null
+    }
   }
 
   if (!tmk) {

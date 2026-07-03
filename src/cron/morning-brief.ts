@@ -60,7 +60,6 @@ async function buildAndDeliver(
   // 2. Pages UI broadcast (non-fatal on cold DO)
   try {
     const stub = env.MCPAGENT.get(env.MCPAGENT.idFromName(getMcpAgentObjectName(tenantId)))
-    // @ts-expect-error DO RPC
     await stub.broadcast({ type: 'brief.morning', content: brief, delivered_at: Date.now() })
   } catch { /* cold DO — expected */ }
 

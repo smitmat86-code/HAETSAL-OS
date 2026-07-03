@@ -79,7 +79,6 @@ app.get('/', async (c) => {
   const stub = await getAgentByName(namespace, getMcpAgentObjectName(tenantId), {
     props: { tenantId, jwtSub },
   })
-  // @ts-expect-error — DO RPC method
   await stub.initTenant(jwtSub, tenantId)
 
   // Optional one-click phone registration for the messaging channels:

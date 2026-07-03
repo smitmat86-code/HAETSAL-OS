@@ -88,7 +88,6 @@ export async function processAction(
   try {
     const doId = env.MCPAGENT.idFromName(msg.tenant_id)
     const stub = env.MCPAGENT.get(doId)
-    // @ts-expect-error -- DO RPC method not in generic DurableObjectStub type
     tmk = await stub.getTmk()
   } catch { /* tmk stays null */ }
 

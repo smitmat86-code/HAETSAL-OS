@@ -12,7 +12,6 @@ import { approval } from './routes/approval'
 import { settings } from './routes/settings'
 import { audit } from './routes/audit'
 import { canary } from './routes/canary'
-import { mission } from './routes/mission'
 import type { Env } from '../../types/env'
 import { getMcpAgentObjectName } from './do/identity'
 import { registerPublicWebhooks } from './public-webhooks'
@@ -63,7 +62,6 @@ app.route('/api/actions', actions)
 app.route('/api/actions', approval)
 app.route('/api/settings', settings)
 app.route('/api/audit', audit)
-app.route('/api/mission', mission)
 
 // Root status page — doubles as a browser-clickable session/KEK refresh.
 // Opening this URL after CF Access login initializes the tenant session in

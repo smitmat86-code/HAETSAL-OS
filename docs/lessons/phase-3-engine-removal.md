@@ -2,6 +2,14 @@
 
 Date: 2026-07-03
 
+0. **Matt waived the G7 export at the Phase 3 gate** (2026-07-03): the
+   Hindsight data was test data from a system never really in production use.
+   The export surface was built, deployed, and scan-verified first (lessons 1-3
+   below record what it found), then removed without running the full export.
+   The waiver is low-risk because engine removal never drops the Neon tables —
+   the raw rows remain readable via SQL. If those tables are ever cleaned up,
+   that is a separate, explicitly-Matt-approved action (DELETE class = RED).
+
 1. **The G7 export needed no Hindsight API.** Hindsight 0.5.2 stores its data
    in the SAME Neon database (`neondb`) as the canonical schema, under the
    `public` schema (banks, documents, memory_units, chunks, entities,

@@ -307,10 +307,6 @@ const ENGINE_REFERENCE_EXEMPT = new Set<string>([
     // the column string only, no engine behavior.
     'src/services/tenant.ts',
     'src/types/tenant.ts',
-    // Phase 3 G7 export surface — removed together with this exemption once
-    // the R2 archival export has run against prod.
-    'src/services/mission-hindsight-export.ts',
-    'src/workers/mcpagent/routes/mission.ts',
 ]);
 
 function checkRetiredEngines(): Violation[] {

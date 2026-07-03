@@ -26,13 +26,14 @@ export async function buildGroundedReply(
   channel: string,
 ): Promise<string> {
   let contextBlock = ''
-  // Retrieval budget: 4s. Prod Postgres/Hyperdrive latency has been observed
-  // in the 10-60s range on composed mode; anything over 4s starves the reply
-  // model and can blow the Worker wall-time limit. Lexical is fast even on
-  // cold connections; composed can be re-enabled once Phase 10/11 tunes it.
+  // Retrieval budget: 10s. Neon auto-suspends after ~5 min idle and cold-
+  // start latency runs 5-8s; Hyperdrive doesn't cache (Law 2). Lexical FTS
+  // is fast once warm. Timeout still fires so the reply always ships; the
+  // long-term fix (a keepalive ping or a warm-connection pool) belongs in
+  // Phase 10/11 broker tuning.
   const context = await withTimeout(
     searchCanonicalMemory({ tenantId, query: text, mode: 'lexical', limit: 5 }, env, tenantId),
-    4000, 'RETRIEVAL',
+    10000, 'RETRIEVAL',
   )
   if (context && context.items.length > 0) {
     contextBlock = '\n\nRelevant memories (cite naturally when useful):\n' + context.items

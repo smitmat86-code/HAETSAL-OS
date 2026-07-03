@@ -1,6 +1,7 @@
 import type { Hono } from 'hono'
 import type { Env } from '../../types/env'
 import { processSendblueInbound, type SendblueInboundBody } from '../../services/sendblue-inbound'
+import { runGatewayChat } from '../../services/workers-ai-chat'
 
 type Variables = {
   tenantId: string
@@ -69,25 +70,19 @@ export function registerPublicWebhooks(
 
       await c.env.KV_SESSION.put('telegram_chat_id:default', String(chatId))
       if (text && !text.startsWith('/')) {
-        const aiResponse = await (c.env.AI as { run: (model: string, input: unknown) => Promise<unknown> }).run(
-          '@cf/meta/llama-3.1-8b-instruct',
+        const aiResponse = await runGatewayChat(c.env, [
           {
-            messages: [
-              {
-                role: 'system' as const,
-                content: 'You are Haetsal (해살), a warm and capable personal AI assistant. You communicate via Telegram. Keep responses concise and conversational — this is a chat, not email. Be helpful, natural, and brief. If asked to do something you can\'t do yet, be honest about it.',
-              },
-              { role: 'user' as const, content: text },
-            ],
-            max_tokens: 300,
+            role: 'system',
+            content: 'You are Haetsal (해살), a warm and capable personal AI assistant. You communicate via Telegram. Keep responses concise and conversational — this is a chat, not email. Be helpful, natural, and brief. If asked to do something you can\'t do yet, be honest about it.',
           },
-        ) as { response?: string }
+          { role: 'user', content: text },
+        ])
         await fetch(`https://api.telegram.org/bot${c.env.TELEGRAM_BOT_TOKEN}/sendMessage`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             chat_id: chatId,
-            text: aiResponse?.response ?? "I'm having trouble thinking right now. Try again in a moment.",
+            text: aiResponse ?? "I'm having trouble thinking right now. Try again in a moment.",
           }),
         })
       }

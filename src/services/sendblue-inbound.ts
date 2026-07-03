@@ -9,9 +9,7 @@ import type { Env } from '../types/env'
 import type { IngestionQueueMessage } from '../types/ingestion'
 import { searchCanonicalMemory } from './canonical-memory-query'
 import { sendSendblueMessage } from './delivery/sendblue'
-
-export const SENDBLUE_VISION_MODEL = '@cf/meta/llama-3.2-11b-vision-instruct'
-const REPLY_MODEL = '@cf/meta/llama-3.1-8b-instruct'
+import { runGatewayChat, runGatewayVision } from './workers-ai-chat'
 
 export interface SendblueInboundBody {
   content?: string
@@ -49,34 +47,24 @@ export async function generateGroundedReply(
   } catch {
     // Retrieval issues never block a reply.
   }
-  const response = await (env.AI as { run: (model: string, input: unknown, options?: unknown) => Promise<unknown> }).run(
-    REPLY_MODEL,
+  const reply = await runGatewayChat(env, [
     {
-      messages: [
-        {
-          role: 'system' as const,
-          content: 'You are Haetsal, a warm and capable personal AI assistant reached over iMessage. Keep replies concise and conversational. Ground answers in the provided memories when relevant; if a needed source (like Gmail or calendar) is not connected yet, say so honestly.' + contextBlock,
-        },
-        { role: 'user' as const, content: text },
-      ],
-      max_tokens: 300,
+      role: 'system',
+      content: 'You are Haetsal, a warm and capable personal AI assistant reached over iMessage. Keep replies concise and conversational. Ground answers in the provided memories when relevant; if a needed source (like Gmail or calendar) is not connected yet, say so honestly.' + contextBlock,
     },
-    { gateway: { id: env.AI_GATEWAY_ID, collectLog: false } },
-  ) as { response?: string }
-  return response?.response ?? 'I had trouble thinking just now - try me again in a moment.'
+    { role: 'user', content: text },
+  ])
+  return reply ?? 'I had trouble thinking just now - try me again in a moment.'
 }
 
-async function describePhoto(env: Env, imageBytes: ArrayBuffer): Promise<string> {
-  const result = await (env.AI as { run: (model: string, input: unknown, options?: unknown) => Promise<unknown> }).run(
-    SENDBLUE_VISION_MODEL,
-    {
-      prompt: 'Describe this image concisely and concretely for a personal memory archive: subjects, any legible text, and context. 2-4 sentences.',
-      image: [...new Uint8Array(imageBytes)],
-      max_tokens: 300,
-    },
-    { gateway: { id: env.AI_GATEWAY_ID, collectLog: false } },
-  ) as { response?: string; description?: string }
-  return result?.response ?? result?.description ?? 'Photo captured (no description available).'
+async function describePhoto(env: Env, imageBytes: ArrayBuffer, mediaType: string): Promise<string> {
+  const description = await runGatewayVision(
+    env,
+    'Describe this image concisely and concretely for a personal memory archive: subjects, any legible text, and context. 2-4 sentences.',
+    imageBytes,
+    mediaType,
+  )
+  return description ?? 'Photo captured (no description available).'
 }
 
 export async function processSendblueInbound(
@@ -100,7 +88,7 @@ export async function processSendblueInbound(
     const bytes = await media.arrayBuffer()
     const storageKey = `sendblue-media/${tenantId}/${occurredAt}-${crypto.randomUUID()}`
     await env.R2_ARTIFACTS.put(storageKey, bytes, { httpMetadata: { contentType: mediaType } })
-    const description = await describePhoto(env, bytes)
+    const description = await describePhoto(env, bytes, mediaType)
 
     const message: IngestionQueueMessage = {
       type: 'sendblue_media',

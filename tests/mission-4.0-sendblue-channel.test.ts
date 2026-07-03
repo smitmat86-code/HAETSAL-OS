@@ -39,9 +39,12 @@ function makeSendblueEnv(sent: SentRequest[], queue: unknown[]) {
     SENDBLUE_PHONE_NUMBER: LINE_NUMBER,
     SENDBLUE_WEBHOOK_PATH_SECRET: PATH_SECRET,
     AI: {
-      run: async (model: string, _input: unknown) => (
-        model.includes('vision')
-          ? { response: 'A whiteboard covered in project notes.' }
+      // Vision calls carry an image_url content part; replies are plain text.
+      // Vision answers in the OpenAI shape, text in the legacy {response}
+      // shape, so both readChatText branches stay covered.
+      run: async (_model: string, input: unknown) => (
+        JSON.stringify(input).includes('image_url')
+          ? { choices: [{ message: { role: 'assistant', content: 'A whiteboard covered in project notes.' } }] }
           : { response: 'Here is what I remember.' }
       ),
     },

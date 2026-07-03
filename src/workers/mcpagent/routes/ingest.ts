@@ -2,6 +2,7 @@ import { Hono } from 'hono'
 import type { Env } from '../../../types/env'
 import type { IngestionQueueMessage } from '../../../types/ingestion'
 import { verifyTelnyxSignature } from '../../../services/telnyx'
+import { runGatewayChat } from '../../../services/workers-ai-chat'
 
 type Variables = { tenantId: string; jwtSub: string; traceId: string }
 const ingest = new Hono<{ Bindings: Env; Variables: Variables }>()
@@ -51,7 +52,6 @@ ingest.post('/sms', async (c) => {
   }
 
   try {
-    console.log('SMS_FLOW: step1 — calling AI for text:', text.substring(0, 50))
     const aiMessages = [
       {
         role: 'system' as const,
@@ -59,11 +59,8 @@ ingest.post('/sms', async (c) => {
       },
       { role: 'user' as const, content: text },
     ]
-    const aiResponse = await (c.env.AI as { run: (model: string, input: unknown) => Promise<unknown> }).run(
-      '@cf/meta/llama-3.1-8b-instruct',
-      { messages: aiMessages, max_tokens: 300 },
-    ) as { response?: string }
-    const reply = aiResponse?.response ?? "I'm having trouble thinking right now. Try again in a moment."
+    const aiResponse = await runGatewayChat(c.env, aiMessages)
+    const reply = aiResponse ?? "I'm having trouble thinking right now. Try again in a moment."
     console.log('SMS_FLOW: step2 — AI replied, length:', reply.length)
     const { sendSmsReply } = await import('../../../services/delivery/sms')
     const sent = await sendSmsReply(fromPhone, reply, c.env)

@@ -48,7 +48,7 @@ Last updated: 2026-04-18 | Session: 7.1 (Hindsight Projection Adapter)
 | src\services\action\preferences.ts | 146 | — | ✅ |
 | src\services\action\router.ts | 111 | — | ✅ |
 | src\services\action\toctou.ts | 23 | — | ✅ |
-| src\services\agents\router.ts | 57 | — | ✅ |
+| src\services\agents\router.ts | 50 | — | ✅ |
 | src\services\bootstrap\historical-import.ts | 140 | historicalSalienceMultiplier | ✅ |
 | src\services\bootstrap\interview.ts | 76 | createInitialState, currentQuestion, currentDomain... | ✅ |
 | src\services\canonical-broker-shadow.ts | 122 | summaryOf, statusOf, traceOf... | ✅ |
@@ -147,13 +147,14 @@ Last updated: 2026-04-18 | Session: 7.1 (Hindsight Projection Adapter)
 | src\services\ingestion\enqueue.ts | 55 | EnqueuedRetainResult | ✅ |
 | src\services\ingestion\retain.ts | 109 | — | ✅ |
 | src\services\ingestion\salience.ts | 80 | scoreSalience | ✅ |
-| src\services\ingestion\write-policy.ts | 74 | WritePolicyResult | ✅ |
+| src\services\ingestion\write-policy.ts | 65 | WritePolicyResult | ✅ |
 | src\services\postgres-sql.ts | 95 | PostgresStatement, PostgresSql, createPostgresStatement... | ✅ |
 | src\services\retrieval-modes.ts | 149 | resolveTemporalWindow | ✅ |
 | src\services\retrieval-support.ts | 121 | CANONICAL_EMBEDDING_MODEL, citationOf, toRetrievalItem... | ✅ |
-| src\services\sendblue-inbound.ts | 146 | SENDBLUE_VISION_MODEL, SendblueInboundBody | ✅ |
+| src\services\sendblue-inbound.ts | 134 | SendblueInboundBody | ✅ |
 | src\services\telnyx.ts | 35 | — | ✅ |
 | src\services\tenant.ts | 133 | — | ✅ |
+| src\services\workers-ai-chat.ts | 69 | CHAT_MODEL, ChatContentPart, ChatMessage... | ✅ |
 | src\services\working-session-capture-bridge.ts | 147 | WorkingSessionSummaryCaptureInput, WorkingSessionAdapter, WorkingSessionEvidenceCaptureMetadata... | ✅ |
 | src\services\working-session.ts | 145 | WORKING_SESSION_BOUNDARY, WorkingSessionRole, WorkingSessionTranscriptEntry... | ✅ |
 | src\tools\act\browse.ts | 31 | browseSchema | ✅ |
@@ -197,18 +198,18 @@ Last updated: 2026-04-18 | Session: 7.1 (Hindsight Projection Adapter)
 | src\workers\ingestion\handlers.ts | 145 | — | ✅ |
 | src\workers\ingestion\retain-consumer.ts | 21 | — | ✅ |
 | src\workers\mcpagent\do\identity.ts | 13 | MCP_STREAMABLE_HTTP_PREFIX, getMcpAgentObjectName, getMcpAgentObjectId | ✅ |
-| src\workers\mcpagent\do\inbound-message.ts | 38 | — | ✅ |
+| src\workers\mcpagent\do\inbound-message.ts | 35 | — | ✅ |
 | src\workers\mcpagent\do\McpAgent.ts | 145 | McpAgentDO | ✅ |
 | src\workers\mcpagent\do\register-tools.ts | 87 | registerLegacyMemoryTools, registerActTools | ✅ |
 | src\workers\mcpagent\do\session-store.ts | 57 | PersistedSessionRow, ensureSessionTable, readPersistedSession... | ✅ |
 | src\workers\mcpagent\index.ts | 149 | — | ✅ |
-| src\workers\mcpagent\public-webhooks.ts | 100 | registerPublicWebhooks | ✅ |
+| src\workers\mcpagent\public-webhooks.ts | 95 | registerPublicWebhooks | ✅ |
 | src\workers\mcpagent\routes\actions.ts | 80 | actions | ✅ |
 | src\workers\mcpagent\routes\approval.ts | 73 | approval | ✅ |
 | src\workers\mcpagent\routes\audit.ts | 51 | audit | ✅ |
 | src\workers\mcpagent\routes\auth.ts | 45 | — | ✅ |
 | src\workers\mcpagent\routes\canary.ts | 15 | canary, hasCanonicalHyperdriveBinding | ✅ |
-| src\workers\mcpagent\routes\ingest.ts | 133 | — | ✅ |
+| src\workers\mcpagent\routes\ingest.ts | 130 | — | ✅ |
 | src\workers\mcpagent\routes\settings.ts | 73 | settings | ✅ |
 | src\workers\mcpagent\runtime.ts | 44 | — | ✅ |
 | src\workflows\bootstrap.ts | 110 | BootstrapWorkflow | ✅ |

@@ -4,6 +4,7 @@
 
 import type { Env } from '../../types/env'
 import type { AgentType } from '../../agents/types'
+import { runGatewayChat } from '../workers-ai-chat'
 
 const ROUTING_PATTERNS: Array<{ pattern: RegExp; agent: AgentType }> = [
   { pattern: /\b(career|work|job|project|deadline|client|promotion)\b/i, agent: 'career_coach' },
@@ -21,14 +22,11 @@ export async function routeRequest(input: string, env: Env): Promise<AgentType> 
     if (pattern.test(input)) return agent
   }
 
-  // Ambiguous — Workers AI 8B classifier fallback (~200ms)
+  // Ambiguous — Workers AI classifier fallback (~200ms)
   try {
-    const result = await env.AI.run(
-      '@cf/meta/llama-3.1-8b-instruct' as keyof AiModels,
-      {
-        messages: [{
-          role: 'user',
-          content: `Classify this request into one category:
+    const response = await runGatewayChat(env, [{
+      role: 'user',
+      content: `Classify this request into one category:
 chief_of_staff (general planning, orchestration, multi-domain)
 career_coach (work, projects, professional goals)
 life_coach (health, relationships, personal growth)
@@ -36,13 +34,8 @@ inline (simple factual question, no agent needed)
 
 Request: "${input.slice(0, 300)}"
 Answer with exactly one category name.`,
-        }],
-      },
-      { gateway: { id: env.AI_GATEWAY_ID, collectLog: false } },
-    ) as AiTextGenerationOutput
+    }], 64) ?? ''
 
-    const response = typeof result === 'string' ? result
-      : (result as { response?: string }).response ?? ''
     const classification = response.trim().toLowerCase().replace(/[^a-z_]/g, '')
 
     if (VALID_AGENTS.includes(classification as AgentType)) {

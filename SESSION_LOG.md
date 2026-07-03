@@ -5,6 +5,18 @@
 
 ---
 
+## Mission Phase 4 hotfix - deprecated Workers AI models - 2026-07-03
+
+**Trigger:** post-deploy e2e smoke failed both flows with Workers AI error 5028: `@cf/meta/llama-3.1-8b-instruct` (and the 3.2-11b vision model) removed from the catalog 2026-05-30. Six prod call sites were silently dead (Sendblue reply+vision, Telnyx SMS reply, Telegram, agent router, write-policy classifier) - earlier phase smokes missed it because retrieval uses bge embeddings, which survive.
+**Built:**
+- `src/services/workers-ai-chat.ts` - shared CHAT_MODEL (`@cf/google/gemma-4-26b-a4b-it`, CF-recommended replacement, text+vision, $0.10/M in), `readChatText` (OpenAI choices[] + legacy {response} shapes, strips think tags), `runGatewayChat`/`runGatewayVision` (G4: gateway + collectLog:false enforced in one place; vision = data-URL image_url content part per model schema)
+- Rewired all six call sites onto the helper; Telegram path gains gateway+collectLog:false it never had (Law-2 audit note 2 fixed); removed `SMS_FLOW: step1` plaintext content log from ingest.ts (Law 2)
+- Test mock now branches on image_url content part; vision answers in OpenAI shape, text in legacy shape (both parser branches covered)
+**Verification:** mission-4.0 suite 8/8; full checkout; redeploy + e2e smoke re-run (text+photo processed)
+**Next:** resume Phase 4 gate (live text/photo gate with Matt)
+
+---
+
 ## Mission Phase 4 - 2026-07-03
 
 **Spec:** HAETSAL_MISSION.md Phase 4 (Sendblue iMessage Channel)

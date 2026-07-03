@@ -5,6 +5,7 @@
 // LESSON: Silent drop, not error — return success to prevent doom loops
 
 import type { Env } from '../../types/env'
+import { runGatewayChat } from '../workers-ai-chat'
 
 export interface WritePolicyResult {
   isProcedural: boolean
@@ -44,26 +45,16 @@ export async function runWritePolicyValidator(
 
   // Stage 2: Workers AI classifier (only if heuristic flags)
   try {
-    const response = await env.AI.run(
-      '@cf/meta/llama-3.1-8b-instruct' as keyof AiModels,
+    const text = await runGatewayChat(env, [
       {
-        messages: [
-          {
-            role: 'system',
-            content: 'You are a memory type classifier. Respond with ONLY "procedural" or "episodic". Procedural memories describe behavioral patterns, habits, or personality traits. Episodic memories describe specific events, facts, or observations.',
-          },
-          {
-            role: 'user',
-            content: `Classify this memory: "${content.slice(0, 500)}"`,
-          },
-        ],
+        role: 'system',
+        content: 'You are a memory type classifier. Respond with ONLY "procedural" or "episodic". Procedural memories describe behavioral patterns, habits, or personality traits. Episodic memories describe specific events, facts, or observations.',
       },
-      { gateway: { id: env.AI_GATEWAY_ID, collectLog: false } },
-    )
-
-    const text = typeof response === 'string'
-      ? response
-      : (response as { response?: string }).response ?? ''
+      {
+        role: 'user',
+        content: `Classify this memory: "${content.slice(0, 500)}"`,
+      },
+    ], 64) ?? ''
     const isProcedural = text.toLowerCase().includes('procedural')
     return { isProcedural, method: 'classifier' }
   } catch {

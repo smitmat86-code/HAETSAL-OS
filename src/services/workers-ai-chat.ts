@@ -19,12 +19,29 @@ export interface ChatMessage {
   content: string | ChatContentPart[]
 }
 
-/** Reads assistant text from OpenAI-shaped or legacy Workers AI results. */
+type ContentPart = { type?: string; text?: string }
+type ChoiceMessage = { content?: string | null | ContentPart[] }
+
+/** Reads assistant text from OpenAI-shaped (string or content-parts array) or
+ *  legacy Workers AI results. Vision replies from gemma often come back as
+ *  a content-parts array even when the input used a plain user message. */
 export function readChatText(result: unknown): string | null {
-  if (typeof result === 'string') return result.trim() || null
-  const r = result as { response?: string; choices?: Array<{ message?: { content?: string | null } }> }
-  const text = r?.choices?.[0]?.message?.content ?? r?.response
-  if (typeof text !== 'string') return null
+  if (typeof result === 'string') return trimOrNull(result)
+  const r = result as { response?: string; choices?: Array<{ message?: ChoiceMessage }> }
+  const content = r?.choices?.[0]?.message?.content
+  if (typeof content === 'string') return trimOrNull(content)
+  if (Array.isArray(content)) {
+    const joined = content
+      .filter((p) => p && (p.type === 'text' || p.type === undefined))
+      .map((p) => p.text ?? '')
+      .join('')
+    if (joined) return trimOrNull(joined)
+  }
+  if (typeof r?.response === 'string') return trimOrNull(r.response)
+  return null
+}
+
+function trimOrNull(text: string): string | null {
   const cleaned = text.replace(/<think>[\s\S]*?<\/think>/g, '').trim()
   return cleaned || null
 }

@@ -75,11 +75,15 @@ export async function describeInboundPhoto(
   imageBytes: ArrayBuffer,
   mediaType: string,
 ): Promise<string> {
+  console.log('VISION_ATTEMPT', { byteLength: imageBytes.byteLength, mediaType })
   const description = await runGatewayVision(
     env,
     'Describe this image concisely and concretely for a personal memory archive: subjects, any legible text, and context. 2-4 sentences.',
     imageBytes,
     mediaType,
   )
+  if (!description) {
+    console.warn('VISION_EMPTY', { byteLength: imageBytes.byteLength, mediaType })
+  }
   return description ?? 'Photo captured (no description available).'
 }

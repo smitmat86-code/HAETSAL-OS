@@ -17,7 +17,12 @@
 **Decisions:**
 - **Matt waived the G7 export** (test data only; no canonical destination needed; S7 moot). Hindsight's Neon tables and historical D1 tables (hindsight_operations, hindsight_bank_config, tenants.hindsight_tenant_id) are NOT dropped — inert raw history
 - Added GET / status page with browser-clickable session/KEK refresh (fixes the dead-end 404 at the domain root; the Cron KEK is needed by morning brief and future automations regardless)
-**Verification:** postflight clean (Retired Engines 0), suite green, live smokes + fresh-context verifier + Law-2 audit: see phase gate report
+**Verification:**
+- postflight clean (Retired Engines 0); suite 65 files / 379 passed / 1 skipped
+- Prod deploys: Step A export-enabler 2f2ff5ba -> removal be33541d (v5 migration applied; one follow-up deploy exposed temporal/compiled in the search_memory MCP zod enum, a gap only the live smoke caught)
+- PHASE3 prod live smoke: canary 204; export route 404; MCP init 200; capture_memory landed governed row in real Neon (trust=evidence, class=episode); modes raw/lexical/semantic/temporal/composed found it (semantic = real Workers AI embeddings + pgvector on Neon); graph/compiled correctly empty (no entities/views until Phase 8/10)
+- Demo clause 10 greps: all remaining hindsight/graphiti matches are historical comments, exempt tenants legacy column, or migration history
+- Fresh-context verifier + Law-2 audit: see phase gate report
 **Hindsight Pin:** N/A — engine removed
 **Blockers:** none (export blocker dissolved by Matt's waiver)
 **Next:** Phase 4 - Sendblue iMessage channel (webhook route + outbound client + photo ingestion; demo clauses 1 + 8)

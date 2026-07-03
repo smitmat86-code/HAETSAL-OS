@@ -58,17 +58,25 @@ export async function runGatewayChat(
   )
   const text = readChatText(result)
   if (text === null) {
-    // Diagnostic: when a chat call comes back empty, log only shape/lengths so
-    // we can tell think-only vs truly-empty vs unexpected schema. Never plaintext.
-    const r = (result ?? {}) as { response?: unknown; choices?: unknown[] }
-    const rawContent = (r.choices as Array<{ message?: { content?: unknown } }> | undefined)?.[0]?.message?.content
-    const rawResponse = r.response
+    // Diagnostic: log the SHAPE of the response so we can distinguish
+    // string/array/null/refusal without leaking user content. Truncate
+    // hard so nothing large slips into logs.
+    const r = (result ?? {}) as Record<string, unknown>
+    const choice = (r.choices as Array<Record<string, unknown>> | undefined)?.[0]
+    const message = choice?.message as Record<string, unknown> | undefined
+    const content = message?.content
+    const contentType = content === null ? 'null' : Array.isArray(content) ? 'array' : typeof content
+    const contentPreview = typeof content === 'string' ? content.slice(0, 80)
+      : Array.isArray(content) ? JSON.stringify(content).slice(0, 200)
+      : content === null ? '(null)' : String(content).slice(0, 80)
     console.warn('GATEWAY_CHAT_EMPTY', {
-      hasChoices: Array.isArray(r.choices),
-      choicesLen: Array.isArray(r.choices) ? r.choices.length : 0,
-      rawContentLen: typeof rawContent === 'string' ? rawContent.length : -1,
-      rawResponseLen: typeof rawResponse === 'string' ? rawResponse.length : -1,
-      thinkOnly: typeof rawContent === 'string' && /<think>[\s\S]*?<\/think>/.test(rawContent),
+      topKeys: Object.keys(r),
+      choiceKeys: choice ? Object.keys(choice) : [],
+      messageKeys: message ? Object.keys(message) : [],
+      contentType,
+      contentPreview,
+      finishReason: choice?.finish_reason,
+      refusal: message?.refusal,
     })
   }
   return text

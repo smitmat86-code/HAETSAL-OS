@@ -1,7 +1,6 @@
 import { z } from 'zod'
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import type { Env } from '../types/env'
-import { debugHindsightBankState } from '../services/canonical-hindsight-debug'
 
 interface HindsightDebugToolContext {
   getEnv: () => Env
@@ -20,6 +19,10 @@ const asText = (value: unknown) => ({ content: [{ type: 'text' as const, text: J
 export function registerHindsightDebugTool(server: McpServer, ctx: HindsightDebugToolContext): void {
   server.tool('debug_hindsight_bank_state', 'Inspect raw Hindsight bank state for the current tenant', debugHindsightSchema.shape, async (input) => {
     const typed = input as z.infer<typeof debugHindsightSchema>
+    // Lazy import: the Hindsight read stack pulls in @cloudflare/containers,
+    // which only resolves inside workerd. The capture tool surface must stay
+    // importable outside it (e.g. live-smoke scripts). Retired in Phase 2.
+    const { debugHindsightBankState } = await import('../services/canonical-hindsight-debug')
     return asText(await debugHindsightBankState({
       tenantId: ctx.getTenantId(),
       captureId: typed.capture_id ?? null,

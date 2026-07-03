@@ -12,7 +12,7 @@ export async function retainContent(
   tmk: CryptoKey | null,
   env: Env,
   ctx?: Pick<ExecutionContext, 'waitUntil'>,
-  options?: { contentEncrypted?: string; hindsightAsync?: boolean; eagerProjectionDispatch?: boolean },
+  options?: { contentEncrypted?: string; eagerProjectionDispatch?: boolean },
 ): Promise<RetainResult | null> {
   const { tenantId, content, source } = artifact
   console.log('RETAIN_CONTENT_START', {
@@ -62,14 +62,13 @@ export async function retainContent(
     artifactRef: artifact.artifactRef ?? null,
     capturedAt: artifact.occurredAt,
     memoryType,
-    compatibilityMode: 'current_hindsight',
     provenance: artifact.provenance ?? source,
     metadata: artifact.metadata,
     dedupHash,
     salienceTier: salience.tier,
     salienceSurpriseScore: salience.surpriseScore,
-    hindsightAsync: options?.hindsightAsync ?? false,
     eagerProjectionDispatch: options?.eagerProjectionDispatch ?? false,
+    governance: artifact.governance ?? null,
   }, env, tenantId, ctx, tmk)
 
   console.log('RETAIN_CONTENT_CANONICAL_PIPELINE_DONE', {
@@ -77,20 +76,33 @@ export async function retainContent(
     source,
     canonicalCaptureId: pipeline.capture.captureId,
     canonicalOperationId: pipeline.capture.operationId,
-    compatibilityStatus: pipeline.compatibility.status,
+    memoryClass: pipeline.capture.governance.memoryClass,
+    trustState: pipeline.capture.governance.trustState,
   })
 
+  // Operational ingestion trail. Load-bearing: checkDedup() reads
+  // ingestion_events.dedup_hash, so this insert is what makes dedup stick.
+  // Metadata only — no content (Law 2).
+  await env.D1_US.prepare(
+    `INSERT OR IGNORE INTO ingestion_events
+     (id, tenant_id, created_at, source, salience_tier, surprise_score, memory_id, r2_key, dedup_hash)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+  ).bind(
+    crypto.randomUUID(), tenantId, Date.now(), source,
+    salience.tier, salience.surpriseScore,
+    pipeline.capture.operationId, pipeline.capture.bodyR2Key, dedupHash,
+  ).run()
+
   return {
-    memoryId: pipeline.compatibility.memoryId ?? pipeline.capture.operationId,
-    operationId: pipeline.compatibility.operationId ?? pipeline.capture.operationId,
-    documentId: pipeline.compatibility.documentId ?? pipeline.capture.documentId,
+    memoryId: pipeline.capture.operationId,
+    operationId: pipeline.capture.operationId,
+    documentId: pipeline.capture.documentId,
     salienceTier: salience.tier,
     dedupHash,
-    stoneR2Key: pipeline.compatibility.stoneR2Key,
     canonicalCaptureId: pipeline.capture.captureId,
     canonicalDocumentId: pipeline.capture.documentId,
     canonicalOperationId: pipeline.capture.operationId,
     canonicalDispatchStatus: pipeline.dispatch.status,
-    compatibilityStatus: pipeline.compatibility.status,
+    governance: pipeline.capture.governance,
   }
 }

@@ -1,7 +1,20 @@
 import type { CanonicalGraphIdentityMapping } from '../types/canonical-graph-projection'
+import type {
+  CanonicalAuthorKind,
+  CanonicalMemoryClass,
+  CanonicalRetention,
+  CanonicalTrustState,
+  CanonicalUsePolicy,
+} from '../types/canonical-governance'
+import type { CanonicalEventRecord } from '../types/canonical-governance-records'
 
 export const CANONICAL_POSTGRES_SCHEMA = 'haetsal_canonical'
 
+/**
+ * 'hindsight' remains in the union so historical projection rows stay
+ * readable; new hindsight projections are rejected (write path severed,
+ * HAETSAL_MISSION.md Phase 1).
+ */
 export type CanonicalProjectionKind = 'hindsight' | 'graphiti'
 export type CanonicalProjectionStatus = 'accepted' | 'queued' | 'completed' | 'failed'
 
@@ -17,6 +30,19 @@ export interface CanonicalCaptureRecord {
   artifact_id: string | null
   captured_at: number
   created_at: number
+  memory_class: CanonicalMemoryClass
+  trust_state: CanonicalTrustState
+  use_policy: CanonicalUsePolicy
+  author_kind: CanonicalAuthorKind
+  agent_identity: string | null
+  model_runtime: string | null
+  confidence: number | null
+  retention: CanonicalRetention
+  provenance_note: string | null
+  memory_type: string | null
+  dedup_hash: string | null
+  salience_tier: number | null
+  governance_downgraded_json: string | null
 }
 
 export interface CanonicalArtifactRecord {
@@ -52,6 +78,8 @@ export interface CanonicalChunkRecord {
   start_offset: number
   end_offset: number
   chunk_sha256: string
+  /** Plaintext chunk body for Postgres FTS — authorized Law 2 boundary (Phase 1). */
+  chunk_text: string | null
   created_at: number
 }
 
@@ -109,6 +137,8 @@ export interface CanonicalCaptureWrite {
   chunks: CanonicalChunkRecord[]
   operation: CanonicalMemoryOperationRecord
   projectionJobs: CanonicalProjectionJobRecord[]
+  /** Append-only ledger entry recorded atomically with the capture. */
+  event: CanonicalEventRecord | null
 }
 
 export interface CanonicalListRow {

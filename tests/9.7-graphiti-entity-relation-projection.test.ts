@@ -4,7 +4,6 @@ import { captureThroughCanonicalPipeline } from '../src/services/canonical-captu
 import { getCanonicalEntityTimeline, traceCanonicalRelationship } from '../src/services/canonical-graph-query'
 import { prepareContextForAgent } from '../src/services/chief-of-staff-context'
 import { encryptContentForArchive } from '../src/services/ingestion/encryption'
-import { getCanonicalMemoryStore } from '../src/services/canonical-postgres'
 import { processCanonicalProjectionDispatch } from '../src/workers/ingestion/canonical-projection-consumer'
 import type { CanonicalPipelineCaptureInput } from '../src/types/canonical-capture-pipeline'
 import { createGraphitiContainerTestEnv } from './support/graphiti-test-env'
@@ -13,6 +12,7 @@ import {
   type HindsightCaptureState,
   type HindsightRecallRow,
 } from './support/hindsight-test-env'
+import { seedHistoricalHindsightProjection } from './support/historical-hindsight-seed'
 
 type SeededCapture = {
   engineDocumentId: string
@@ -119,10 +119,9 @@ async function captureAndDispatch(args: {
 }): Promise<SeededCapture> {
   const sendSpy = vi.spyOn(args.testEnv.QUEUE_BULK, 'send').mockResolvedValue(undefined as never)
   const input = await encryptFixture(args.fixture, args.suffix, args.tmk)
-  const result = await captureThroughCanonicalPipeline({
+  await captureThroughCanonicalPipeline({
     ...input,
     memoryType: 'episodic',
-    compatibilityMode: 'current_hindsight',
   }, args.testEnv, TENANT_ID)
   const pending: Promise<unknown>[] = []
   const message = sendSpy.mock.calls[0]?.[0] as { tenantId: string; payload: Record<string, unknown> }
@@ -131,10 +130,22 @@ async function captureAndDispatch(args: {
   })
   await Promise.allSettled(pending)
   sendSpy.mockRestore()
-  const projection = await getCanonicalMemoryStore(args.testEnv)
-    .getLatestProjectionResultForOperation(TENANT_ID, result.capture.operationId, 'hindsight')
+  // Historical Hindsight projection: simulates a capture that was projected
+  // to Hindsight before the write path was severed (mission Phase 1). The
+  // pipeline can no longer produce these, so this is seeded directly for the
+  // same body/scope/title as the real (graphiti) capture above.
+  const seeded = await seedHistoricalHindsightProjection(args.testEnv, {
+    tenantId: TENANT_ID,
+    sourceSystem: args.fixture.sourceSystem,
+    sourceRef: args.fixture.sourceRef ? `${args.fixture.sourceRef}-${args.suffix}` : null,
+    scope: args.fixture.scope,
+    title: args.fixture.title ?? null,
+    body: args.fixture.body,
+    capturedAt: args.fixture.capturedAt ?? null,
+    tmk: args.tmk,
+  })
   return {
-    engineDocumentId: projection!.engine_document_id!,
+    engineDocumentId: seeded.engineDocumentId,
   }
 }
 
@@ -253,6 +264,7 @@ describe('9.7 graphiti entity and relation projection', () => {
       document_id: seeded.engineDocumentId,
       text: 'Project Atlas has an active owner and still depends on Beacon API for the next rollout.',
       score: 0.97,
+      tags: [`tenant:${TENANT_ID}`],
       metadata: { source: 'mcp_retain', domain: 'general' },
     })
 

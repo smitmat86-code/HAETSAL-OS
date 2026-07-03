@@ -104,7 +104,7 @@ beforeEach(() => {
 })
 
 describe('6.3 canonical capture pipeline', () => {
-  it('makes live note capture canonical-first, queues projection handoff, and records compatibility state', async () => {
+  it('makes live note capture canonical-first with a governed provenance envelope', async () => {
     const testEnv = makeEnvWithHindsightStub()
     const sendSpy = vi.spyOn(testEnv.QUEUE_BULK, 'send').mockResolvedValue(undefined as never)
     const input = await encryptFixture(noteFixture as CanonicalPipelineCaptureInput, TENANT_A, 'note')
@@ -112,33 +112,34 @@ describe('6.3 canonical capture pipeline', () => {
     const result = await captureThroughCanonicalPipeline({
       ...input,
       memoryType: 'episodic',
-      compatibilityMode: 'current_hindsight',
       salienceTier: 3,
       salienceSurpriseScore: 0.9,
-      hindsightAsync: true,
     }, testEnv, TENANT_A)
 
-    const queued = await getCanonicalMemoryStore(testEnv).getOperationById(TENANT_A, result.capture.operationId)
+    const store = getCanonicalMemoryStore(testEnv)
+    const operation = await store.getOperationById(TENANT_A, result.capture.operationId)
+    const capture = await store.getCapture(TENANT_A, result.capture.captureId)
     const message = sendSpy.mock.calls[0]?.[0]
     const status = await getCanonicalMemoryStatus({ tenantId: TENANT_A, operationId: result.capture.operationId }, testEnv, TENANT_A)
 
     expect(result.dispatch.status).toBe('queued')
-    expect(result.compatibility.status).toBe('queued')
-    expect(queued?.status).toBe('queued')
+    expect(operation?.status).toBe('queued')
     expect(JSON.stringify(message)).not.toContain(input.body)
     expect(JSON.stringify(message)).not.toContain(input.bodyEncrypted!)
-    expect(status.projections.map(item => item.kind)).toEqual(expect.arrayContaining(['hindsight', 'graphiti']))
-    expect(status.compatibility?.status).toBe('queued')
+    expect(status.projections.map(item => item.kind)).toEqual(['graphiti'])
+    expect(capture?.memory_class).toBe('episode')
+    expect(capture?.trust_state).toBe('evidence')
+    expect(capture?.salience_tier).toBe(3)
+    expect(result.capture.governance.memoryClass).toBe('episode')
   })
 
-  it('keeps conversation captures canonical-first even when compatibility is off', async () => {
+  it('keeps conversation captures canonical-first with graphiti-only projection', async () => {
     const testEnv = makeEnvWithHindsightStub()
     const sendSpy = vi.spyOn(testEnv.QUEUE_BULK, 'send').mockResolvedValue(undefined as never)
     const input = await encryptFixture(conversationFixture as CanonicalPipelineCaptureInput, TENANT_A, 'conversation')
 
     const result = await captureThroughCanonicalPipeline({
       ...input,
-      compatibilityMode: 'off',
       memoryType: 'semantic',
     }, testEnv, TENANT_A)
 
@@ -147,8 +148,7 @@ describe('6.3 canonical capture pipeline', () => {
 
     expect(result.capture.chunkIds.length).toBeGreaterThan(1)
     expect(document?.chunk_count).toBe(result.capture.chunkIds.length)
-    expect(result.compatibility.status).toBe('skipped')
-    expect(message.payload.projectionKinds).toEqual(expect.arrayContaining(['hindsight', 'graphiti']))
+    expect(message.payload.projectionKinds).toEqual(['graphiti'])
   })
 
   it('preserves encrypted artifact handling and keeps queue payloads metadata-only', async () => {
@@ -158,7 +158,6 @@ describe('6.3 canonical capture pipeline', () => {
 
     const result = await captureThroughCanonicalPipeline({
       ...input,
-      compatibilityMode: 'off',
       memoryType: 'world',
     }, testEnv, TENANT_A)
 
@@ -172,7 +171,7 @@ describe('6.3 canonical capture pipeline', () => {
     expect(messageJson).not.toContain('artifact-artifact')
   })
 
-  it('replaces the inline compatibility bridge with queued Hindsight projection work', async () => {
+  it('retains through the canonical pipeline with no Hindsight work at all', async () => {
     const tmk = await deriveTestTmk()
     const testEnv = makeEnvWithHindsightStub()
     const sendSpy = vi.spyOn(testEnv.QUEUE_BULK, 'send').mockResolvedValue(undefined as never)
@@ -186,7 +185,7 @@ describe('6.3 canonical capture pipeline', () => {
       provenance: 'mcp_retain',
     }
 
-    const result = await retainContent(artifact, tmk, testEnv, undefined, { hindsightAsync: true })
+    const result = await retainContent(artifact, tmk, testEnv)
     const hindsightOp = await testEnv.D1_US.prepare(
       `SELECT status FROM hindsight_operations WHERE operation_id = ?`,
     ).bind(result!.operationId).first<{ status: string }>()
@@ -198,11 +197,10 @@ describe('6.3 canonical capture pipeline', () => {
 
     expect(result?.canonicalCaptureId).toBeTruthy()
     expect(result?.canonicalDispatchStatus).toBe('queued')
-    expect(result?.compatibilityStatus).toBe('queued')
+    expect(result?.governance?.trustState).toBe('evidence')
     expect(sendSpy).toHaveBeenCalledTimes(1)
     expect(hindsightOp).toBeNull()
-    expect(status.compatibility?.status).toBe('queued')
-    expect(status.compatibility?.targetRef).toBeNull()
+    expect(status.projections.map(item => item.kind)).toEqual(['graphiti'])
   })
 
   it('still blocks procedural writes before canonical capture is created', async () => {

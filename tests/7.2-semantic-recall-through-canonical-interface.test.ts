@@ -3,7 +3,6 @@ import { env } from 'cloudflare:test'
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { captureThroughCanonicalPipeline } from '../src/services/canonical-capture-pipeline'
 import { getCanonicalMemoryStatus } from '../src/services/canonical-memory-status'
-import { getCanonicalMemoryStore } from '../src/services/canonical-postgres'
 import { encryptContentForArchive } from '../src/services/ingestion/encryption'
 import { registerCanonicalMemoryTools } from '../src/tools/canonical-memory'
 import type { CanonicalPipelineCaptureInput } from '../src/types/canonical-capture-pipeline'
@@ -14,6 +13,11 @@ import type {
 import { processCanonicalProjectionDispatch } from '../src/workers/ingestion/canonical-projection-consumer'
 import { reconcileHindsightOperation } from '../src/cron/hindsight-operations'
 import { createHindsightTestEnv, type HindsightCaptureState, type HindsightRecallRow } from './support/hindsight-test-env'
+import {
+  seedAvailableHindsightOperation,
+  seedHistoricalHindsightProjectionOnCapture,
+  seedPendingHindsightOperation,
+} from './support/hindsight-historical-projection-seed'
 import conversationFixture from './fixtures/canonical-memory/conversation-capture.json'
 import noteFixture from './fixtures/canonical-memory/note-capture.json'
 
@@ -120,40 +124,56 @@ async function processDispatch(
   await Promise.allSettled(pending)
 }
 
-async function processDispatchWithoutWaitUntil(
-  message: { tenantId: string; payload: Record<string, unknown> },
-  testEnv: typeof env,
-): Promise<void> {
-  await processCanonicalProjectionDispatch(message.tenantId, message.payload, testEnv)
-}
-
-async function captureAndProject(args: {
+/**
+ * Captures through the real (graphiti-only) pipeline, then seeds a
+ * historical 'hindsight' projection result on top of it directly through the
+ * canonical store. The write path that used to submit hindsight projections
+ * live was severed in mission Phase 1 (captureThroughCanonicalPipeline no
+ * longer accepts a 'hindsight' projectionKind); this reproduces the
+ * historical row shape that semantic recall/status still read.
+ */
+async function captureAndSeedHindsight(args: {
   fixture: CanonicalPipelineCaptureInput
   suffix: string
   memoryType: 'episodic' | 'semantic' | 'world'
-  hindsightAsync?: boolean
   testEnv: typeof env
   tmk: CryptoKey
+  resultStatus?: 'completed' | 'queued' | 'failed'
+  memoryUnitsAvailable?: boolean
 }): Promise<{ captureId: string; documentId: string; operationId: string; engineDocumentId: string; engineOperationId: string | null }> {
   const sendSpy = vi.spyOn(args.testEnv.QUEUE_BULK, 'send').mockResolvedValue(undefined as never)
   const input = await encryptFixture(args.fixture, TENANT_A, args.suffix, args.tmk)
   const result = await captureThroughCanonicalPipeline({
     ...input,
     memoryType: args.memoryType,
-    compatibilityMode: 'current_hindsight',
-    hindsightAsync: args.hindsightAsync ?? false,
   }, args.testEnv, TENANT_A)
   const message = sendSpy.mock.calls[0]?.[0] as { tenantId: string; payload: Record<string, unknown> }
   await processDispatch(message, args.testEnv)
   sendSpy.mockRestore()
-  const projection = await getCanonicalMemoryStore(args.testEnv)
-    .getLatestProjectionResultForOperation(TENANT_A, result.capture.operationId, 'hindsight')
+
+  const seeded = await seedHistoricalHindsightProjectionOnCapture({
+    testEnv: args.testEnv,
+    tenantId: TENANT_A,
+    captureId: result.capture.captureId,
+    documentId: result.capture.documentId,
+    operationId: result.capture.operationId,
+    resultStatus: args.resultStatus ?? 'completed',
+  })
+  await seedAvailableHindsightOperation({
+    testEnv: args.testEnv,
+    tenantId: TENANT_A,
+    bankId: `hindsight-${TENANT_A}`,
+    operationId: seeded.engineOperationId!,
+    sourceDocumentId: seeded.engineDocumentId!,
+    available: args.memoryUnitsAvailable ?? true,
+  })
+
   return {
     captureId: result.capture.captureId,
     documentId: result.capture.documentId,
     operationId: result.capture.operationId,
-    engineDocumentId: projection!.engine_document_id!,
-    engineOperationId: projection!.engine_operation_id,
+    engineDocumentId: seeded.engineDocumentId!,
+    engineOperationId: seeded.engineOperationId,
   }
 }
 
@@ -171,7 +191,7 @@ describe('7.2 semantic recall through canonical interface', () => {
     const recallResults: HindsightRecallRow[] = []
     const capture: HindsightCaptureState = { retainCount: 0, operationIds: [] }
     const testEnv = createHindsightTestEnv({ capture, operationStatus: 'completed', recallResults })
-    const seeded = await captureAndProject({
+    const seeded = await captureAndSeedHindsight({
       fixture: noteFixture as CanonicalPipelineCaptureInput,
       suffix: 'note-semantic',
       memoryType: 'episodic',
@@ -185,6 +205,7 @@ describe('7.2 semantic recall through canonical interface', () => {
       text: 'The user committed to following up with two open questions tomorrow.',
       score: 0.97,
       metadata: { source: 'mcp_retain', domain: 'general' },
+      tags: [`tenant:${TENANT_A}`, 'domain:general', 'source:mcp_retain'],
     }])
 
     const result = await callTool<CanonicalSearchResult>(createToolRegistry(testEnv, tmk), 'search_memory', {
@@ -207,7 +228,7 @@ describe('7.2 semantic recall through canonical interface', () => {
     const recallResults: HindsightRecallRow[] = []
     const capture: HindsightCaptureState = { retainCount: 0, operationIds: [] }
     const testEnv = createHindsightTestEnv({ capture, operationStatus: 'completed', recallResults })
-    const seeded = await captureAndProject({
+    const seeded = await captureAndSeedHindsight({
       fixture: noteFixture as CanonicalPipelineCaptureInput,
       suffix: 'strict-tag-match',
       memoryType: 'episodic',
@@ -221,6 +242,7 @@ describe('7.2 semantic recall through canonical interface', () => {
       text: 'The user committed to following up with two open questions tomorrow.',
       score: 0.95,
       metadata: { source: 'mcp_retain', domain: 'general' },
+      tags: [`tenant:${TENANT_A}`, 'domain:general', 'source:mcp_retain'],
     }])
 
     const result = await callTool<CanonicalSearchResult>(createToolRegistry(testEnv, tmk), 'search_memory', {
@@ -251,15 +273,33 @@ describe('7.2 semantic recall through canonical interface', () => {
     const seededCapture = await captureThroughCanonicalPipeline({
       ...input,
       memoryType: 'episodic',
-      compatibilityMode: 'current_hindsight',
-      hindsightAsync: true,
     }, testEnv, TENANT_A)
     const message = sendSpy.mock.calls[0]?.[0] as { tenantId: string; payload: Record<string, unknown> }
-    await processDispatchWithoutWaitUntil(message, testEnv)
-    const seeded = await getCanonicalMemoryStore(testEnv)
-      .getLatestProjectionResultForOperation(TENANT_A, seededCapture.capture.operationId, 'hindsight')
+    await processDispatch(message, testEnv)
+    sendSpy.mockRestore()
 
-    const pendingState = await reconcileHindsightOperation(seeded!.engine_operation_id!, testEnv)
+    // Simulate a legacy queued hindsight retain that predates the write-path
+    // cutover: a canonical projection row still marked queued, plus the
+    // matching D1 operation row that reconcileHindsightOperation polls.
+    const engineOperationId = `op-${crypto.randomUUID()}`
+    const seeded = await seedHistoricalHindsightProjectionOnCapture({
+      testEnv,
+      tenantId: TENANT_A,
+      captureId: seededCapture.capture.captureId,
+      documentId: seededCapture.capture.documentId,
+      operationId: seededCapture.capture.operationId,
+      resultStatus: 'queued',
+      engineOperationId,
+    })
+    await seedPendingHindsightOperation({
+      testEnv,
+      tenantId: TENANT_A,
+      bankId: `hindsight-${TENANT_A}`,
+      operationId: engineOperationId,
+      sourceDocumentId: seeded.engineDocumentId!,
+    })
+
+    const pendingState = await reconcileHindsightOperation(engineOperationId, testEnv)
     replaceRecallResults(recallResults, [])
     const pendingResult = await callTool<CanonicalSearchResult>(createToolRegistry(testEnv, tmk), 'search_memory', {
       query: 'What follow-up is due tomorrow?',
@@ -269,12 +309,13 @@ describe('7.2 semantic recall through canonical interface', () => {
 
     replaceRecallResults(recallResults, [{
       id: 'semantic-note-result-after-reconcile',
-      document_id: seeded!.engine_document_id!,
+      document_id: seeded.engineDocumentId,
       text: 'The user committed to following up with two open questions tomorrow.',
       score: 0.97,
       metadata: { source: 'mcp_retain', domain: 'general' },
+      tags: [`tenant:${TENANT_A}`, 'domain:general', 'source:mcp_retain'],
     }])
-    const settledState = await reconcileHindsightOperation(seeded!.engine_operation_id!, testEnv)
+    const settledState = await reconcileHindsightOperation(engineOperationId, testEnv)
     const settledResult = await callTool<CanonicalSearchResult>(createToolRegistry(testEnv, tmk), 'search_memory', {
       query: 'What follow-up is due tomorrow?',
       mode: 'semantic',
@@ -305,21 +346,41 @@ describe('7.2 semantic recall through canonical interface', () => {
     const seededCapture = await captureThroughCanonicalPipeline({
       ...input,
       memoryType: 'episodic',
-      compatibilityMode: 'current_hindsight',
-      hindsightAsync: true,
     }, testEnv, TENANT_A)
     const message = sendSpy.mock.calls[0]?.[0] as { tenantId: string; payload: Record<string, unknown> }
-    await processDispatchWithoutWaitUntil(message, testEnv)
-    const seeded = await getCanonicalMemoryStore(testEnv)
-      .getLatestProjectionResultForOperation(TENANT_A, seededCapture.capture.operationId, 'hindsight')
-    const settledState = await reconcileHindsightOperation(seeded!.engine_operation_id!, testEnv)
+    await processDispatch(message, testEnv)
+    sendSpy.mockRestore()
+
+    // Historical hindsight operation that completed on the engine side but
+    // never became available (no memory units materialized) — a queued
+    // canonical row plus a D1 operation row, reconciled once so its
+    // availability state reflects the "completed, zero units" scenario.
+    const engineOperationId = `op-${crypto.randomUUID()}`
+    const seeded = await seedHistoricalHindsightProjectionOnCapture({
+      testEnv,
+      tenantId: TENANT_A,
+      captureId: seededCapture.capture.captureId,
+      documentId: seededCapture.capture.documentId,
+      operationId: seededCapture.capture.operationId,
+      resultStatus: 'queued',
+      engineOperationId,
+    })
+    await seedPendingHindsightOperation({
+      testEnv,
+      tenantId: TENANT_A,
+      bankId: `hindsight-${TENANT_A}`,
+      operationId: engineOperationId,
+      sourceDocumentId: seeded.engineDocumentId!,
+    })
+    const settledState = await reconcileHindsightOperation(engineOperationId, testEnv)
 
     replaceRecallResults(recallResults, [{
       id: 'semantic-zero-unit-result',
-      document_id: seeded!.engine_document_id!,
+      document_id: seeded.engineDocumentId,
       text: 'The user committed to following up with two open questions tomorrow.',
       score: 0.91,
       metadata: { source: 'mcp_retain', domain: 'general' },
+      tags: [`tenant:${TENANT_A}`, 'domain:general', 'source:mcp_retain'],
     }])
 
     const search = await callTool<CanonicalSearchResult>(createToolRegistry(testEnv, tmk), 'search_memory', {
@@ -348,7 +409,7 @@ describe('7.2 semantic recall through canonical interface', () => {
     const recallResults: HindsightRecallRow[] = []
     const capture: HindsightCaptureState = { retainCount: 0, operationIds: [] }
     const testEnv = createHindsightTestEnv({ capture, operationStatus: 'completed', recallResults })
-    const seeded = await captureAndProject({
+    const seeded = await captureAndSeedHindsight({
       fixture: conversationFixture as CanonicalPipelineCaptureInput,
       suffix: 'conversation-semantic',
       memoryType: 'semantic',
@@ -362,6 +423,7 @@ describe('7.2 semantic recall through canonical interface', () => {
       text: 'The rollout notes should keep the checklist owner as an explicit follow-up item.',
       score: 0.91,
       metadata: { source: 'mcp_memory_write', domain: 'general' },
+      tags: [`tenant:${TENANT_A}`, 'domain:general', 'source:mcp_memory_write'],
     }])
 
     const result = await callTool<CanonicalSearchResult>(createToolRegistry(testEnv, tmk), 'search_memory', {
@@ -384,7 +446,7 @@ describe('7.2 semantic recall through canonical interface', () => {
     const recallResults: HindsightRecallRow[] = []
     const capture: HindsightCaptureState = { retainCount: 0, operationIds: [] }
     const testEnv = createHindsightTestEnv({ capture, operationStatus: 'completed', recallResults })
-    const seeded = await captureAndProject({
+    const seeded = await captureAndSeedHindsight({
       fixture: noteFixture as CanonicalPipelineCaptureInput,
       suffix: 'mixed-linkback',
       memoryType: 'episodic',
@@ -399,6 +461,7 @@ describe('7.2 semantic recall through canonical interface', () => {
         text: 'Follow up with two open questions tomorrow.',
         score: 0.88,
         metadata: { source: 'mcp_retain', domain: 'general' },
+        tags: [`tenant:${TENANT_A}`, 'domain:general', 'source:mcp_retain'],
       },
       {
         id: 'semantic-external-result',
@@ -437,8 +500,6 @@ describe('7.2 semantic recall through canonical interface', () => {
     await captureThroughCanonicalPipeline({
       ...input,
       memoryType: 'episodic',
-      compatibilityMode: 'current_hindsight',
-      hindsightAsync: true,
     }, testEnv, TENANT_A)
     sendSpy.mockRestore()
 
@@ -463,11 +524,10 @@ describe('7.2 semantic recall through canonical interface', () => {
     const recallResults: HindsightRecallRow[] = []
     const capture: HindsightCaptureState = { retainCount: 0, operationIds: [] }
     const testEnv = createHindsightTestEnv({ capture, operationStatus: 'completed', recallResults })
-    const seeded = await captureAndProject({
+    const seeded = await captureAndSeedHindsight({
       fixture: noteFixture as CanonicalPipelineCaptureInput,
       suffix: 'status-semantic',
       memoryType: 'episodic',
-      hindsightAsync: true,
       testEnv,
       tmk,
     })

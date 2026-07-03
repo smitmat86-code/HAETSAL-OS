@@ -1,15 +1,18 @@
 // tests/2.1-retain.test.ts
-// Retain pipeline integration tests
-// Verifies: dedup, plaintext Hindsight retain, D1 records, encrypted STONE R2 archive
+// Retain pipeline integration tests — canonical governed write path.
+// Verifies: dedup, canonical D1 trail, encrypted R2 archive, governance receipt.
+// Hindsight write path severed in mission Phase 1; retains never touch Hindsight.
 
-import { describe, it, expect, beforeAll } from 'vitest'
+import { describe, it, expect, beforeAll, vi } from 'vitest'
 import { env } from 'cloudflare:test'
-import { processCanonicalProjectionDispatch } from '../src/workers/ingestion/canonical-projection-consumer'
 import { retainContent } from '../src/services/ingestion/retain'
 import { computeDedupHash, checkDedup } from '../src/services/ingestion/dedup'
 import { inferDomain, inferMemoryType } from '../src/services/ingestion/domain'
 import { encryptContentForArchive } from '../src/services/ingestion/encryption'
+import { installCanonicalMemoryTestStore } from '../src/services/canonical-postgres'
 import type { IngestionArtifact } from '../src/types/ingestion'
+
+installCanonicalMemoryTestStore(env)
 
 // Create test tenant in D1 before retain tests (FK constraint)
 beforeAll(async () => {
@@ -65,69 +68,16 @@ function makeArtifact(overrides: Partial<IngestionArtifact> = {}): IngestionArti
   }
 }
 
-function makeEnvWithHindsightStub(
-  capture?: { bankIds: string[]; retainBodies?: unknown[] },
-  options?: { immediateProjectionDispatch?: boolean },
-) {
+function makeSeveredTestEnv() {
+  const hindsightFetch = vi.fn(async () => {
+    throw new Error('Hindsight must not be called by the retain pipeline (write path severed)')
+  })
   const testEnv = {
     ...env,
-    HINDSIGHT_DEDICATED_WORKERS_ENABLED: 'false',
     WORKER_DOMAIN: 'brain.workers.dev',
-    HINDSIGHT_WEBHOOK_SECRET: 'test-secret',
-    HINDSIGHT: {
-      fetch: async (input: RequestInfo | URL, init?: RequestInit) => {
-        const url =
-          input instanceof Request
-            ? new URL(input.url)
-            : new URL(input.toString())
-        if (/^\/v1\/default\/banks\/[^/]+\/mental-models$/.test(url.pathname) && (!init?.method || init.method === 'GET')) {
-          return new Response(JSON.stringify({ items: [] }), {
-            status: 200,
-            headers: { 'Content-Type': 'application/json' },
-          })
-        }
-        if (/^\/v1\/default\/banks\/[^/]+\/webhooks$/.test(url.pathname) && (!init?.method || init.method === 'GET')) {
-          return new Response(JSON.stringify({ items: [] }), {
-            status: 200,
-            headers: { 'Content-Type': 'application/json' },
-          })
-        }
-        if (/^\/v1\/default\/banks\/[^/]+\/memories$/.test(url.pathname)) {
-          capture?.bankIds.push(url.pathname.split('/')[4])
-          const request = input instanceof Request
-            ? input
-            : new Request(input.toString(), init)
-          capture?.retainBodies?.push(await request.clone().json())
-          return new Response(JSON.stringify({
-            success: true,
-            bank_id: url.pathname.split('/')[4],
-            items_count: 1,
-            async: false,
-          }), {
-            status: 200,
-            headers: { 'Content-Type': 'application/json' },
-          })
-        }
-        return new Response(JSON.stringify({ status: 'ok' }), {
-          status: 200,
-          headers: { 'Content-Type': 'application/json' },
-        })
-      },
-    },
+    HINDSIGHT: { fetch: hindsightFetch },
   } as unknown as typeof env
-  if (options?.immediateProjectionDispatch) {
-    testEnv.QUEUE_BULK.send = (async (message: {
-      tenantId: string
-      payload: Record<string, unknown>
-    }) => {
-      const pending: Promise<unknown>[] = []
-      await processCanonicalProjectionDispatch(message.tenantId, message.payload, testEnv, {
-        waitUntil: (promise: Promise<unknown>) => { pending.push(promise) },
-      })
-      await Promise.allSettled(pending)
-    }) as typeof env.QUEUE_BULK.send
-  }
-  return testEnv
+  return { testEnv, hindsightFetch }
 }
 
 describe('dedup', () => {
@@ -178,41 +128,61 @@ describe('domain inference', () => {
   })
 })
 
-describe('retainContent pipeline', () => {
-  it('retains content and creates D1 records', async () => {
+describe('retainContent pipeline (canonical-only)', () => {
+  it('retains content, creates the D1 ingestion trail, and never calls Hindsight', async () => {
     const tmk = await deriveTestTmk()
     const artifact = makeArtifact()
-    const testEnv = makeEnvWithHindsightStub(undefined, { immediateProjectionDispatch: true })
+    const { testEnv, hindsightFetch } = makeSeveredTestEnv()
 
     const result = await retainContent(artifact, tmk, testEnv)
 
     expect(result).not.toBeNull()
     expect(result!.memoryId).toBeTruthy()
+    expect(result!.memoryId).toBe(result!.canonicalOperationId)
     expect(result!.salienceTier).toBeGreaterThanOrEqual(1)
     expect(result!.dedupHash).toBeTruthy()
-    expect(result!.stoneR2Key).toBeTruthy()
+    expect(hindsightFetch).not.toHaveBeenCalled()
 
-    // Verify ingestion_events row
+    // Verify ingestion_events row (load-bearing for dedup)
     const event = await testEnv.D1_US.prepare(
       `SELECT * FROM ingestion_events WHERE dedup_hash = ?`,
     ).bind(result!.dedupHash).first()
     expect(event).not.toBeNull()
     expect(event!.tenant_id).toBe('test-tenant-retain')
-    expect(event!.memory_id).toBe(result!.memoryId)
+    expect(event!.memory_id).toBe(result!.canonicalOperationId)
+    expect(event!.r2_key).toBeTruthy()
 
-    // Verify memory_audit row
+    // Verify canonical memory_audit row
     const audit = await testEnv.D1_US.prepare(
-      `SELECT * FROM memory_audit WHERE memory_id = ?`,
-    ).bind(result!.memoryId).first()
+      `SELECT * FROM memory_audit WHERE memory_id = ? AND operation = 'memory.capture.accepted'`,
+    ).bind(result!.canonicalCaptureId).first()
     expect(audit).not.toBeNull()
-    expect(audit!.operation).toBe('retained')
+  })
+
+  it('returns a governance receipt with evidence-grade defaults', async () => {
+    const tmk = await deriveTestTmk()
+    const artifact = makeArtifact({
+      content: `governance-test-${crypto.randomUUID()}`,
+      memoryType: 'episodic',
+      governance: { authorKind: 'agent', agentIdentity: 'test_agent' },
+    })
+    const { testEnv } = makeSeveredTestEnv()
+
+    const result = await retainContent(artifact, tmk, testEnv)
+
+    expect(result).not.toBeNull()
+    expect(result!.governance?.memoryClass).toBe('episode')
+    expect(result!.governance?.trustState).toBe('evidence')
+    expect(result!.governance?.usePolicy).toBe('can_use_as_evidence')
+    expect(result!.governance?.authorKind).toBe('agent')
+    expect(result!.governance?.agentIdentity).toBe('test_agent')
   })
 
   it('returns null on dedup hit (second identical artifact)', async () => {
     const tmk = await deriveTestTmk()
     const content = `dedup-test-${crypto.randomUUID()}`
     const artifact = makeArtifact({ content })
-    const testEnv = makeEnvWithHindsightStub(undefined, { immediateProjectionDispatch: true })
+    const { testEnv } = makeSeveredTestEnv()
 
     // First retain — should succeed
     const first = await retainContent(artifact, tmk, testEnv)
@@ -223,19 +193,22 @@ describe('retainContent pipeline', () => {
     expect(second).toBeNull()
   })
 
-  it('writes encrypted content to R2 STONE archive', async () => {
+  it('writes encrypted content to the R2 archive', async () => {
     const tmk = await deriveTestTmk()
     const artifact = makeArtifact({ content: `stone-test-${crypto.randomUUID()}` })
-    const testEnv = makeEnvWithHindsightStub(undefined, { immediateProjectionDispatch: true })
+    const { testEnv } = makeSeveredTestEnv()
 
     const result = await retainContent(artifact, tmk, testEnv)
     expect(result).not.toBeNull()
 
-    // Verify R2 object exists at the STONE key
-    const r2Object = await testEnv.R2_ARTIFACTS.get(result!.stoneR2Key!)
-    expect(r2Object).not.toBeNull()
+    const event = await testEnv.D1_US.prepare(
+      `SELECT r2_key FROM ingestion_events WHERE dedup_hash = ?`,
+    ).bind(result!.dedupHash).first<{ r2_key: string }>()
+    expect(event?.r2_key).toBeTruthy()
 
-    // Content should be encrypted (base64), not plaintext
+    // Verify R2 object exists at the archival key and is not plaintext
+    const r2Object = await testEnv.R2_ARTIFACTS.get(event!.r2_key)
+    expect(r2Object).not.toBeNull()
     const storedContent = await r2Object!.text()
     expect(storedContent).not.toContain(artifact.content)
   })
@@ -244,158 +217,45 @@ describe('retainContent pipeline', () => {
     const tmk = await deriveTestTmk()
     const artifact = makeArtifact({ content: `pre-encrypted-test-${crypto.randomUUID()}` })
     const contentEncrypted = await encryptContentForArchive(artifact.content, tmk)
-    const testEnv = makeEnvWithHindsightStub(undefined, { immediateProjectionDispatch: true })
+    const { testEnv } = makeSeveredTestEnv()
 
     const result = await retainContent(artifact, null, testEnv, undefined, {
       contentEncrypted,
     })
 
     expect(result).not.toBeNull()
-    const r2Object = await testEnv.R2_ARTIFACTS.get(result!.stoneR2Key!)
+    const event = await testEnv.D1_US.prepare(
+      `SELECT r2_key FROM ingestion_events WHERE dedup_hash = ?`,
+    ).bind(result!.dedupHash).first<{ r2_key: string }>()
+    const r2Object = await testEnv.R2_ARTIFACTS.get(event!.r2_key)
     expect(r2Object).not.toBeNull()
     expect(await r2Object!.text()).toBe(contentEncrypted)
-  })
-
-  it('uses a stable document-based memory reference for Hindsight retains', async () => {
-    const tmk = await deriveTestTmk()
-    const artifact = makeArtifact({ content: `law2-test-${crypto.randomUUID()}` })
-    const testEnv = makeEnvWithHindsightStub(undefined, { immediateProjectionDispatch: true })
-
-    const result = await retainContent(artifact, tmk, testEnv)
-    expect(result).not.toBeNull()
-    expect(result!.memoryId).toBeTruthy()
-    expect(result!.memoryId).toContain('test-tenant-retain:mcp_retain:')
-  })
-
-  it('resolves the stored hindsight bank id before writing to Hindsight', async () => {
-    const tmk = await deriveTestTmk()
-    const artifact = makeArtifact({ content: `bank-id-test-${crypto.randomUUID()}` })
-    const capture = { bankIds: [] as string[] }
-    const testEnv = makeEnvWithHindsightStub(capture, { immediateProjectionDispatch: true })
-
-    const result = await retainContent(artifact, tmk, testEnv)
-
-    expect(result).not.toBeNull()
-    expect(capture.bankIds).toContain('hindsight-test-tenant-retain')
-    expect(capture.bankIds).not.toContain('test-tenant-retain')
-  })
-
-  it('normalizes Hindsight metadata values to strings', async () => {
-    const tmk = await deriveTestTmk()
-    const capture = { bankIds: [] as string[], retainBodies: [] as unknown[] }
-    const artifact = makeArtifact({
-      content: `metadata-test-${crypto.randomUUID()}`,
-      metadata: { priority: 3, nested: { source: 'test' }, enabled: true },
-    })
-    const testEnv = makeEnvWithHindsightStub(capture, { immediateProjectionDispatch: true })
-
-    const result = await retainContent(artifact, tmk, testEnv)
-
-    expect(result).not.toBeNull()
-    const body = capture.retainBodies[0] as {
-      items: Array<{ metadata: Record<string, string> }>
-    }
-    expect(body.items[0].metadata.priority).toBe('3')
-    expect(body.items[0].metadata.nested).toBe('{"source":"test"}')
-    expect(body.items[0].metadata.enabled).toBe('true')
-    expect(body.items[0].metadata.salience_tier).toMatch(/^[123]$/)
-    expect(body.items[0].metadata.occurred_at_ms).toBe(String(artifact.occurredAt))
   })
 
   it('scores salience correctly for mcp_retain source (Tier 3)', async () => {
     const tmk = await deriveTestTmk()
     const artifact = makeArtifact({ source: 'mcp_retain' })
-    const testEnv = makeEnvWithHindsightStub(undefined, { immediateProjectionDispatch: true })
+    const { testEnv } = makeSeveredTestEnv()
 
     const result = await retainContent(artifact, tmk, testEnv)
     expect(result).not.toBeNull()
     expect(result!.salienceTier).toBe(3)
   })
 
-  it('records async retain lifecycle in hindsight_operations', async () => {
+  it('does not create hindsight_operations rows for new retains', async () => {
     const tmk = await deriveTestTmk()
-    const artifact = makeArtifact({ content: `async-op-test-${crypto.randomUUID()}` })
-    const testEnv = makeEnvWithHindsightStub({
-      bankIds: [],
-      retainBodies: [],
-    }, { immediateProjectionDispatch: true })
-    testEnv.QUEUE_BULK.send = (async (message: {
-      tenantId: string
-      payload: Record<string, unknown>
-    }) => {
-      await processCanonicalProjectionDispatch(message.tenantId, message.payload, testEnv)
-    }) as typeof env.QUEUE_BULK.send
-    testEnv.HINDSIGHT = {
-      fetch: async (input: RequestInfo | URL, init?: RequestInit) => {
-        const url =
-          input instanceof Request
-            ? new URL(input.url)
-            : new URL(input.toString())
-        if (/^\/v1\/default\/banks\/[^/]+\/memories$/.test(url.pathname)) {
-          const request = input instanceof Request
-            ? input
-            : new Request(input.toString(), init)
-          await request.clone().json()
-          return new Response(JSON.stringify({
-            success: true,
-            bank_id: url.pathname.split('/')[4],
-            items_count: 1,
-            async: true,
-            operation_id: 'op-async-retain-test',
-          }), {
-            status: 200,
-            headers: { 'Content-Type': 'application/json' },
-          })
-        }
-        if (/^\/v1\/default\/banks\/[^/]+\/operations\/[^/]+$/.test(url.pathname)) {
-          return new Response(JSON.stringify({
-            operation_id: 'op-async-retain-test',
-            status: 'pending',
-            operation_type: 'retain',
-            created_at: new Date().toISOString(),
-            updated_at: new Date().toISOString(),
-            completed_at: null,
-            error_message: null,
-          }), {
-            status: 200,
-            headers: { 'Content-Type': 'application/json' },
-          })
-        }
-        return new Response(JSON.stringify({ status: 'ok' }), {
-          status: 200,
-          headers: { 'Content-Type': 'application/json' },
-        })
-      },
-    } as unknown as typeof env.HINDSIGHT
+    const artifact = makeArtifact({ content: `no-hindsight-ops-${crypto.randomUUID()}` })
+    const { testEnv } = makeSeveredTestEnv()
 
-    const result = await retainContent(artifact, tmk, testEnv, undefined, {
-      hindsightAsync: true,
-    })
+    const before = await testEnv.D1_US.prepare(
+      `SELECT COUNT(*) AS c FROM hindsight_operations WHERE tenant_id = 'test-tenant-retain'`,
+    ).first<{ c: number }>()
+    const result = await retainContent(artifact, tmk, testEnv)
+    const after = await testEnv.D1_US.prepare(
+      `SELECT COUNT(*) AS c FROM hindsight_operations WHERE tenant_id = 'test-tenant-retain'`,
+    ).first<{ c: number }>()
 
     expect(result).not.toBeNull()
-    expect(result!.operationId).toBe(result!.canonicalOperationId)
-
-    const row = await testEnv.D1_US.prepare(
-      `SELECT operation_id, tenant_id, bank_id, source_document_id, status, dedup_hash
-       FROM hindsight_operations
-       WHERE operation_id = ?`,
-    ).bind('op-async-retain-test').first<{
-      operation_id: string
-      tenant_id: string
-      bank_id: string
-      source_document_id: string
-      status: string
-      dedup_hash: string
-    }>()
-
-    expect(row).not.toBeNull()
-    expect(row!.tenant_id).toBe('test-tenant-retain')
-    expect(row!.status).toBe('pending')
-    expect(row!.source_document_id).toContain('test-tenant-retain:mcp_retain:')
-
-    const audit = await testEnv.D1_US.prepare(
-      `SELECT operation, memory_id FROM memory_audit WHERE operation = 'retain_queued' AND memory_id = ?`,
-    ).bind('op-async-retain-test').first()
-    expect(audit).not.toBeNull()
+    expect(after!.c).toBe(before!.c)
   })
 })

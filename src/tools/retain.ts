@@ -3,11 +3,12 @@
 
 import type { RetainInput, RetainOutput } from '../types/tools'
 import type { Env } from '../types/env'
+import type { CanonicalCaptureGovernanceInput } from '../types/canonical-memory'
 import { retainContent } from '../services/ingestion/retain'
 
 /**
- * MCP retain via direct ingestion so interactive writes are visible to Hindsight
- * without depending on the separate ingestion queue consumer.
+ * MCP retain via direct canonical ingestion so interactive writes land in
+ * canonical Postgres immediately, with a provenance-tagged receipt.
  */
 export async function retainViaService(
   input: RetainInput,
@@ -15,7 +16,7 @@ export async function retainViaService(
   tmk: CryptoKey | null,
   env: Env,
   ctx?: Pick<ExecutionContext, 'waitUntil'>,
-  options?: { hindsightAsync?: boolean; eagerProjectionDispatch?: boolean },
+  options?: { eagerProjectionDispatch?: boolean; governance?: CanonicalCaptureGovernanceInput | null },
 ): Promise<RetainOutput> {
   console.log('MCP_RETAIN_START', {
     tenantId,
@@ -46,8 +47,8 @@ export async function retainViaService(
     metadata: input.metadata ?? {
       ...(input.title ? { title: input.title } : {}),
     },
+    governance: options?.governance ?? null,
   }, tmk, env, ctx, {
-    hindsightAsync: options?.hindsightAsync ?? true,
     // Interactive MCP writes should preserve the old "write and hand off now"
     // behavior even though canonical projections are also queued for durability.
     eagerProjectionDispatch: options?.eagerProjectionDispatch ?? true,
@@ -67,6 +68,6 @@ export async function retainViaService(
     canonical_document_id: result?.canonicalDocumentId ?? undefined,
     canonical_operation_id: result?.canonicalOperationId ?? undefined,
     dispatch_status: result?.canonicalDispatchStatus ?? undefined,
-    compatibility_status: result?.compatibilityStatus ?? undefined,
+    governance: result?.governance ?? undefined,
   }
 }

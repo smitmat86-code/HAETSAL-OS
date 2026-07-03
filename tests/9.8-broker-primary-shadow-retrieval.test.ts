@@ -4,7 +4,6 @@ import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { captureThroughCanonicalPipeline } from '../src/services/canonical-capture-pipeline'
 import { decryptCanonicalPayload } from '../src/services/canonical-memory-read-model'
 import { encryptContentForArchive } from '../src/services/ingestion/encryption'
-import { getCanonicalMemoryStore } from '../src/services/canonical-postgres'
 import { registerCanonicalMemoryTools } from '../src/tools/canonical-memory'
 import type { CanonicalPipelineCaptureInput } from '../src/types/canonical-capture-pipeline'
 import type { CanonicalBrokerTraceDetail } from '../src/types/canonical-memory-broker'
@@ -12,6 +11,7 @@ import type { CanonicalSearchResult } from '../src/types/canonical-memory-query'
 import { processCanonicalProjectionDispatch } from '../src/workers/ingestion/canonical-projection-consumer'
 import { createGraphitiContainerTestEnv } from './support/graphiti-test-env'
 import { createHindsightTestEnv, type HindsightRecallRow } from './support/hindsight-test-env'
+import { seedHistoricalHindsightProjection } from './support/historical-hindsight-seed'
 import conversationFixture from './fixtures/canonical-memory/conversation-capture.json'
 
 type ToolResponse = { content: Array<{ text: string }> }
@@ -123,7 +123,6 @@ async function captureAndProject(
   const result = await captureThroughCanonicalPipeline({
     ...input,
     memoryType: 'semantic',
-    compatibilityMode: 'current_hindsight',
   }, testEnv, TENANT_ID)
   const message = sendSpy.mock.calls[0]?.[0] as { tenantId: string; payload: Record<string, unknown> }
   const pending: Promise<unknown>[] = []
@@ -132,11 +131,23 @@ async function captureAndProject(
   })
   await Promise.allSettled(pending)
   sendSpy.mockRestore()
-  const projection = await getCanonicalMemoryStore(testEnv)
-    .getLatestProjectionResultForOperation(TENANT_ID, result.capture.operationId, 'hindsight')
+  // Historical Hindsight projection: simulates a capture that was projected
+  // to Hindsight before the write path was severed (mission Phase 1). The
+  // pipeline can no longer produce these, so this is seeded directly for the
+  // same body/scope/title as the real (graphiti) capture above.
+  const seeded = await seedHistoricalHindsightProjection(testEnv, {
+    tenantId: TENANT_ID,
+    sourceSystem: fixture.sourceSystem,
+    sourceRef: fixture.sourceRef ? `${fixture.sourceRef}-${suffix}` : null,
+    scope: fixture.scope,
+    title: fixture.title ?? null,
+    body: fixture.body,
+    capturedAt: fixture.capturedAt ?? null,
+    tmk,
+  })
   return {
     operationId: result.capture.operationId,
-    engineDocumentId: projection!.engine_document_id!,
+    engineDocumentId: seeded.engineDocumentId,
   }
 }
 
@@ -173,6 +184,7 @@ describe('9.8 broker primary + shadow retrieval', () => {
       document_id: seeded.engineDocumentId,
       text: 'User still needs an owner for the operations checklist before the next meeting.',
       score: 0.96,
+      tags: [`tenant:${TENANT_ID}`],
       metadata: { source: 'mcp_memory_write', domain: 'general' },
     })
 
@@ -204,6 +216,7 @@ describe('9.8 broker primary + shadow retrieval', () => {
       document_id: seeded.engineDocumentId,
       text: 'User has an unresolved operations checklist owner before the next meeting.',
       score: 0.91,
+      tags: [`tenant:${TENANT_ID}`],
       metadata: { source: 'mcp_memory_write', domain: 'general' },
     })
 
@@ -233,6 +246,7 @@ describe('9.8 broker primary + shadow retrieval', () => {
       document_id: seeded.engineDocumentId,
       text: 'Delayed semantic shadow result for the broker.',
       score: 0.75,
+      tags: [`tenant:${TENANT_ID}`],
       metadata: { source: 'mcp_memory_write', domain: 'general' },
     })
     const registry = createToolRegistry(testEnv, tmk)
@@ -261,6 +275,7 @@ describe('9.8 broker primary + shadow retrieval', () => {
       document_id: seeded.engineDocumentId,
       text: 'Semantic memory says the checklist owner is unresolved.',
       score: 0.98,
+      tags: [`tenant:${TENANT_ID}`],
       metadata: { source: 'mcp_memory_write', domain: 'general' },
     })
 

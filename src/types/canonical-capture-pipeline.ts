@@ -1,7 +1,9 @@
 import type { IngestionSource } from './ingestion'
-import type { CanonicalArtifactRef, CanonicalProjectionKind } from './canonical-memory'
-
-export type CanonicalCompatibilityMode = 'off' | 'current_hindsight'
+import type {
+  CanonicalArtifactRef,
+  CanonicalCaptureGovernanceInput,
+  CanonicalProjectionKind,
+} from './canonical-memory'
 
 export interface CanonicalPipelineCaptureInput {
   tenantId: string
@@ -14,15 +16,14 @@ export interface CanonicalPipelineCaptureInput {
   artifactRef?: CanonicalArtifactRef | null
   capturedAt?: number | null
   memoryType?: 'episodic' | 'semantic' | 'world'
-  compatibilityMode?: CanonicalCompatibilityMode
   provenance?: string | null
   metadata?: Record<string, unknown>
   dedupHash?: string | null
   salienceTier?: 1 | 2 | 3
   salienceSurpriseScore?: number
-  hindsightAsync?: boolean
   eagerProjectionDispatch?: boolean
   projectionKinds?: CanonicalProjectionKind[] | null
+  governance?: CanonicalCaptureGovernanceInput | null
   canonicalCaptureId?: string
   canonicalDocumentId?: string
   canonicalOperationId?: string
@@ -64,29 +65,21 @@ export interface HindsightProjectionReconcileResult {
   errorMessage?: string | null
 }
 
-export interface CompatibilityRetainResult {
-  mode: CanonicalCompatibilityMode
-  status: 'skipped' | 'queued' | 'retained' | 'failed'
-  memoryId: string | null
-  operationId: string | null
-  documentId: string | null
-  stoneR2Key: string | null
-  errorMessage?: string | null
-}
-
 export interface CanonicalCapturePipelineResult {
   capture: {
     captureId: string
     documentId: string
+    artifactId: string | null
     chunkIds: string[]
     operationId: string
     projectionJobIds: string[]
     projectionKinds: CanonicalProjectionKind[]
+    bodyR2Key: string
+    governance: import('./canonical-memory').CanonicalCaptureResult['governance']
   }
   dispatch: {
     queue: 'QUEUE_BULK'
     status: 'queued'
     message: CanonicalProjectionDispatchMessage
   }
-  compatibility: CompatibilityRetainResult
 }

@@ -5,13 +5,11 @@ import type {
 } from '../types/canonical-capture-pipeline'
 import { maybeTriggerCompiledRefresh } from './canonical-compiled-refresh-trigger'
 import { materializeGraphitiProjectionPayload } from './canonical-graphiti-projection'
-import { materializeHindsightProjectionPayload } from './canonical-hindsight-projection'
 import { captureCanonicalMemory } from './canonical-memory'
 import {
   enqueueCanonicalProjectionDispatch,
   markCanonicalProjectionDispatchFailed,
 } from './canonical-projection-dispatch'
-import { runCompatibilityRetainBridge } from './canonical-capture-compat'
 import { processCanonicalProjectionDispatch } from '../workers/ingestion/canonical-projection-consumer'
 
 export async function captureThroughCanonicalPipeline(
@@ -32,6 +30,13 @@ export async function captureThroughCanonicalPipeline(
     artifactRef: input.artifactRef ?? null,
     capturedAt: input.capturedAt ?? null,
     projectionKinds: input.projectionKinds ?? null,
+    governance: {
+      ...input.governance,
+      legacyMemoryType: input.governance?.legacyMemoryType ?? input.memoryType ?? null,
+      provenanceNote: input.governance?.provenanceNote ?? input.provenance ?? null,
+      dedupHash: input.governance?.dedupHash ?? input.dedupHash ?? null,
+      salienceTier: input.governance?.salienceTier ?? input.salienceTier ?? null,
+    },
   }, env, tenantId)
 
   const message = {
@@ -52,23 +57,17 @@ export async function captureThroughCanonicalPipeline(
     canonicalDocumentId: capture.documentId,
     canonicalOperationId: capture.operationId,
   }
-  const materializationTasks = capture.projectionKinds.map((kind) => ({
-    kind,
-    task: kind === 'hindsight'
-      ? materializeHindsightProjectionPayload(projectionInput, capture.captureId, env)
-      : materializeGraphitiProjectionPayload(projectionInput, capture.captureId, env),
-  }))
-  await Promise.allSettled(materializationTasks.map(({ task }) => task)).then((results) => {
-    results.forEach((result, index) => {
-      if (result.status === 'fulfilled') return
-      const lane = materializationTasks[index]?.kind.toUpperCase() ?? 'UNKNOWN'
-      console.error(`${lane}_PROJECTION_PAYLOAD_MATERIALIZE_FAILED`, {
+  if (capture.projectionKinds.includes('graphiti')) {
+    try {
+      await materializeGraphitiProjectionPayload(projectionInput, capture.captureId, env)
+    } catch (error) {
+      console.error('GRAPHITI_PROJECTION_PAYLOAD_MATERIALIZE_FAILED', {
         tenantId,
         captureId: capture.captureId,
-        error: result.reason instanceof Error ? result.reason.message : String(result.reason),
+        error: error instanceof Error ? error.message : String(error),
       })
-    })
-  })
+    }
+  }
 
   try {
     await enqueueCanonicalProjectionDispatch(message, env)
@@ -79,13 +78,6 @@ export async function captureThroughCanonicalPipeline(
     await markCanonicalProjectionDispatchFailed(message, env, error)
     throw error
   }
-
-  const compatibility = await runCompatibilityRetainBridge({
-    ...input,
-    canonicalCaptureId: capture.captureId,
-    canonicalDocumentId: capture.documentId,
-    canonicalOperationId: capture.operationId,
-  }, env, tenantId)
 
   await maybeTriggerCompiledRefresh({
     tenantId,
@@ -111,6 +103,5 @@ export async function captureThroughCanonicalPipeline(
       status: 'queued',
       message,
     },
-    compatibility,
   }
 }

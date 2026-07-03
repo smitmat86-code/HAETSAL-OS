@@ -14,6 +14,7 @@ import type { CanonicalPipelineCaptureInput } from '../src/types/canonical-captu
 import { processCanonicalProjectionDispatch } from '../src/workers/ingestion/canonical-projection-consumer'
 import { createGraphitiContainerTestEnv } from './support/graphiti-test-env'
 import { createHindsightTestEnv, type HindsightCaptureState, type HindsightRecallRow } from './support/hindsight-test-env'
+import { seedHistoricalHindsightProjection } from './support/historical-hindsight-seed'
 import type {
   CompiledChangeViewReadModel,
   CompiledContextPackReadModel,
@@ -233,20 +234,32 @@ async function captureAndProject(args: {
 }): Promise<SeededCapture> {
   const sendSpy = vi.spyOn(args.testEnv.QUEUE_BULK, 'send').mockResolvedValue(undefined as never)
   const input = await encryptFixture(args.fixture, args.suffix, args.tmk)
-  const result = await captureThroughCanonicalPipeline({ ...input, memoryType: args.memoryType, compatibilityMode: 'current_hindsight' }, args.testEnv, FALLBACK_TENANT_ID)
+  const result = await captureThroughCanonicalPipeline({ ...input, memoryType: args.memoryType }, args.testEnv, FALLBACK_TENANT_ID)
   const pending: Promise<unknown>[] = []
   const message = sendSpy.mock.calls[0]?.[0] as { tenantId: string; payload: Record<string, unknown> }
   await processCanonicalProjectionDispatch(message.tenantId, message.payload, args.testEnv, { waitUntil: (promise: Promise<unknown>) => { pending.push(promise) } })
   await Promise.allSettled(pending)
   sendSpy.mockRestore()
   vi.restoreAllMocks()
-  const projection = await installCanonicalMemoryTestStore(args.testEnv)
-    .getLatestProjectionResultForOperation(FALLBACK_TENANT_ID, result.capture.operationId, 'hindsight')
+  // Historical Hindsight projection: simulates a capture that was projected
+  // to Hindsight before the write path was severed (mission Phase 1). The
+  // pipeline can no longer produce these, so this is seeded directly for the
+  // same body/scope/title as the real (graphiti) capture above.
+  const seeded = await seedHistoricalHindsightProjection(args.testEnv, {
+    tenantId: FALLBACK_TENANT_ID,
+    sourceSystem: args.fixture.sourceSystem,
+    sourceRef: args.fixture.sourceRef ? `${args.fixture.sourceRef}-${args.suffix}` : null,
+    scope: args.fixture.scope,
+    title: args.fixture.title ?? null,
+    body: args.fixture.body,
+    capturedAt: args.fixture.capturedAt ?? null,
+    tmk: args.tmk,
+  })
   return {
-    captureId: result.capture.captureId,
-    documentId: result.capture.documentId,
-    operationId: result.capture.operationId,
-    engineDocumentId: projection!.engine_document_id,
+    captureId: seeded.captureId,
+    documentId: seeded.documentId,
+    operationId: seeded.operationId,
+    engineDocumentId: seeded.engineDocumentId,
   }
 }
 
@@ -537,6 +550,7 @@ describe('11.3 Chief of Staff compiled read path', () => {
       document_id: seeded.engineDocumentId,
       text: 'Launch plan is down to three milestones, optional work left the critical path, and the checklist owner is still unresolved.',
       score: 0.95,
+      tags: [`tenant:${FALLBACK_TENANT_ID}`],
       metadata: { source: 'mcp_memory_write', domain: 'general' },
     })
 

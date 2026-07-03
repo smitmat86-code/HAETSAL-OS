@@ -62,9 +62,9 @@ export function registerMemoryTools(server: McpServer, ctx: MemoryToolContext): 
         source: 'mcp:memory_write', memoryType: memory_type,
         domain: domain ?? 'general', provenance: 'user_authored',
         occurredAt: Date.now(),
+        governance: { authorKind: 'user', legacyMemoryType: memory_type },
       }
       const result = await retainContent(artifact, tmk, ctx.getEnv(), ctx.getExecutionContext(), {
-        hindsightAsync: true,
         eagerProjectionDispatch: true,
       })
       console.log('MEMORY_WRITE_DONE', {
@@ -80,7 +80,7 @@ export function registerMemoryTools(server: McpServer, ctx: MemoryToolContext): 
           canonical_document_id: result?.canonicalDocumentId ?? null,
           canonical_operation_id: result?.canonicalOperationId ?? null,
           dispatch_status: result?.canonicalDispatchStatus ?? null,
-          compatibility_status: result?.compatibilityStatus ?? null,
+          governance: result?.governance ?? null,
         }) }] }
     },
   )

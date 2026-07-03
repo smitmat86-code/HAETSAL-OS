@@ -9,6 +9,7 @@ import type { CanonicalPipelineCaptureInput } from '../src/types/canonical-captu
 import type { CanonicalDocumentResult, CanonicalMemoryStatusResult } from '../src/types/canonical-memory-query'
 import { createGraphitiContainerTestEnv } from './support/graphiti-test-env'
 import { createHindsightTestEnv } from './support/hindsight-test-env'
+import { seedAvailableHindsightOperation, seedHistoricalHindsightProjectionOnCapture } from './support/hindsight-historical-projection-seed'
 import artifactFixture from './fixtures/canonical-memory/artifact-capture.json'
 import conversationFixture from './fixtures/canonical-memory/conversation-capture.json'
 import noteFixture from './fixtures/canonical-memory/note-capture.json'
@@ -127,13 +128,12 @@ describe('10.0 canonical Postgres source-of-truth cutover', () => {
 
     const result = await captureThroughCanonicalPipeline({
       ...input,
-      compatibilityMode: 'current_hindsight',
       eagerProjectionDispatch: true,
       memoryType: 'episodic',
     }, testEnv, id)
     const store = getCanonicalMemoryStore(testEnv)
     const capture = await store.getCapture(id, result.capture.captureId)
-    const projection = await store.getLatestProjectionResultForOperation(id, result.capture.operationId, 'hindsight')
+    const projection = await store.getLatestProjectionResultForOperation(id, result.capture.operationId, 'graphiti')
     const d1Mirror = await testEnv.D1_US.prepare(
       `SELECT source_system, source_ref, title, body_r2_key, body_sha256
        FROM canonical_captures
@@ -141,6 +141,7 @@ describe('10.0 canonical Postgres source-of-truth cutover', () => {
     ).bind(id, result.capture.captureId).first<Record<string, string | null>>()
 
     expect(capture?.id).toBe(result.capture.captureId)
+    expect(result.capture.projectionKinds).toEqual(['graphiti'])
     expect(projection?.result_status).toBe('completed')
     expect(d1Mirror).toBeNull()
   })
@@ -155,11 +156,22 @@ describe('10.0 canonical Postgres source-of-truth cutover', () => {
 
     const result = await captureThroughCanonicalPipeline({
       ...input,
-      compatibilityMode: 'current_hindsight',
       eagerProjectionDispatch: true,
       memoryType: 'semantic',
-      hindsightAsync: true,
     }, testEnv, id)
+
+    // Simulate a historical hindsight projection alongside the real (graphiti-only)
+    // capture — memory_status still surfaces hindsight rows created before the
+    // write path was severed in mission Phase 1.
+    await seedHistoricalHindsightProjectionOnCapture({
+      testEnv,
+      tenantId: id,
+      captureId: result.capture.captureId,
+      documentId: result.capture.documentId,
+      operationId: result.capture.operationId,
+      resultStatus: 'completed',
+    })
+
     const store = getCanonicalMemoryStore(testEnv)
     const document = await store.getDocument(id, result.capture.documentId)
     const status = await callTool<CanonicalMemoryStatusResult>(handlers, 'memory_status', {
@@ -185,10 +197,30 @@ describe('10.0 canonical Postgres source-of-truth cutover', () => {
 
     const result = await captureThroughCanonicalPipeline({
       ...input,
-      compatibilityMode: 'current_hindsight',
       eagerProjectionDispatch: true,
       memoryType: 'semantic',
     }, testEnv, id)
+
+    // Historical hindsight projection seeded directly through the canonical
+    // store — the write path was severed in mission Phase 1, but graph/hindsight
+    // reconciliation over already-projected historical rows is still real
+    // production behavior read straight from Postgres truth.
+    const seeded = await seedHistoricalHindsightProjectionOnCapture({
+      testEnv,
+      tenantId: id,
+      captureId: result.capture.captureId,
+      documentId: result.capture.documentId,
+      operationId: result.capture.operationId,
+      resultStatus: 'completed',
+    })
+    await seedAvailableHindsightOperation({
+      testEnv,
+      tenantId: id,
+      bankId: `hindsight-${id}`,
+      operationId: seeded.engineOperationId!,
+      sourceDocumentId: seeded.engineDocumentId!,
+    })
+
     const store = getCanonicalMemoryStore(testEnv)
     const document = await store.getDocument(id, result.capture.documentId)
     const hindsight = await store.getLatestProjectionResultForOperation(id, result.capture.operationId, 'hindsight')

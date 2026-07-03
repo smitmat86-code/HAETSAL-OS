@@ -1,4 +1,4 @@
-import type { CanonicalArtifactRef } from './canonical-memory'
+import type { CanonicalArtifactRef, CanonicalCaptureGovernanceInput, CanonicalCaptureResult } from './canonical-memory'
 
 export type IngestionSource =
   | 'sms'
@@ -23,6 +23,8 @@ export interface IngestionArtifact {
   provenance?: string
   artifactRef?: CanonicalArtifactRef | null
   metadata?: Record<string, unknown>
+  /** Provenance envelope + governance overrides for the canonical write (Phase 1). */
+  governance?: CanonicalCaptureGovernanceInput | null
 }
 
 export interface SalienceResult {
@@ -38,12 +40,11 @@ export interface RetainResult {
   documentId?: string | null
   salienceTier: number
   dedupHash: string
-  stoneR2Key: string | null
   canonicalCaptureId?: string | null
   canonicalDocumentId?: string | null
   canonicalOperationId?: string | null
   canonicalDispatchStatus?: 'queued' | 'failed'
-  compatibilityStatus?: 'skipped' | 'queued' | 'retained' | 'failed'
+  governance?: CanonicalCaptureResult['governance']
 }
 
 export type IngestionQueueMessageType =

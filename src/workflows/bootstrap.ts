@@ -15,9 +15,6 @@ import {
   importDriveHistory,
 } from '../services/bootstrap/historical-import'
 import { broadcastEvent } from '../services/action/executor'
-import {
-  ensureHindsightBankConfigured,
-} from '../services/bootstrap/hindsight-config'
 import { getMcpAgentObjectName } from '../workers/mcpagent/do/identity'
 
 export class BootstrapWorkflow extends WorkflowEntrypoint<Env, BootstrapParams> {
@@ -81,20 +78,9 @@ export class BootstrapWorkflow extends WorkflowEntrypoint<Env, BootstrapParams> 
       return await importDriveHistory(tenantId, driveMonths, token, this.env)
     })
 
-    // Phase C-1: Hindsight configuration (2.4a addendum)
-    // Order: bank config → mental models → webhook. Each step retries independently.
-    const bankId = await step.do('lookup-hindsight-bank', async () => {
-      const row = await this.env.D1_US.prepare(
-        'SELECT hindsight_tenant_id FROM tenants WHERE id = ?',
-      ).bind(tenantId).first<{ hindsight_tenant_id: string }>()
-      return row?.hindsight_tenant_id ?? ''
-    })
-
-    if (bankId) {
-      await step.do('ensure-hindsight-bank-configured', async () => {
-        await ensureHindsightBankConfigured(bankId, tenantId, this.env)
-      })
-    }
+    // Phase C-1 (Hindsight bank provisioning) removed: the Hindsight write
+    // path was severed in mission Phase 1. Canonical Postgres needs no
+    // per-tenant engine provisioning step.
 
     // Phase C-2: Handoff
     const totalImported = gmailCount + calendarCount + driveCount

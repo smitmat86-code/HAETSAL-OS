@@ -28,8 +28,13 @@ export async function captureExternalClientMemory(
       artifact_ref: normalized.artifactRef,
       metadata: normalized.metadata,
     }, tenantId, tmk, env, ctx, {
-      hindsightAsync: true,
       eagerProjectionDispatch: true,
+      governance: {
+        authorKind: 'external_client',
+        agentIdentity: normalized.clientName ?? 'external_client',
+        legacyMemoryType: memoryType,
+        provenanceNote: normalized.provenance,
+      },
     })),
     surface: BRAIN_MEMORY_SURFACE_PROFILE.surface,
     capture_mode: normalized.captureMode,

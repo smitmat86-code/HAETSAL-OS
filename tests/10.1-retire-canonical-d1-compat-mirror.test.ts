@@ -13,6 +13,7 @@ import type {
 } from '../src/types/canonical-memory-query'
 import { createGraphitiContainerTestEnv } from './support/graphiti-test-env'
 import { createHindsightTestEnv, type HindsightRecallRow } from './support/hindsight-test-env'
+import { seedAvailableHindsightOperation, seedHistoricalHindsightProjectionOnCapture } from './support/hindsight-historical-projection-seed'
 import conversationFixture from './fixtures/canonical-memory/conversation-capture.json'
 import noteFixture from './fixtures/canonical-memory/note-capture.json'
 
@@ -159,18 +160,36 @@ describe('10.1 retire canonical D1 compatibility mirror', () => {
 
     const result = await captureThroughCanonicalPipeline({
       ...input,
-      compatibilityMode: 'current_hindsight',
       eagerProjectionDispatch: true,
       memoryType: 'semantic',
     }, testEnv, id)
+
+    // Historical hindsight projection seeded directly through the canonical
+    // store — the write path was severed in mission Phase 1, but the read
+    // path (memory_status/search_memory) still has to serve historical rows.
+    const seeded = await seedHistoricalHindsightProjectionOnCapture({
+      testEnv,
+      tenantId: id,
+      captureId: result.capture.captureId,
+      documentId: result.capture.documentId,
+      operationId: result.capture.operationId,
+      resultStatus: 'completed',
+    })
+    await seedAvailableHindsightOperation({
+      testEnv,
+      tenantId: id,
+      bankId: `hindsight-${id}`,
+      operationId: seeded.engineOperationId!,
+      sourceDocumentId: seeded.engineDocumentId!,
+    })
     const store = getCanonicalMemoryStore(testEnv)
-    const projection = await store.getLatestProjectionResultForOperation(id, result.capture.operationId, 'hindsight')
     recallResults.splice(0, recallResults.length, {
       id: 'stable-semantic',
-      document_id: projection!.engine_document_id!,
+      document_id: seeded.engineDocumentId!,
       text: 'The operations checklist still needs an owner before launch.',
       score: 0.97,
       metadata: { source: 'mcp_memory_write', domain: 'general' },
+      tags: [`tenant:${id}`, 'domain:general', 'source:mcp_memory_write'],
     })
 
     const status = await callTool<CanonicalMemoryStatusResult>(handlers, 'memory_status', {
@@ -203,10 +222,23 @@ describe('10.1 retire canonical D1 compatibility mirror', () => {
 
     const result = await captureThroughCanonicalPipeline({
       ...input,
-      compatibilityMode: 'current_hindsight',
       eagerProjectionDispatch: true,
       memoryType: 'episodic',
     }, testEnv, id)
+
+    // The hindsight write path was severed in mission Phase 1: captures no
+    // longer create hindsight projections. Historical rows still have to
+    // reconcile from Postgres-only canonical truth (no D1 mirror), so this
+    // seeds the historical projection state the same way a pre-cutover
+    // completed retain would have left it.
+    await seedHistoricalHindsightProjectionOnCapture({
+      testEnv,
+      tenantId: id,
+      captureId: result.capture.captureId,
+      documentId: result.capture.documentId,
+      operationId: result.capture.operationId,
+      resultStatus: 'completed',
+    })
     const store = getCanonicalMemoryStore(testEnv)
     const projection = await store.getLatestProjectionResultForOperation(id, result.capture.operationId, 'hindsight')
 
@@ -226,7 +258,6 @@ describe('10.1 retire canonical D1 compatibility mirror', () => {
 
     const result = await captureThroughCanonicalPipeline({
       ...input,
-      compatibilityMode: 'current_hindsight',
       eagerProjectionDispatch: true,
       memoryType: 'semantic',
     }, testEnv, id)
@@ -251,18 +282,35 @@ describe('10.1 retire canonical D1 compatibility mirror', () => {
 
     const result = await captureThroughCanonicalPipeline({
       ...input,
-      compatibilityMode: 'current_hindsight',
       eagerProjectionDispatch: true,
       memoryType: 'semantic',
     }, testEnv, id)
-    const projection = await getCanonicalMemoryStore(testEnv)
-      .getLatestProjectionResultForOperation(id, result.capture.operationId, 'hindsight')
+
+    // Historical hindsight projection seeded directly through the canonical
+    // store (write path severed in mission Phase 1) so search_memory has a
+    // linkback to resolve, exercising the broker trace over historical data.
+    const seeded = await seedHistoricalHindsightProjectionOnCapture({
+      testEnv,
+      tenantId: id,
+      captureId: result.capture.captureId,
+      documentId: result.capture.documentId,
+      operationId: result.capture.operationId,
+      resultStatus: 'completed',
+    })
+    await seedAvailableHindsightOperation({
+      testEnv,
+      tenantId: id,
+      bankId: `hindsight-${id}`,
+      operationId: seeded.engineOperationId!,
+      sourceDocumentId: seeded.engineDocumentId!,
+    })
     recallResults.splice(0, recallResults.length, {
       id: 'broker-semantic',
-      document_id: projection!.engine_document_id!,
+      document_id: seeded.engineDocumentId!,
       text: 'User still needs an owner for the operations checklist before the next meeting.',
       score: 0.95,
       metadata: { source: 'mcp_memory_write', domain: 'general' },
+      tags: [`tenant:${id}`, 'domain:general', 'source:mcp_memory_write'],
     })
 
     const search = await callTool<CanonicalSearchResult>(handlers, 'search_memory', {

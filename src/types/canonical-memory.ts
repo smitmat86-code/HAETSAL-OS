@@ -12,6 +12,21 @@ export interface CanonicalArtifactRef {
   sha256?: string | null
 }
 
+export interface CanonicalCaptureGovernanceInput {
+  authorKind?: import('./canonical-governance').CanonicalAuthorKind
+  agentIdentity?: string | null
+  modelRuntime?: string | null
+  confidence?: number | null
+  retention?: import('./canonical-governance').CanonicalRetention | null
+  provenanceNote?: string | null
+  memoryClass?: import('./canonical-governance').CanonicalMemoryClass | null
+  trustState?: import('./canonical-governance').CanonicalTrustState | null
+  usePolicy?: import('./canonical-governance').CanonicalUsePolicy | null
+  legacyMemoryType?: 'episodic' | 'semantic' | 'world' | null
+  dedupHash?: string | null
+  salienceTier?: number | null
+}
+
 export interface CanonicalCaptureInput {
   tenantId: string
   sourceSystem: string
@@ -23,6 +38,7 @@ export interface CanonicalCaptureInput {
   artifactRef?: CanonicalArtifactRef | null
   capturedAt?: number | null
   projectionKinds?: CanonicalProjectionKind[] | null
+  governance?: CanonicalCaptureGovernanceInput | null
 }
 
 export interface CanonicalCaptureResult {
@@ -33,4 +49,15 @@ export interface CanonicalCaptureResult {
   operationId: string
   projectionJobIds: string[]
   projectionKinds: CanonicalProjectionKind[]
+  /** R2 key of the encrypted archival body. */
+  bodyR2Key: string
+  /** Provenance-tagged governance receipt for the write (Phase 1). */
+  governance: {
+    memoryClass: import('./canonical-governance').CanonicalMemoryClass
+    trustState: import('./canonical-governance').CanonicalTrustState
+    usePolicy: import('./canonical-governance').CanonicalUsePolicy
+    authorKind: import('./canonical-governance').CanonicalAuthorKind
+    agentIdentity: string | null
+    downgraded: { requestedClass?: string; requestedTrustState?: string; reason: string } | null
+  }
 }

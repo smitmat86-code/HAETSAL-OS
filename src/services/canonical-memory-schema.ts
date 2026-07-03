@@ -7,8 +7,12 @@ import type {
 const SAFE_VALUE = /^[a-z0-9:_-]{2,80}$/i
 const CHUNK_LIMIT = 240
 
+/**
+ * 'hindsight' removed from the active set — the Hindsight write path is
+ * severed (HAETSAL_MISSION.md Phase 1). Existing rows keep the historical
+ * value; new captures may not request it.
+ */
 export const CANONICAL_PROJECTION_KINDS: CanonicalProjectionKind[] = [
-  'hindsight',
   'graphiti',
 ]
 
@@ -21,6 +25,9 @@ export function resolveCanonicalProjectionKinds(
   const resolved: CanonicalProjectionKind[] = []
   for (const kind of projectionKinds) {
     if (!allowedKinds.has(kind)) {
+      if (kind === 'hindsight') {
+        throw new Error('Hindsight projections are retired: the write path was severed in mission Phase 1')
+      }
       throw new Error(`Invalid canonical projection kind: ${String(kind)}`)
     }
     if (!resolved.includes(kind)) resolved.push(kind)

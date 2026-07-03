@@ -14,6 +14,7 @@ import conversationFixture from './fixtures/canonical-memory/conversation-captur
 import noteFixture from './fixtures/canonical-memory/note-capture.json'
 import { createGraphitiContainerTestEnv } from './support/graphiti-test-env'
 import { createHindsightTestEnv, type HindsightCaptureState, type HindsightRecallRow } from './support/hindsight-test-env'
+import { seedHistoricalHindsightProjection } from './support/historical-hindsight-seed'
 
 type SeededCapture = { operationId: string; documentId: string; engineDocumentId: string }
 
@@ -89,7 +90,6 @@ async function captureAndDispatch(args: {
   const result = await captureThroughCanonicalPipeline({
     ...input,
     memoryType: args.memoryType,
-    compatibilityMode: 'current_hindsight',
   }, args.testEnv, TENANT_ID)
   const pending: Promise<unknown>[] = []
   const message = sendSpy.mock.calls[0]?.[0] as { tenantId: string; payload: Record<string, unknown> }
@@ -98,12 +98,24 @@ async function captureAndDispatch(args: {
   })
   await Promise.allSettled(pending)
   sendSpy.mockRestore()
-  const projection = await getCanonicalMemoryStore(args.testEnv)
-    .getLatestProjectionResultForOperation(TENANT_ID, result.capture.operationId, 'hindsight')
+  // Historical Hindsight projection: simulates a capture that was projected
+  // to Hindsight before the write path was severed (mission Phase 1). The
+  // pipeline can no longer produce these, so this is seeded directly for the
+  // same body/scope/title as the real (graphiti) capture above.
+  const seeded = await seedHistoricalHindsightProjection(args.testEnv, {
+    tenantId: TENANT_ID,
+    sourceSystem: args.fixture.sourceSystem,
+    sourceRef: args.fixture.sourceRef ? `${args.fixture.sourceRef}-${args.suffix}` : null,
+    scope: args.fixture.scope,
+    title: args.fixture.title ?? null,
+    body: args.fixture.body,
+    capturedAt: args.fixture.capturedAt ?? null,
+    tmk: args.tmk,
+  })
   return {
     operationId: result.capture.operationId,
-    documentId: result.capture.documentId,
-    engineDocumentId: projection!.engine_document_id!,
+    documentId: seeded.documentId,
+    engineDocumentId: seeded.engineDocumentId,
   }
 }
 
@@ -150,7 +162,6 @@ describe('9.6 graphiti internal container parity', () => {
     const capture = await captureThroughCanonicalPipeline({
       ...input,
       memoryType: 'episodic',
-      compatibilityMode: 'current_hindsight',
     }, testEnv, TENANT_ID)
     const message = sendSpy.mock.calls[0]?.[0] as { tenantId: string; payload: Record<string, unknown> }
     await processCanonicalProjectionDispatch(message.tenantId, message.payload, testEnv)
@@ -187,6 +198,7 @@ describe('9.6 graphiti internal container parity', () => {
       document_id: conversation.engineDocumentId,
       text: 'The operations checklist still needs an owner before the next meeting.',
       score: 0.96,
+      tags: [`tenant:${TENANT_ID}`],
       metadata: { source: 'mcp_memory_write', domain: 'general' },
     })
 
@@ -229,7 +241,6 @@ describe('9.6 graphiti internal container parity', () => {
     const capture = await captureThroughCanonicalPipeline({
       ...input,
       memoryType: 'episodic',
-      compatibilityMode: 'current_hindsight',
     }, testEnv, TENANT_ID)
     const graphJob = (await getCanonicalMemoryStore(testEnv)
       .listProjectionJobsForOperation(TENANT_ID, capture.capture.operationId))

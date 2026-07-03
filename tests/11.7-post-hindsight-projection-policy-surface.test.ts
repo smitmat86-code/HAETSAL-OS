@@ -74,7 +74,7 @@ async function makeInput(suffix: string): Promise<CanonicalPipelineCaptureInput>
 function createPolicyTestEnv() {
   const { requests, testEnv } = createGraphitiContainerTestEnv()
   const hindsightFetch = vi.fn(async () => {
-    throw new Error('Hindsight dispatch should not run for this policy test')
+    throw new Error('Hindsight dispatch should not run: write path severed in mission Phase 1')
   })
   return {
     requests,
@@ -105,9 +105,9 @@ beforeEach(() => {
   vi.restoreAllMocks()
 })
 
-describe('11.7 post-Hindsight projection policy surface', () => {
-  it('preserves hindsight and graphiti defaults when projectionKinds is omitted', async () => {
-    const { testEnv } = createPolicyTestEnv()
+describe('11.7 post-Hindsight projection policy surface (Phase 1 severed)', () => {
+  it('defaults to graphiti-only projection when projectionKinds is omitted', async () => {
+    const { hindsightFetch, testEnv } = createPolicyTestEnv()
     const sendSpy = vi.spyOn(testEnv.QUEUE_BULK, 'send').mockResolvedValue(undefined as never)
     const input = await makeInput('default')
 
@@ -116,13 +116,25 @@ describe('11.7 post-Hindsight projection policy surface', () => {
       .listProjectionJobsForOperation(TENANT_ID, result.capture.operationId)
     const message = sendSpy.mock.calls[0]?.[0] as { payload: { projectionKinds: string[] } }
 
-    expect(result.capture.projectionKinds).toEqual(['hindsight', 'graphiti'])
-    expect(message.payload.projectionKinds).toEqual(['hindsight', 'graphiti'])
-    expect(jobs.map(job => job.projection_kind)).toEqual(['graphiti', 'hindsight'])
-    expect(await testEnv.R2_ARTIFACTS.get(hindsightPayloadKey(result.capture.captureId))).toBeTruthy()
+    expect(result.capture.projectionKinds).toEqual(['graphiti'])
+    expect(message.payload.projectionKinds).toEqual(['graphiti'])
+    expect(jobs.map(job => job.projection_kind)).toEqual(['graphiti'])
     expect(await testEnv.R2_ARTIFACTS.get(graphitiPayloadKey(result.capture.captureId))).toBeTruthy()
-    expect(result.compatibility.mode).toBe('current_hindsight')
-    expect(result.compatibility.status).toBe('queued')
+    expect(await testEnv.R2_ARTIFACTS.get(hindsightPayloadKey(result.capture.captureId))).toBeNull()
+    expect('compatibility' in result).toBe(false)
+    expect(hindsightFetch).not.toHaveBeenCalled()
+  })
+
+  it('rejects an explicit hindsight projection request as retired', async () => {
+    const { hindsightFetch, testEnv } = createPolicyTestEnv()
+    vi.spyOn(testEnv.QUEUE_BULK, 'send').mockResolvedValue(undefined as never)
+    const input = await makeInput('hindsight-rejected')
+
+    await expect(captureThroughCanonicalPipeline({
+      ...input,
+      projectionKinds: ['hindsight'],
+    }, testEnv, TENANT_ID)).rejects.toThrow(/Hindsight projections are retired/)
+    expect(hindsightFetch).not.toHaveBeenCalled()
   })
 
   it('creates only graphiti projection jobs when projectionKinds selects graphiti', async () => {
@@ -146,44 +158,14 @@ describe('11.7 post-Hindsight projection policy surface', () => {
     expect(await testEnv.R2_ARTIFACTS.get(hindsightPayloadKey(result.capture.captureId))).toBeNull()
   })
 
-  it('supports graphiti-only canonical capture with compatibilityMode off', async () => {
-    const { hindsightFetch, testEnv } = createPolicyTestEnv()
-    const sendSpy = vi.spyOn(testEnv.QUEUE_BULK, 'send').mockResolvedValue(undefined as never)
-    const input = await makeInput('compat-off')
-
-    const result = await captureThroughCanonicalPipeline({
-      ...input,
-      compatibilityMode: 'off',
-      projectionKinds: ['graphiti'],
-    }, testEnv, TENANT_ID)
-    const hindsightProjection = await getCanonicalMemoryStore(testEnv)
-      .getLatestProjectionResultForOperation(TENANT_ID, result.capture.operationId, 'hindsight')
-
-    expect(result.compatibility).toEqual({
-      mode: 'off',
-      status: 'skipped',
-      memoryId: null,
-      operationId: null,
-      documentId: null,
-      stoneR2Key: null,
-      errorMessage: null,
-    })
-    expect(result.dispatch.message.payload.projectionKinds).toEqual(['graphiti'])
-    expect(sendSpy).toHaveBeenCalledTimes(1)
-    expect(hindsightProjection).toBeNull()
-    expect(hindsightFetch).not.toHaveBeenCalled()
-  })
-
-  it('does not materialize or dispatch Hindsight when eager graphiti-only dispatch is requested', async () => {
+  it('does not materialize or dispatch Hindsight when eager dispatch is requested', async () => {
     const { hindsightFetch, requests, testEnv } = createPolicyTestEnv()
     vi.spyOn(testEnv.QUEUE_BULK, 'send').mockResolvedValue(undefined as never)
     const input = await makeInput('eager-graphiti-only')
 
     const result = await captureThroughCanonicalPipeline({
       ...input,
-      compatibilityMode: 'off',
       eagerProjectionDispatch: true,
-      projectionKinds: ['graphiti'],
     }, testEnv, TENANT_ID)
     const store = getCanonicalMemoryStore(testEnv)
     const graphitiProjection = await store

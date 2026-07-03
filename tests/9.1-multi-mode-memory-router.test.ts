@@ -10,6 +10,7 @@ import type { CanonicalSearchResult } from '../src/types/canonical-memory-query'
 import { processCanonicalProjectionDispatch } from '../src/workers/ingestion/canonical-projection-consumer'
 import { createGraphitiContainerTestEnv } from './support/graphiti-test-env'
 import { createHindsightTestEnv, type HindsightRecallRow } from './support/hindsight-test-env'
+import { seedHistoricalHindsightProjection } from './support/historical-hindsight-seed'
 import conversationFixture from './fixtures/canonical-memory/conversation-capture.json'
 import noteFixture from './fixtures/canonical-memory/note-capture.json'
 
@@ -96,30 +97,24 @@ async function captureAndProject(args: {
   memoryType: 'episodic' | 'semantic' | 'world'
   testEnv: typeof env
   tmk: CryptoKey
-  compatibilityMode?: 'off' | 'current_hindsight'
 }): Promise<{
   captureId: string
   documentId: string
   operationId: string
-  engineDocumentId: string | null
 }> {
   const sendSpy = vi.spyOn(args.testEnv.QUEUE_BULK, 'send').mockResolvedValue(undefined as never)
   const input = await encryptFixture(args.fixture, args.suffix, args.tmk)
   const result = await captureThroughCanonicalPipeline({
     ...input,
-    compatibilityMode: args.compatibilityMode ?? 'off',
     memoryType: args.memoryType,
   }, args.testEnv, TENANT_A)
   const message = sendSpy.mock.calls[0]?.[0] as { tenantId: string; payload: Record<string, unknown> }
   await processCanonicalProjectionDispatch(message.tenantId, message.payload, args.testEnv)
   sendSpy.mockRestore()
-  const projection = await getCanonicalMemoryStore(args.testEnv)
-    .getLatestProjectionResultForOperation(TENANT_A, result.capture.operationId, 'hindsight')
   return {
     captureId: result.capture.captureId,
     documentId: result.capture.documentId,
     operationId: result.capture.operationId,
-    engineDocumentId: projection?.engine_document_id ?? null,
   }
 }
 
@@ -147,13 +142,19 @@ describe('9.1 multi-mode memory router', () => {
   it('routes concept questions to semantic mode with normalized attribution', async () => {
     const tmk = await deriveTestTmk()
     const testEnv = createRuntimeEnv({ recallResults: [] })
-    const seeded = await captureAndProject({
-      fixture: noteFixture as CanonicalPipelineCaptureInput,
-      suffix: 'semantic-route',
-      memoryType: 'episodic',
-      testEnv,
+    const noteInput = noteFixture as CanonicalPipelineCaptureInput
+    // Historical Hindsight projection: simulates a capture that was projected
+    // to Hindsight before the write path was severed (mission Phase 1). The
+    // pipeline can no longer produce these, so this is seeded directly.
+    const seeded = await seedHistoricalHindsightProjection(testEnv, {
+      tenantId: TENANT_A,
+      sourceSystem: noteInput.sourceSystem,
+      sourceRef: `${noteInput.sourceRef ?? 'fixture'}-semantic-route`,
+      scope: noteInput.scope,
+      title: noteInput.title,
+      body: noteInput.body,
+      capturedAt: noteInput.capturedAt,
       tmk,
-      compatibilityMode: 'current_hindsight',
     })
     const baseFetch = testEnv.HINDSIGHT.fetch
     testEnv.HINDSIGHT.fetch = async (input: RequestInfo | URL, init?: RequestInit) => {

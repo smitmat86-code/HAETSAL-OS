@@ -1,7 +1,5 @@
 import type { Env } from '../types/env'
 import { reconcileCanonicalHindsightProjection } from './canonical-hindsight-reconcile'
-import { fetchDocument, getOperationStatus } from './hindsight'
-import { resolveHindsightBankId } from './hindsight-transport'
 
 export interface HindsightStatusRefreshRow {
   projection_kind: string
@@ -28,6 +26,13 @@ export async function refreshQueuedHindsightProjection(
     return false
   }
 
+  // Lazy import: the Hindsight read stack pulls @cloudflare/containers, which
+  // only resolves inside workerd. This refresh path serves historical data
+  // only and is removed at the Phase 2 read cutover.
+  const [{ fetchDocument, getOperationStatus }, { resolveHindsightBankId }] = await Promise.all([
+    import('./hindsight'),
+    import('./hindsight-transport'),
+  ])
   const bankId = await resolveHindsightBankId(tenantId, env)
   const now = Date.now()
   let changed = false

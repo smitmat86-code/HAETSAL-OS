@@ -6,7 +6,7 @@ import type {
 } from '../types/canonical-memory-query'
 import type { HindsightRecallRequest, HindsightRecallResponse } from '../types/hindsight'
 import { buildCanonicalPreview, clampCanonicalLimit } from './canonical-memory-read-model'
-import { buildHindsightTags, recallMemory } from './hindsight'
+import { buildHindsightTags } from './hindsight-formatters'
 import { extractSemanticLookup, resolveCanonicalSemanticLinkback } from './canonical-semantic-linkback'
 
 type SemanticProjectionStatus = 'accepted' | 'queued' | 'completed' | 'failed' | 'unknown'
@@ -117,6 +117,9 @@ export async function searchCanonicalSemanticMemory(
   const limit = clampCanonicalLimit(input.limit, 5, 10)
   const requestedScope = input.scope ?? null
   try {
+    // Lazy import: the Hindsight read stack pulls @cloudflare/containers,
+    // which only resolves inside workerd. Retired at the Phase 2 cutover.
+    const { recallMemory } = await import('./hindsight')
     const response = await recallMemory(tenantId, {
       query: input.query,
       budget: 'mid',

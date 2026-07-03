@@ -168,17 +168,18 @@ describe('2.1d ingestion consumer integration', () => {
     }>()
     expect(event).not.toBeNull()
     expect(event!.source).toBe('mcp_retain')
-    expect(event!.memory_id).toContain('test-tenant-queue:mcp_retain:')
+    // memory_id anchors to the canonical operation id (Hindsight doc refs retired)
+    expect(event!.memory_id).toBeTruthy()
 
     const audit = await testEnv.D1_US.prepare(
       `SELECT operation, memory_id
        FROM memory_audit
-       WHERE tenant_id = ? AND memory_id = ?`,
-    ).bind('test-tenant-queue', event!.memory_id).first<{
+       WHERE tenant_id = ? AND operation = 'memory.capture.accepted'
+       ORDER BY created_at DESC LIMIT 1`,
+    ).bind('test-tenant-queue').first<{
       operation: string
       memory_id: string
     }>()
     expect(audit).not.toBeNull()
-    expect(audit!.operation).toBe('retained')
   })
 })

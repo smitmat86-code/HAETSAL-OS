@@ -56,6 +56,9 @@ const FILE_SIZE_ACCEPTED = new Set<string>([
     'src/services/canonical-memory.ts', // Canonical capture orchestrator remains centralized for cutover safety
     'src/services/canonical-postgres-repository.ts', // Canonical store implementation spans in-memory test store + Neon store
     'src/services/canonical-postgres-schema.ts', // Canonical schema contracts collected in one place for migration clarity
+    'src/services/canonical-governance-ddl.ts', // Phase 1 governance DDL kept in one idempotent statement list for schema clarity
+    'src/services/canonical-governance-postgres.ts', // Governance store Postgres implementation mirrors the canonical store pattern
+    'src/services/canonical-governance-memory.ts', // Governance store in-memory test twin mirrors the Postgres implementation
     'src/services/canonical-semantic-recall.ts', // Slightly over limit; semantic recall mapping kept intact during cutover
     'src/services/compiled-synthesis-repository.ts', // Compiled synthesis store mirrors canonical store structure across in-memory and Neon implementations
 ]);

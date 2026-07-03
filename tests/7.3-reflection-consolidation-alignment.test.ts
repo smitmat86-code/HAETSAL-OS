@@ -12,6 +12,7 @@ import type { CanonicalPipelineCaptureInput } from '../src/types/canonical-captu
 import type { CanonicalMemoryStatusResult } from '../src/types/canonical-memory-query'
 import { processCanonicalProjectionDispatch } from '../src/workers/ingestion/canonical-projection-consumer'
 import { createGraphitiContainerTestEnv } from './support/graphiti-test-env'
+import { seedAvailableHindsightOperation, seedHistoricalHindsightProjectionOnCapture } from './support/hindsight-historical-projection-seed'
 import noteFixture from './fixtures/canonical-memory/note-capture.json'
 
 const consolidationMocks = vi.hoisted(() => ({
@@ -123,10 +124,14 @@ async function encryptFixture(
   }
 }
 
-function createHindsightEnv(state: {
-  operationStatus: 'pending' | 'completed' | 'failed'
-  retainCount: number
-}): typeof env {
+/**
+ * The Hindsight retain/operation HTTP surface is no longer exercised by the
+ * capture pipeline (the write path was severed in mission Phase 1). This env
+ * only needs the graphiti container binding for the real capture; historical
+ * hindsight projection state is seeded directly through the canonical store
+ * via seedHistoricalHindsightProjectionOnCapture/seedAvailableHindsightOperation.
+ */
+function createHindsightEnv(): typeof env {
   const { testEnv } = createGraphitiContainerTestEnv()
   return {
     ...env,
@@ -135,39 +140,6 @@ function createHindsightEnv(state: {
     HINDSIGHT_DEDICATED_WORKERS_ENABLED: 'false',
     WORKER_DOMAIN: 'brain.workers.dev',
     HINDSIGHT_WEBHOOK_SECRET: 'test-secret',
-    HINDSIGHT: {
-      fetch: async (input: RequestInfo | URL, init?: RequestInit) => {
-        const url = input instanceof Request ? new URL(input.url) : new URL(input.toString())
-        if (/^\/v1\/default\/banks\/[^/]+\/mental-models$/.test(url.pathname) || /^\/v1\/default\/banks\/[^/]+\/webhooks$/.test(url.pathname)) {
-          return Response.json({ items: [] })
-        }
-        if (/^\/v1\/default\/banks\/[^/]+\/operations\/[^/]+$/.test(url.pathname)) {
-          const operationId = url.pathname.split('/').at(-1)
-          return Response.json({
-            operation_id: operationId,
-            status: state.operationStatus,
-            operation_type: 'retain',
-            created_at: new Date().toISOString(),
-            updated_at: new Date().toISOString(),
-            completed_at: state.operationStatus === 'pending' ? null : new Date().toISOString(),
-            error_message: state.operationStatus === 'failed' ? 'projection failed' : null,
-          })
-        }
-        if (/^\/v1\/default\/banks\/[^/]+\/memories$/.test(url.pathname)) {
-          const request = input instanceof Request ? input : new Request(input.toString(), init)
-          const body = await request.clone().json() as { items: Array<{ document_id: string }> }
-          state.retainCount += 1
-          return Response.json({
-            success: true,
-            bank_id: url.pathname.split('/')[4],
-            items_count: 1,
-            async: true,
-            operation_id: `op-${body.items[0]!.document_id}`,
-          })
-        }
-        return Response.json({ status: 'ok' })
-      },
-    },
   } as unknown as typeof env
 }
 
@@ -182,6 +154,15 @@ async function processDispatch(
   await Promise.allSettled(pending)
 }
 
+/**
+ * Captures through the real (graphiti-only) pipeline, then seeds a
+ * historical, fully-settled 'hindsight' projection on top of it directly
+ * through the canonical store plus the matching D1 availability row —
+ * reproducing the state a completed legacy retain would have left before the
+ * write path was severed. Reflection status only reads from that historical
+ * shape (memory_audit + consolidation_runs), so this is sufficient for
+ * every reflection/consolidation scenario in this file.
+ */
 async function captureAndProject(args: {
   suffix: string
   testEnv: typeof env
@@ -197,12 +178,27 @@ async function captureAndProject(args: {
   const result = await captureThroughCanonicalPipeline({
     ...input,
     memoryType: 'episodic',
-    compatibilityMode: 'current_hindsight',
   }, args.testEnv, TENANT_A)
 
   const message = sendSpy.mock.calls[0]?.[0] as { tenantId: string; payload: Record<string, unknown> }
   await processDispatch(message, args.testEnv)
   sendSpy.mockRestore()
+
+  const seeded = await seedHistoricalHindsightProjectionOnCapture({
+    testEnv: args.testEnv,
+    tenantId: TENANT_A,
+    captureId: result.capture.captureId,
+    documentId: result.capture.documentId,
+    operationId: result.capture.operationId,
+    resultStatus: 'completed',
+  })
+  await seedAvailableHindsightOperation({
+    testEnv: args.testEnv,
+    tenantId: TENANT_A,
+    bankId: HINDSIGHT_BANK_ID,
+    operationId: seeded.engineOperationId!,
+    sourceDocumentId: seeded.engineDocumentId!,
+  })
 
   return {
     captureId: result.capture.captureId,
@@ -240,7 +236,7 @@ beforeEach(async () => {
 describe('7.3 reflection / consolidation alignment', () => {
   it('extends canonical memory status from pending reflection to completed reflection through the existing consolidation runner', async () => {
     const tmk = await deriveTestTmk()
-    const testEnv = createHindsightEnv({ operationStatus: 'completed', retainCount: 0 })
+    const testEnv = createHindsightEnv()
     const seeded = await captureAndProject({
       suffix: 'reflection-complete',
       testEnv,
@@ -297,7 +293,7 @@ describe('7.3 reflection / consolidation alignment', () => {
 
   it('keeps failed and retried reflection states distinguishable and truthful', async () => {
     const tmk = await deriveTestTmk()
-    const testEnv = createHindsightEnv({ operationStatus: 'completed', retainCount: 0 })
+    const testEnv = createHindsightEnv()
     const seeded = await captureAndProject({
       suffix: 'reflection-retry',
       testEnv,
@@ -341,13 +337,12 @@ describe('7.3 reflection / consolidation alignment', () => {
 
   it('keeps reflection null until the semantic projection itself is actually complete', async () => {
     const tmk = await deriveTestTmk()
-    const testEnv = createHindsightEnv({ operationStatus: 'pending', retainCount: 0 })
+    const testEnv = createHindsightEnv()
     const sendSpy = vi.spyOn(testEnv.QUEUE_BULK, 'send').mockResolvedValue(undefined as never)
     const input = await encryptFixture(noteFixture as CanonicalPipelineCaptureInput, TENANT_A, 'still-queued', tmk)
     const result = await captureThroughCanonicalPipeline({
       ...input,
       memoryType: 'episodic',
-      compatibilityMode: 'current_hindsight',
     }, testEnv, TENANT_A)
     sendSpy.mockRestore()
 

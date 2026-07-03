@@ -5,6 +5,33 @@
 
 ---
 
+## Mission Phase 1 - 2026-07-03
+
+**Spec:** HAETSAL_MISSION.md Phase 1 (Canonical Governed Write Path, hard cutover)
+**Built:**
+- Governance vocabulary + resolution rules: `src/types/canonical-governance.ts`, `src/types/canonical-governance-records.ts`, `src/services/canonical-governance.ts` - epistemic classes (raw_source|episode|observation|claim|fact|preference|procedure|compiled_view), trust states (evidence|inferred|user_confirmed|trusted_import|disputed|stale|superseded|rejected), use policies, provenance envelope; agent writes forced to evidence/can_use_as_evidence; fact/instruction/protected-trust requests from non-user authors downgraded with recorded reason; procedure class rejected except consolidation_cron (Law 3)
+- Canonical Postgres governance schema: `src/services/canonical-governance-ddl.ts` (idempotent ALTERs on canonical_captures/chunks + 10 new tables: events, sessions, messages, entities, claims, facts, edges, reviews, policies, recall_traces), `src/services/canonical-postgres-base-ddl.ts` (base DDL extracted from repository)
+- Governance store: `src/services/canonical-governance-store.ts` (interface), `canonical-governance-postgres.ts`, `canonical-governance-memory.ts`; promotion discipline in `canonical-promotion.ts` (facts only via approved review, policy, or user)
+- Capture path now writes the full provenance envelope + governance columns + plaintext chunk_text (authorized Law 2 boundary) + an atomic canonical_events ledger row; provenance-tagged governance receipt returned to callers (`canonical-memory.ts`, `canonical-capture-pipeline.ts`, `ingestion/retain.ts`, `tools/retain.ts`, `tools/memory.ts`, `external-client-memory-write.ts`)
+- Hindsight write path SEVERED: projection kinds default ['graphiti'], 'hindsight' rejected; compat bridge deleted; hindsight materializer/submission deleted; hindsightAsync/compatibilityMode removed; bootstrap ensure-hindsight-bank step removed; queue consumer skips legacy hindsight jobs with a logged marker. Deleted: canonical-capture-compat.ts, canonical-hindsight-projection{,-payload}.ts, ingestion/retain-{request,persistence}.ts, bootstrap/hindsight-{config,bank-spec}.ts
+- Dedup regression fix: ingestion_events insert re-homed into retainContent (was hidden inside the deleted Hindsight dispatcher; checkDedup reads it)
+- Tests: mission-1.0 (governed write contracts), mission-1.1 (governance primitives + promotion), 11.7 rewritten to severed policy; 2.1/2.1d/1.2-tools/6.1/6.2/6.3 rewritten canonical-only; 7.2/7.3/10.0/10.1 + 9.1/9.2/9.4/9.6-9.9/11.3 reseeded over historical-hindsight fixtures (read path serves historical data until Phase 2); 7.1 + 2.4a deleted with their subjects; two seeding helpers in tests/support/
+- Live smoke: `scripts/mission-phase1-live-smoke.ts` (capture_memory tool handler -> canonical Postgres, envelope + event + chunk_text verified; see lessons for substrate note)
+**Decisions:**
+- Law 2 boundary shift implemented as authorized: canonical Postgres (Neon via Hyperdrive) is now the plaintext memory surface (chunk_text/claims/messages); bodies remain TMK-encrypted in R2; D1/KV/logs stay content-free
+- Graphiti writes continue until Phase 2 (reads+writes severed together there); Hindsight reads remain for historical data until Phase 2
+- Legacy memoryType mapping locked: episodic->episode, semantic->claim, world->observation
+**Verification:**
+- `npm test`: 76 files, 417 passed, 1 skipped
+- `npm run postflight`: pass (3 new schema/store files added to accepted list with justification)
+- Law-2 audit subagent + fresh-context verifier: see phase gate report
+- Live smoke: PHASE1_LIVE_SMOKE_OK (see docs/lessons/phase-1-write-path-severance.md item 6 for substrate)
+**Hindsight Pin:** write path severed; container + read path remain until Phase 2/3
+**Blockers:** none
+**Next:** Phase 2 - retrieval broker (7 modes over canonical Postgres FTS/pgvector/graph), sever Hindsight read path + Graphiti reads/writes
+
+---
+
 ## Mission Phase 0 - 2026-07-02
 
 **Spec:** HAETSAL_MISSION.md Phase 0 (Mission Bootstrap & Baseline Reset)

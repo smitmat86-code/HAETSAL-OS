@@ -1,5 +1,7 @@
 import type { CanonicalGraphIdentityMapping } from '../types/canonical-graph-projection'
 import { CANONICAL_POSTGRES_SCHEMA } from './canonical-postgres-schema'
+import { CANONICAL_BASE_DDL } from './canonical-postgres-base-ddl'
+import { CANONICAL_GOVERNANCE_DDL } from './canonical-governance-ddl'
 import type { PostgresSql } from './postgres-sql'
 import type {
   CanonicalArtifactRecord,
@@ -26,6 +28,7 @@ import type {
 
 export interface CanonicalMemoryStore {
   writeCapture(input: CanonicalCaptureWrite): Promise<void>
+  listRecentEvents(tenantId: string, limit: number): Promise<NonNullable<CanonicalCaptureWrite['event']>[]>
   getCapture(tenantId: string, captureId: string): Promise<CanonicalCaptureRecord | null>
   getCaptureBodyKey(tenantId: string, captureId: string): Promise<string | null>
   listRecentDocuments(tenantId: string, scope: string | null, limit: number): Promise<CanonicalListRow[]>
@@ -176,6 +179,7 @@ export class InMemoryCanonicalMemoryStore implements CanonicalMemoryStore {
   private readonly projectionJobs = new Map<string, CanonicalCaptureWrite['projectionJobs'][number]>()
   private readonly projectionResults = new Map<string, CanonicalProjectionResultRecord>()
   private readonly graphIdentityMappings = new Map<string, CanonicalGraphIdentityMappingRecord>()
+  private readonly events = new Map<string, NonNullable<CanonicalCaptureWrite['event']>>()
 
   async writeCapture(input: CanonicalCaptureWrite): Promise<void> {
     this.captures.set(input.capture.id, { ...input.capture })
@@ -184,6 +188,15 @@ export class InMemoryCanonicalMemoryStore implements CanonicalMemoryStore {
     input.chunks.forEach((chunk) => { this.chunks.set(chunk.id, { ...chunk }) })
     this.operations.set(input.operation.id, { ...input.operation })
     input.projectionJobs.forEach((job) => { this.projectionJobs.set(job.id, { ...job }) })
+    if (input.event) this.events.set(input.event.id, { ...input.event })
+  }
+
+  async listRecentEvents(tenantId: string, limit: number): Promise<NonNullable<CanonicalCaptureWrite['event']>[]> {
+    return [...this.events.values()]
+      .filter((event) => event.tenant_id === tenantId)
+      .sort((left, right) => right.occurred_at - left.occurred_at || right.id.localeCompare(left.id))
+      .slice(0, limit)
+      .map((event) => ({ ...event }))
   }
 
   async getCapture(tenantId: string, captureId: string): Promise<CanonicalCaptureRecord | null> {
@@ -599,122 +612,7 @@ export class PostgresCanonicalMemoryStore implements CanonicalMemoryStore {
 
   private async ensureSchemaOnce(): Promise<void> {
     await this.sql.query(`CREATE SCHEMA IF NOT EXISTS ${CANONICAL_POSTGRES_SCHEMA}`)
-    const statements = [
-      `CREATE TABLE IF NOT EXISTS ${CANONICAL_POSTGRES_SCHEMA}.canonical_captures (
-        id TEXT PRIMARY KEY,
-        tenant_id TEXT NOT NULL,
-        source_system TEXT NOT NULL,
-        source_ref TEXT,
-        scope TEXT NOT NULL,
-        title TEXT,
-        body_r2_key TEXT NOT NULL,
-        body_sha256 TEXT NOT NULL,
-        artifact_id TEXT,
-        captured_at BIGINT NOT NULL,
-        created_at BIGINT NOT NULL
-      )`,
-      `CREATE INDEX IF NOT EXISTS idx_pg_canonical_captures_tenant_source
-        ON ${CANONICAL_POSTGRES_SCHEMA}.canonical_captures(tenant_id, source_system, created_at DESC)`,
-      `CREATE INDEX IF NOT EXISTS idx_pg_canonical_captures_tenant_scope
-        ON ${CANONICAL_POSTGRES_SCHEMA}.canonical_captures(tenant_id, scope, created_at DESC)`,
-      `CREATE TABLE IF NOT EXISTS ${CANONICAL_POSTGRES_SCHEMA}.canonical_artifacts (
-        id TEXT PRIMARY KEY,
-        tenant_id TEXT NOT NULL,
-        capture_id TEXT NOT NULL REFERENCES ${CANONICAL_POSTGRES_SCHEMA}.canonical_captures(id) ON DELETE CASCADE,
-        storage_kind TEXT NOT NULL,
-        r2_key TEXT,
-        media_type TEXT,
-        filename TEXT,
-        byte_length BIGINT,
-        sha256 TEXT,
-        created_at BIGINT NOT NULL
-      )`,
-      `CREATE INDEX IF NOT EXISTS idx_pg_canonical_artifacts_tenant_created
-        ON ${CANONICAL_POSTGRES_SCHEMA}.canonical_artifacts(tenant_id, created_at DESC)`,
-      `CREATE TABLE IF NOT EXISTS ${CANONICAL_POSTGRES_SCHEMA}.canonical_documents (
-        id TEXT PRIMARY KEY,
-        tenant_id TEXT NOT NULL,
-        capture_id TEXT NOT NULL REFERENCES ${CANONICAL_POSTGRES_SCHEMA}.canonical_captures(id) ON DELETE CASCADE,
-        artifact_id TEXT REFERENCES ${CANONICAL_POSTGRES_SCHEMA}.canonical_artifacts(id) ON DELETE SET NULL,
-        title TEXT,
-        body_r2_key TEXT NOT NULL,
-        body_sha256 TEXT NOT NULL,
-        chunk_count INTEGER NOT NULL,
-        created_at BIGINT NOT NULL
-      )`,
-      `CREATE INDEX IF NOT EXISTS idx_pg_canonical_documents_tenant_capture
-        ON ${CANONICAL_POSTGRES_SCHEMA}.canonical_documents(tenant_id, capture_id, created_at DESC)`,
-      `CREATE TABLE IF NOT EXISTS ${CANONICAL_POSTGRES_SCHEMA}.canonical_chunks (
-        id TEXT PRIMARY KEY,
-        tenant_id TEXT NOT NULL,
-        document_id TEXT NOT NULL REFERENCES ${CANONICAL_POSTGRES_SCHEMA}.canonical_documents(id) ON DELETE CASCADE,
-        ordinal INTEGER NOT NULL,
-        start_offset INTEGER NOT NULL,
-        end_offset INTEGER NOT NULL,
-        chunk_sha256 TEXT NOT NULL,
-        created_at BIGINT NOT NULL
-      )`,
-      `CREATE UNIQUE INDEX IF NOT EXISTS idx_pg_canonical_chunks_document_ordinal
-        ON ${CANONICAL_POSTGRES_SCHEMA}.canonical_chunks(document_id, ordinal)`,
-      `CREATE INDEX IF NOT EXISTS idx_pg_canonical_chunks_tenant_document
-        ON ${CANONICAL_POSTGRES_SCHEMA}.canonical_chunks(tenant_id, document_id)`,
-      `CREATE TABLE IF NOT EXISTS ${CANONICAL_POSTGRES_SCHEMA}.canonical_memory_operations (
-        id TEXT PRIMARY KEY,
-        tenant_id TEXT NOT NULL,
-        capture_id TEXT NOT NULL REFERENCES ${CANONICAL_POSTGRES_SCHEMA}.canonical_captures(id) ON DELETE CASCADE,
-        operation_type TEXT NOT NULL,
-        status TEXT NOT NULL,
-        created_at BIGINT NOT NULL,
-        updated_at BIGINT NOT NULL
-      )`,
-      `CREATE INDEX IF NOT EXISTS idx_pg_canonical_memory_operations_tenant_status
-        ON ${CANONICAL_POSTGRES_SCHEMA}.canonical_memory_operations(tenant_id, status, created_at DESC)`,
-      `CREATE TABLE IF NOT EXISTS ${CANONICAL_POSTGRES_SCHEMA}.canonical_projection_jobs (
-        id TEXT PRIMARY KEY,
-        tenant_id TEXT NOT NULL,
-        operation_id TEXT NOT NULL REFERENCES ${CANONICAL_POSTGRES_SCHEMA}.canonical_memory_operations(id) ON DELETE CASCADE,
-        capture_id TEXT NOT NULL REFERENCES ${CANONICAL_POSTGRES_SCHEMA}.canonical_captures(id) ON DELETE CASCADE,
-        document_id TEXT NOT NULL REFERENCES ${CANONICAL_POSTGRES_SCHEMA}.canonical_documents(id) ON DELETE CASCADE,
-        projection_kind TEXT NOT NULL,
-        status TEXT NOT NULL,
-        created_at BIGINT NOT NULL,
-        enqueued_at BIGINT NOT NULL
-      )`,
-      `CREATE INDEX IF NOT EXISTS idx_pg_canonical_projection_jobs_tenant_status
-        ON ${CANONICAL_POSTGRES_SCHEMA}.canonical_projection_jobs(tenant_id, projection_kind, status, created_at DESC)`,
-      `CREATE TABLE IF NOT EXISTS ${CANONICAL_POSTGRES_SCHEMA}.canonical_projection_results (
-        id TEXT PRIMARY KEY,
-        tenant_id TEXT NOT NULL,
-        projection_job_id TEXT NOT NULL REFERENCES ${CANONICAL_POSTGRES_SCHEMA}.canonical_projection_jobs(id) ON DELETE CASCADE,
-        status TEXT NOT NULL,
-        target_ref TEXT,
-        error_message TEXT,
-        engine_bank_id TEXT,
-        engine_document_id TEXT,
-        engine_operation_id TEXT,
-        created_at BIGINT NOT NULL,
-        updated_at BIGINT NOT NULL
-      )`,
-      `CREATE INDEX IF NOT EXISTS idx_pg_canonical_projection_results_tenant_status
-        ON ${CANONICAL_POSTGRES_SCHEMA}.canonical_projection_results(tenant_id, status, created_at DESC)`,
-      `CREATE INDEX IF NOT EXISTS idx_pg_canonical_projection_results_operation
-        ON ${CANONICAL_POSTGRES_SCHEMA}.canonical_projection_results(engine_operation_id, updated_at DESC)`,
-      `CREATE TABLE IF NOT EXISTS ${CANONICAL_POSTGRES_SCHEMA}.canonical_graph_identity_mappings (
-        id TEXT PRIMARY KEY,
-        tenant_id TEXT NOT NULL,
-        projection_job_id TEXT NOT NULL REFERENCES ${CANONICAL_POSTGRES_SCHEMA}.canonical_projection_jobs(id) ON DELETE CASCADE,
-        canonical_key TEXT NOT NULL,
-        graph_ref TEXT NOT NULL,
-        graph_kind TEXT NOT NULL,
-        created_at BIGINT NOT NULL,
-        updated_at BIGINT NOT NULL
-      )`,
-      `CREATE UNIQUE INDEX IF NOT EXISTS idx_pg_canonical_graph_identity_unique
-        ON ${CANONICAL_POSTGRES_SCHEMA}.canonical_graph_identity_mappings(projection_job_id, canonical_key, graph_kind)`,
-      `CREATE INDEX IF NOT EXISTS idx_pg_canonical_graph_identity_lookup
-        ON ${CANONICAL_POSTGRES_SCHEMA}.canonical_graph_identity_mappings(tenant_id, canonical_key, graph_kind, updated_at DESC)`,
-    ]
-    for (const statement of statements) {
+    for (const statement of [...CANONICAL_BASE_DDL, ...CANONICAL_GOVERNANCE_DDL]) {
       await this.sql.query(statement)
     }
   }
@@ -732,10 +630,17 @@ export class PostgresCanonicalMemoryStore implements CanonicalMemoryStore {
     await this.ensureSchema()
     const queries = [
       this.sql.prepare`INSERT INTO haetsal_canonical.canonical_captures
-        (id, tenant_id, source_system, source_ref, scope, title, body_r2_key, body_sha256, artifact_id, captured_at, created_at)
+        (id, tenant_id, source_system, source_ref, scope, title, body_r2_key, body_sha256, artifact_id, captured_at, created_at,
+         memory_class, trust_state, use_policy, author_kind, agent_identity, model_runtime, confidence, retention,
+         provenance_note, memory_type, dedup_hash, salience_tier, governance_downgraded_json)
         VALUES (${input.capture.id}, ${input.capture.tenant_id}, ${input.capture.source_system}, ${input.capture.source_ref},
                 ${input.capture.scope}, ${input.capture.title}, ${input.capture.body_r2_key}, ${input.capture.body_sha256},
-                ${input.capture.artifact_id}, ${input.capture.captured_at}, ${input.capture.created_at})`,
+                ${input.capture.artifact_id}, ${input.capture.captured_at}, ${input.capture.created_at},
+                ${input.capture.memory_class}, ${input.capture.trust_state}, ${input.capture.use_policy},
+                ${input.capture.author_kind}, ${input.capture.agent_identity}, ${input.capture.model_runtime},
+                ${input.capture.confidence}, ${input.capture.retention}, ${input.capture.provenance_note},
+                ${input.capture.memory_type}, ${input.capture.dedup_hash}, ${input.capture.salience_tier},
+                ${input.capture.governance_downgraded_json})`,
       ...(input.artifact ? [this.sql.prepare`INSERT INTO haetsal_canonical.canonical_artifacts
         (id, tenant_id, capture_id, storage_kind, r2_key, media_type, filename, byte_length, sha256, created_at)
         VALUES (${input.artifact.id}, ${input.artifact.tenant_id}, ${input.artifact.capture_id}, ${input.artifact.storage_kind},
@@ -747,9 +652,9 @@ export class PostgresCanonicalMemoryStore implements CanonicalMemoryStore {
                 ${input.document.title}, ${input.document.body_r2_key}, ${input.document.body_sha256},
                 ${input.document.chunk_count}, ${input.document.created_at})`,
       ...input.chunks.map((chunk) => this.sql.prepare`INSERT INTO haetsal_canonical.canonical_chunks
-        (id, tenant_id, document_id, ordinal, start_offset, end_offset, chunk_sha256, created_at)
+        (id, tenant_id, document_id, ordinal, start_offset, end_offset, chunk_sha256, chunk_text, created_at)
         VALUES (${chunk.id}, ${chunk.tenant_id}, ${chunk.document_id}, ${chunk.ordinal}, ${chunk.start_offset},
-                ${chunk.end_offset}, ${chunk.chunk_sha256}, ${chunk.created_at})`),
+                ${chunk.end_offset}, ${chunk.chunk_sha256}, ${chunk.chunk_text}, ${chunk.created_at})`),
       this.sql.prepare`INSERT INTO haetsal_canonical.canonical_memory_operations
         (id, tenant_id, capture_id, operation_type, status, created_at, updated_at)
         VALUES (${input.operation.id}, ${input.operation.tenant_id}, ${input.operation.capture_id},
@@ -758,16 +663,34 @@ export class PostgresCanonicalMemoryStore implements CanonicalMemoryStore {
         (id, tenant_id, operation_id, capture_id, document_id, projection_kind, status, created_at, enqueued_at)
         VALUES (${job.id}, ${job.tenant_id}, ${job.operation_id}, ${job.capture_id}, ${job.document_id},
                 ${job.projection_kind}, ${job.status}, ${job.created_at}, ${job.enqueued_at})`),
+      ...(input.event ? [this.sql.prepare`INSERT INTO haetsal_canonical.canonical_events
+        (id, tenant_id, event_type, subject_kind, subject_id, capture_id, actor_kind, actor_identity, occurred_at, recorded_at, detail_json)
+        VALUES (${input.event.id}, ${input.event.tenant_id}, ${input.event.event_type}, ${input.event.subject_kind},
+                ${input.event.subject_id}, ${input.event.capture_id}, ${input.event.actor_kind}, ${input.event.actor_identity},
+                ${input.event.occurred_at}, ${input.event.recorded_at}, ${input.event.detail_json})`] : []),
     ]
     await this.sql.transaction(queries)
   }
 
   async getCapture(tenantId: string, captureId: string): Promise<CanonicalCaptureRecord | null> {
     return this.first<CanonicalCaptureRecord>(this.sql`
-      SELECT id, tenant_id, source_system, source_ref, scope, title, body_r2_key, body_sha256, artifact_id, captured_at, created_at
+      SELECT id, tenant_id, source_system, source_ref, scope, title, body_r2_key, body_sha256, artifact_id, captured_at, created_at,
+             memory_class, trust_state, use_policy, author_kind, agent_identity, model_runtime, confidence, retention,
+             provenance_note, memory_type, dedup_hash, salience_tier, governance_downgraded_json
       FROM haetsal_canonical.canonical_captures
       WHERE tenant_id = ${tenantId} AND id = ${captureId}
       LIMIT 1
+    `)
+  }
+
+  async listRecentEvents(tenantId: string, limit: number): Promise<NonNullable<CanonicalCaptureWrite['event']>[]> {
+    return this.rows<NonNullable<CanonicalCaptureWrite['event']>>(this.sql`
+      SELECT id, tenant_id, event_type, subject_kind, subject_id, capture_id, actor_kind, actor_identity,
+             occurred_at, recorded_at, detail_json
+      FROM haetsal_canonical.canonical_events
+      WHERE tenant_id = ${tenantId}
+      ORDER BY occurred_at DESC, id DESC
+      LIMIT ${limit}
     `)
   }
 

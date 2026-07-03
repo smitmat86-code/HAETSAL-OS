@@ -5,6 +5,7 @@ import type {
 } from '../types/canonical-memory'
 import { buildCanonicalCaptureAcceptedAuditBatch } from './canonical-memory-audit'
 import { persistCanonicalPayloads, sha256Hex } from './canonical-memory-artifacts'
+import { resolveCaptureGovernance } from './canonical-governance'
 import { getCanonicalMemoryStore } from './canonical-postgres'
 import {
   assertCanonicalIdentity,
@@ -30,6 +31,22 @@ export async function captureCanonicalMemory(
   const tenant = await env.D1_US.prepare('SELECT id FROM tenants WHERE id = ?').bind(tenantId).first()
   if (!tenant) throw new Error(`Unknown tenant for canonical capture: ${tenantId}`)
 
+  const governance = resolveCaptureGovernance({
+    sourceSystem: input.sourceSystem,
+    sourceRef: input.sourceRef ?? null,
+    capturedAt: input.capturedAt ?? null,
+    scope: input.scope,
+    authorKind: input.governance?.authorKind,
+    agentIdentity: input.governance?.agentIdentity ?? null,
+    modelRuntime: input.governance?.modelRuntime ?? null,
+    confidence: input.governance?.confidence ?? null,
+    retention: input.governance?.retention ?? null,
+    provenanceNote: input.governance?.provenanceNote ?? null,
+    memoryClass: input.governance?.memoryClass ?? null,
+    trustState: input.governance?.trustState ?? null,
+    usePolicy: input.governance?.usePolicy ?? null,
+    legacyMemoryType: input.governance?.legacyMemoryType ?? null,
+  })
   const capture = {
     captureId: crypto.randomUUID(),
     documentId: crypto.randomUUID(),
@@ -43,7 +60,7 @@ export async function captureCanonicalMemory(
     body,
     bodyEncrypted: requireEncryptedBody({ bodyEncrypted: input.bodyEncrypted ?? '' }),
     artifact: toNormalizedArtifact(input.artifactRef),
-    capturedAt: input.capturedAt ?? Date.now(),
+    capturedAt: governance.envelope.capturedAt,
   }
   const chunks = planCanonicalChunks(body)
   const payloads = await persistCanonicalPayloads(capture, env)
@@ -67,6 +84,19 @@ export async function captureCanonicalMemory(
       artifact_id: capture.artifact?.id ?? null,
       captured_at: capture.capturedAt,
       created_at: createdAt,
+      memory_class: governance.memoryClass,
+      trust_state: governance.trustState,
+      use_policy: governance.usePolicy,
+      author_kind: governance.envelope.authorKind,
+      agent_identity: governance.envelope.agentIdentity,
+      model_runtime: governance.envelope.modelRuntime,
+      confidence: governance.envelope.confidence,
+      retention: governance.envelope.retention,
+      provenance_note: governance.envelope.provenanceNote,
+      memory_type: input.governance?.legacyMemoryType ?? null,
+      dedup_hash: input.governance?.dedupHash ?? null,
+      salience_tier: input.governance?.salienceTier ?? null,
+      governance_downgraded_json: governance.downgraded ? JSON.stringify(governance.downgraded) : null,
     },
     artifact: capture.artifact
       ? {
@@ -101,6 +131,7 @@ export async function captureCanonicalMemory(
       start_offset: chunk.startOffset,
       end_offset: chunk.endOffset,
       chunk_sha256: await sha256Hex(chunk.text),
+      chunk_text: chunk.text,
       created_at: createdAt,
     }))),
     operation: {
@@ -123,6 +154,25 @@ export async function captureCanonicalMemory(
       created_at: createdAt,
       enqueued_at: createdAt,
     })),
+    event: {
+      id: crypto.randomUUID(),
+      tenant_id: tenantId,
+      event_type: 'memory.captured',
+      subject_kind: 'capture',
+      subject_id: capture.captureId,
+      capture_id: capture.captureId,
+      actor_kind: governance.envelope.authorKind,
+      actor_identity: governance.envelope.agentIdentity,
+      occurred_at: capture.capturedAt,
+      recorded_at: createdAt,
+      detail_json: JSON.stringify({
+        memoryClass: governance.memoryClass,
+        trustState: governance.trustState,
+        usePolicy: governance.usePolicy,
+        sourceSystem: capture.sourceSystem,
+        scope: capture.scope,
+      }),
+    },
   }
   await store.writeCapture(write)
 
@@ -140,6 +190,15 @@ export async function captureCanonicalMemory(
     operationId: capture.operationId,
     projectionJobIds: projectionJobs.map(job => job.id),
     projectionKinds: capture.projectionKinds,
+    bodyR2Key: payloads.documentR2Key,
+    governance: {
+      memoryClass: governance.memoryClass,
+      trustState: governance.trustState,
+      usePolicy: governance.usePolicy,
+      authorKind: governance.envelope.authorKind,
+      agentIdentity: governance.envelope.agentIdentity,
+      downgraded: governance.downgraded,
+    },
   }
 }
 

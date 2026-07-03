@@ -22,7 +22,7 @@ export interface RetainOutput {
   canonical_document_id?: string
   canonical_operation_id?: string
   dispatch_status?: 'queued' | 'failed'
-  compatibility_status?: 'skipped' | 'queued' | 'retained' | 'failed'
+  governance?: import('./canonical-memory').CanonicalCaptureResult['governance']
 }
 
 export interface RecallInput {

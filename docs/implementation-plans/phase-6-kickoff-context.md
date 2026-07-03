@@ -53,9 +53,24 @@ Fable given its complexity (sub-agent orchestration).
   tiers there (e.g. MODEL_DEEP for reasoning; kimi-k2.7 is the current agentic
   best if tiering up).
 
-## Phase 5 known limitations to keep in mind (not Phase 6 blockers)
+## Phase 5 known limitations + verifier-flagged follow-ups (not Phase 6 blockers)
 - Approved IRREVERSIBLE actions execute immediately (no durable send-delay
   cancel window). Reminder delivery Telegram-first. Both deferred to Phase 13.
+- **Cold-DO TMK on approved actions (verifier gap, low-med risk).**
+  `src/workers/action/index.ts` only persists the YELLOW payload to R2 when
+  `stub.getTmk()` returns non-null. If the DO is cold at proposal time, the
+  payload isn't stored and `executeApprovedAction` no-ops at approval. The
+  consumer already has a `fetchAndValidateKek` KV fallback for this; the action
+  worker does NOT. **Do NOT copy it blindly** — first verify the KEK-in-KV key
+  material is byte-identical to `deriveTmk(jwtSub, CF_ACCESS_AUD)` (the approve
+  route decrypts with the latter). If they differ, a naive fallback would
+  encrypt-with-KEK / decrypt-with-derived and silently corrupt. Verify the key
+  equivalence in `provisionOrRenewKek` before wiring the fallback. Phase 13.
+- **Channel-enum drift (verifier gap, low risk).** `src/tools/act/remind.ts`
+  channel enum is still the Phase-1 `['sms','push','both']`; the canonical
+  `MessageChannel` (messaging.ts) is `['sms','imessage','telegram','email']`.
+  `reminder.ts` accepts `channel?: string` unvalidated, so no runtime bug —
+  just align the schema. Fold into Phase 6 while touching the agent surface.
 
 ## Live-test note
 Telegram is the working live channel (Matt's chat registered). Sendblue Free

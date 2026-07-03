@@ -7,7 +7,7 @@
 import type { Env } from '../types/env'
 import type { IngestionQueueMessage } from '../types/ingestion'
 import { sendTelegramReply } from './delivery/telegram'
-import { buildGroundedReply, describeInboundPhoto } from './messaging-helpers'
+import { buildGroundedReply, describeInboundPhoto, warmCanonicalPostgres } from './messaging-helpers'
 
 export interface TelegramPhotoSize { file_id: string; width?: number; height?: number; file_size?: number }
 export interface TelegramMessage {
@@ -68,6 +68,9 @@ export async function processTelegramInbound(
     console.warn('TELEGRAM_UNKNOWN_CHAT', { chatId })
     return { handled: false, kind: 'ignored' }
   }
+  // Warm Neon in parallel while we set up the response — pay only when a real
+  // user is here to benefit from it. Zero cost when the bot is idle.
+  warmCanonicalPostgres(env, ctx)
   const occurredAt = typeof msg.date === 'number' ? msg.date * 1000 : Date.now()
 
   if (Array.isArray(msg.photo) && msg.photo.length > 0) {

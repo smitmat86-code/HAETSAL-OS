@@ -6,6 +6,27 @@
 import type { Env } from '../types/env'
 import { searchCanonicalMemory } from './canonical-memory-query'
 import { runGatewayChat, runGatewayVision } from './workers-ai-chat'
+import { createCanonicalPostgresSql } from './postgres-sql'
+
+/**
+ * Warm the canonical Postgres connection so the retrieval query that follows
+ * doesn't eat a 2-5s Neon cold-start. Called at the top of every inbound
+ * webhook — cost is one round-trip per real user message (not per cron
+ * tick), which keeps the "pay for what you use" side of serverless honest.
+ * Failures are swallowed; the reply pipeline continues.
+ */
+export function warmCanonicalPostgres(env: Env, ctx: Pick<ExecutionContext, 'waitUntil'>): void {
+  ctx.waitUntil((async () => {
+    try {
+      const sql = createCanonicalPostgresSql(env)
+      await sql`SELECT 1`
+    } catch (error) {
+      console.warn('NEON_WARM_FAILED', {
+        error: error instanceof Error ? error.message : String(error),
+      })
+    }
+  })())
+}
 
 /** Race a promise against a timeout so slow retrieval never blocks the reply. */
 async function withTimeout<T>(p: Promise<T>, ms: number, tag: string): Promise<T | null> {

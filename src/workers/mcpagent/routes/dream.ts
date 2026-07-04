@@ -12,6 +12,7 @@ import { latestDreamRun } from '../../../services/dream/report'
 import { DREAM_REVIEW_TYPE } from '../../../services/dream/proposals'
 import { getCanonicalDocument } from '../../../services/canonical-memory-query'
 import { getCanonicalGovernanceStore } from '../../../services/canonical-governance-postgres'
+import { decaySummary, runDecayPass } from '../../../services/decay/pass'
 
 type Variables = { tenantId: string; jwtSub: string; traceId: string }
 
@@ -59,6 +60,10 @@ dream.get('/reviews', async (c) => {
     createdAt: r.created_at,
   })))
 })
+
+// Phase 12: metadata-only decay pass (fixture-gated; nightly via the dream workflow).
+dream.post('/decay/run', async (c) => c.json(await runDecayPass(c.env, c.get('tenantId')), 202))
+dream.get('/decay/summary', async (c) => c.json(await decaySummary(c.env, c.get('tenantId'))))
 
 function safeParse(json: string): unknown {
   try { return JSON.parse(json) } catch { return null }

@@ -147,6 +147,7 @@ Last updated: 2026-04-18 | Session: 7.1 (Hindsight Projection Adapter)
 | src\services\compiled-synthesis-trigger.ts | 46 | — | ✅ |
 | src\services\compiled-synthesis-utils.ts | 27 | trimRequired, normalizeJson, slugifyStableSegment... | ✅ |
 | src\services\compiled-synthesis.ts | 22 | — | ✅ |
+| src\services\decay\pass.ts | 114 | DecaySummary, scoreCapture | ✅ |
 | src\services\delivery\obsidian-write.ts | 52 | — | ✅ |
 | src\services\delivery\sendblue.ts | 58 | SendblueSendResult, sendblueAuthHeaders | ✅ |
 | src\services\delivery\sms.ts | 35 | — | ✅ |
@@ -258,14 +259,14 @@ Last updated: 2026-04-18 | Session: 7.1 (Hindsight Projection Adapter)
 | src\workers\mcpagent\routes\canary.ts | 15 | canary, hasCanonicalHyperdriveBinding | ✅ |
 | src\workers\mcpagent\routes\compiled.ts | 55 | compiled | ✅ |
 | src\workers\mcpagent\routes\dashboard-data.ts | 101 | dashboardData | ✅ |
-| src\workers\mcpagent\routes\dream.ts | 66 | dream | ✅ |
+| src\workers\mcpagent\routes\dream.ts | 71 | dream | ✅ |
 | src\workers\mcpagent\routes\ingest.ts | 130 | — | ✅ |
 | src\workers\mcpagent\routes\session.ts | 31 | session | ✅ |
 | src\workers\mcpagent\routes\settings.ts | 73 | settings | ✅ |
 | src\workers\mcpagent\runtime.ts | 45 | — | ✅ |
 | src\workers\mcpagent\self-registration.ts | 39 | — | ✅ |
 | src\workflows\bootstrap.ts | 110 | BootstrapWorkflow | ✅ |
-| src\workflows\dream-cycle.ts | 63 | DreamCycleParams, DreamCycleWorkflow | ✅ |
+| src\workflows\dream-cycle.ts | 79 | DreamCycleParams, DreamCycleWorkflow | ✅ |
 
 ### pages/src/
 

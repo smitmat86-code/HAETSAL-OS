@@ -11,6 +11,7 @@ import { WorkflowEntrypoint, WorkflowStep, WorkflowEvent } from 'cloudflare:work
 import type { Env } from '../types/env'
 import { executeDreamStage, type DreamStageResult } from '../services/dream/stage'
 import { finishDreamRun } from '../services/dream/report'
+import { runDecayPass } from '../services/decay/pass'
 import { writeAuditLog } from '../middleware/audit'
 
 export interface DreamCycleParams {
@@ -23,6 +24,21 @@ export class DreamCycleWorkflow extends WorkflowEntrypoint<Env, DreamCycleParams
   async run(event: WorkflowEvent<DreamCycleParams>, step: WorkflowStep) {
     const { tenantId, runId, runDate } = event.payload
     const env = this.env
+
+    // Phase 12: metadata-only decay pass — needs no key material, so it runs
+    // even on nights the content stage defers on a missing KEK. A decay
+    // failure is an audit note, never a cycle-stopper (own catch: an
+    // exhausted step throws into the body and would otherwise kill the run).
+    try {
+      await step.do('dream-decay-pass', {
+        retries: { limit: 1, delay: '15 seconds', backoff: 'constant' },
+        timeout: '3 minutes',
+      }, async () => { await runDecayPass(env, tenantId) })
+    } catch {
+      await step.do('dream-decay-failed-note', async () => {
+        await writeAuditLog(env, 'decay.pass_failed', tenantId, { agentIdentity: 'consolidation_cron' })
+      })
+    }
 
     try {
       const outcome: DreamStageResult = await step.do('dream-extract-propose-report', {

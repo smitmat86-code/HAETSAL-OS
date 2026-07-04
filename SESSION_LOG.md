@@ -5,6 +5,17 @@
 
 ---
 
+## Mission Phase 12 - Memory decay + multimodal confirmation - 2026-07-04
+
+**Spec:** HAETSAL_MISSION.md Phase 12. Adaptive forgetting on metadata + encrypted refs; multimodal was Phase 4's clause 8.
+**Built:**
+- src/services/decay/pass.ts - metadata-only decay: score = recency half-life (30d) + 0.3*log2(1+access) + user-source boost, where access = broker-trace primary-hit counts (D1 canonical_broker_traces.primary_capture_id) - the reinforcement signal costs nothing new. The module takes NO key material (cannot decrypt even by accident - Law 2 by construction). Soft states only in content-free D1 memory_decay (migration 1026 + lazy DDL): archived (<0.15 and >21d) / reinforced (>=0.9 or >=2 hits) / active. Never mutates canonical rows.
+- Nightly wiring: dream workflow gains an independent 'dream-decay-pass' step (no KEK needed, runs even when the content stage defers). /api/dream/decay/{run,summary} (CF Access) for the gate + dashboard.
+- Multimodal: unchanged since Phase 4 (photo -> R2 -> vision -> governed capture, live-gated then); mission-4.0/4.1 contracts re-asserted at this gate.
+**Verification:** tests/mission-12.0 (4 contracts: scoring model incl. half-life + boosts, fixture pass archives old system-written / reinforces 3-hit / keeps fresh, idempotent re-run, summary). Model behavior note: 60d USER memories stay above the archive line by design (source boost) - the archive fixture is 90d cron-written.
+
+---
+
 ## Mission Phase 11 - Dashboard (8 panels) - 2026-07-04
 
 **Spec:** HAETSAL_MISSION.md Phase 11 / demo clause 7. Full dashboard on Workers Static Assets, same Worker, CF Access enforced.

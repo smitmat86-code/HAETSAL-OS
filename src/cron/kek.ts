@@ -1,8 +1,11 @@
 // src/cron/kek.ts
 // KEK fetch, validate, derive CryptoKey from raw KV bytes
 // LESSON: KEK expiry is silent — defer entire run, never crash
-// The KEK is the TMK raw bytes stored in KV with 24h TTL
-// Security: KV exposure limited to 24h after last active session
+// The KEK is a RANDOM 32-byte key (generated at provision, stored in KV with
+// 24h TTL and TMK-encrypted in D1). It is NOT the TMK raw bytes - deriveTmk
+// keys are non-extractable and the two key families are not interchangeable:
+// KEK-encrypted artifacts decrypt only with the KEK (proven at the Phase 8
+// gate). Security: KV exposure limited to 24h after last active session
 
 import type { Env } from '../types/env'
 

@@ -14,7 +14,8 @@
 - Wiring: 2am cron → handleDreamCron (replaces parked pass-1..4 invocation; consolidation.ts kept unwired), wrangler [[workflows]] brain-dream-cycle + DREAM_WORKFLOW binding + regenerated env types, /api/dream/{run,latest,reviews} (CF Access) for the gate smoke + Phase 11 consolidation panel.
 **Law 3:** dream cycle runs as consolidation_cron identity; report-only means even pattern-grade findings (promotions) wait in the review inbox.
 **Verification:** tests/mission-8.0 (9 contracts: parse tolerance + confidence floor + caps, report composition incl. no-auto-promotion line + quiet night, proposal dedup vs pending reviews, D1 claim/dedup/finish/latest, brief-section fallbacks). Full suite + postflight at gate.
-**Next:** Phase 8 gate (verifier, Law-2 audit, deploy, manual-trigger smoke; overnight cron validates clause 9 in tomorrow's brief), then Phase 9.
+**Gate result:** Combined verifier+Law-2 agent PASS/APPROVE (9 criteria; 4 low gaps fixed same-session). Deploys 334daebd -> 37b1fa90 -> 303c5648. Live smoke GREEN 6/6 after two real findings: (1) cron-context content writes need the Cron KEK — stage now fetches it and DEFERS honestly when absent; (2) **KEK != TMK proven live** (random 32-byte KEK vs non-extractable HKDF TMK) — report reads switched to the KEK; settles the Phase 5 cold-DO-fallback question (naive KV-KEK fallback must NOT be wired; see docs/lessons/phase-8-dream-cycle.md). Overnight clause-9 leg completes with tonight's 2am cron + tomorrow's brief.
+**Next:** Phase 9 sessions working context + external-client round-trip gate.
 
 ---
 

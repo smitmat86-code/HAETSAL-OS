@@ -6,7 +6,7 @@
 
 import { Hono } from 'hono'
 import type { Env } from '../../../types/env'
-import { deriveTmk } from '../../../middleware/auth'
+import { fetchAndValidateKek } from '../../../cron/kek'
 import { startDreamRun } from '../../../cron/dream'
 import { latestDreamRun } from '../../../services/dream/report'
 import { DREAM_REVIEW_TYPE } from '../../../services/dream/proposals'
@@ -31,11 +31,16 @@ dream.get('/latest', async (c) => {
   let report: string | null = null
   if (run.report_document_id) {
     try {
-      const tmk = await deriveTmk(c.get('jwtSub'), c.env.CF_ACCESS_AUD)
-      const doc = await getCanonicalDocument(
-        { tenantId, documentId: run.report_document_id }, c.env, tenantId, { tmk },
-      )
-      report = doc.body
+      // The report body sidecar is Cron-KEK-encrypted (cron-context write) —
+      // the KEK is a random key, NOT the derived session TMK (proven at the
+      // Phase 8 gate). Read with the same key family that wrote it.
+      const kek = await fetchAndValidateKek(tenantId, c.env)
+      if (kek) {
+        const doc = await getCanonicalDocument(
+          { tenantId, documentId: run.report_document_id }, c.env, tenantId, { tmk: kek },
+        )
+        report = doc.body
+      }
     } catch { report = null }
   }
   return c.json({ run, report })

@@ -35,4 +35,17 @@ brief) completes naturally after tonight's 2am cron + tomorrow's 7:00 brief.
 
 ## OUTCOME
 
-- pending
+- Deploys: `334daebd` (initial) → `37b1fa90` (Cron-KEK fix after the live run
+  failed with "retainContent requires TMK" — cron context needs the KEK, and
+  missing KEK now DEFERS honestly) → `303c5648` (report read path uses the
+  KEK: **proven that KEK ≠ TMK**, settling the Phase 5 follow-up — see
+  phase-8-dream-cycle.md).
+- **Smoke GREEN 6/6**: trigger 202 → workflow completed (both steps green,
+  step output `[REDACTED]` by sensitive flag) → 18-memory window read →
+  report persisted + read back with the report-only guarantee line → review
+  inbox serving pending dream proposals.
+- Verifier+Law-2 combined agent: PASS/APPROVE (9 criteria; 4 low gaps all
+  fixed same-session: fixed-vocab workflow errors, sensitive:'output',
+  decided-proposal dedup, test typing).
+- Demo clause 9 overnight leg: tonight's 2am cron + tomorrow's 7:00 brief
+  ("While You Slept" section) complete the assertion for Matt's tenant.

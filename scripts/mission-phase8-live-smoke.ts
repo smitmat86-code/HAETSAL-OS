@@ -34,16 +34,18 @@ async function main(): Promise<void> {
   await api('GET', '/dashboard/agents') // session refresh
 
   const started = await api<{ runId?: string; started?: boolean }>('POST', '/api/dream/run')
-  record('trigger', started.status === 202 && started.json?.started === true,
+  const runId = started.json?.runId
+  record('trigger', started.status === 202 && started.json?.started === true && !!runId,
     `status=${started.status}, started=${started.json?.started}`)
-  if (!started.json?.started) return finish()
+  if (!runId) return finish()
 
+  // Match OUR run id — /latest also surfaces stale terminal rows.
   let run: DreamRun | null = null
   let report: string | null = null
   const deadline = Date.now() + 4 * 60_000
   while (Date.now() < deadline) {
     const latest = await api<{ run: DreamRun | null; report: string | null }>('GET', '/api/dream/latest')
-    if (latest.json?.run && ['completed', 'failed'].includes(latest.json.run.status)) {
+    if (latest.json?.run?.id === runId && ['completed', 'failed'].includes(latest.json.run.status)) {
       run = latest.json.run
       report = latest.json.report
       break

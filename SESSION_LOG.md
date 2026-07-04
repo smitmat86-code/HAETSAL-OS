@@ -13,6 +13,8 @@
 - Nightly wiring: dream workflow gains an independent 'dream-decay-pass' step (no KEK needed, runs even when the content stage defers). /api/dream/decay/{run,summary} (CF Access) for the gate + dashboard.
 - Multimodal: unchanged since Phase 4 (photo -> R2 -> vision -> governed capture, live-gated then); mission-4.0/4.1 contracts re-asserted at this gate.
 **Verification:** tests/mission-12.0 (4 contracts: scoring model incl. half-life + boosts, fixture pass archives old system-written / reinforces 3-hit / keeps fresh, idempotent re-run, summary). Model behavior note: 60d USER memories stay above the archive line by design (source boost) - the archive fixture is 90d cron-written.
+**Gate result:** Verifier PASS/APPROVE (decay-step isolation fixed pre-report: own catch so a decay failure never kills the cycle; CANDIDATE_LIMIT=200 window annotated as the Phase 13 follow-up). Deploy 2ffcccf6. Live: 69 prod captures scored -> 20 reinforced / 49 active / 0 archived (age floor honest). Suite 475/76 files.
+**Next:** Phase 13 closeout.
 
 ---
 

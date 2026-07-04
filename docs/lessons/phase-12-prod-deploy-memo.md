@@ -27,4 +27,11 @@ POST /api/dream/decay/run → 202 with counts; GET summary reflects states.
 
 ## OUTCOME
 
-- pending
+- Verifier PASS/APPROVE (Law 2 by construction confirmed; decay-step
+  isolation fix applied pre-report). Deploy `2ffcccf6`.
+- Live smoke: POST /api/dream/decay/run scored 69 real prod captures ->
+  20 reinforced (retrieval-hit), 49 active, 0 archived (nothing on this
+  young system exceeds the 21-day archive age floor - honest). Summary
+  endpoint reflects state. Fixture gate (archive + reinforce + idempotence)
+  covered by mission-12.0 contracts.
+- Multimodal clause 8: mission-4.0/4.1 re-asserted 15/15.

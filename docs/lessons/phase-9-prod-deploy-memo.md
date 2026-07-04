@@ -39,4 +39,14 @@ surface with his own CF Access identity.
 
 ## OUTCOME
 
-- pending
+- Deploy: version `6664d244` (commit e0e9d69). **Smoke GREEN 6/6**: fresh
+  external MCP client (Streamable HTTP JSON-RPC) initialize -> capture_memory
+  (queued receipt) -> search_memory composed cited the write with provenance
+  fields within 30s -> /api/session window + close endpoints live.
+- Verifier+Law-2 PASS/APPROVE; the declared Sessions-API deviation judged
+  ACCEPTABLE with SDK-type-surface evidence (AgentSessionProvider has no
+  encryption hook). Gap fixes landed same-session: namespace guards (killed
+  4 pool unhandled rejections), dead generateGroundedReply export removed.
+- Demo clauses 3+4: the mechanism passes live via the identical /mcp surface;
+  Matt's Claude Code / Codex sessions authenticate with his own CF Access
+  identity and hit the same tools.

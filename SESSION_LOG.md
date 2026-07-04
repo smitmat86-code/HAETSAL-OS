@@ -15,7 +15,8 @@
 - Phase 9 traces: execution runs persist a structured reasoning trace (task, tool usage, result) AES-GCM encrypted to R2 traces/<tenant>/exec-<runId> (agents/execution/trace.ts), fire-and-forget.
 - Surfaces: /api/session/:key/{window,close} (CF Access) for Phase 11 + smoke. McpAgentDO init() extracted to registerAllDoTools (register-tools.ts) for the line limit; session RPCs + closeIdleSession alarm callback added.
 **Verification:** tests/mission-9.0 (6 contracts: ciphertext at rest, ordered window + limit + unreadable-row skip, exchange lifecycle + alarm re-arm + content-free payloads, honest no-key degradation, close→evidence capture searchable in canonical, encrypted trace round-trip). Postflight green.
-**Gate:** deploy + scripts/mission-phase9-live-smoke.ts = demo clauses 3+4 mechanism (fresh external MCP client over Streamable HTTP: initialize → capture_memory → search_memory composed cites it with provenance within 30s) + session surface live. Claude Code/Codex sessions speak the same protocol against /mcp.
+**Gate result:** Verifier+Law-2 PASS/APPROVE (deviation judged acceptable: SDK AgentSessionProvider has no encryption hook — HAETSAL-owned encrypted store with SDK message shapes). Deploy 6664d244 (e0e9d69). Live smoke GREEN 6/6: external MCP client initialize -> capture_memory -> search_memory composed cites with provenance <30s; session endpoints live. Fixes at gate: namespace guards (4 pool unhandled rejections), dead export removed. Full suite 466 passed / 74 files, zero unhandled errors.
+**Next:** Phase 10 compiled markdown views.
 
 ---
 

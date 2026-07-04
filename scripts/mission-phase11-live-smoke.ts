@@ -36,7 +36,7 @@ const FEEDS: Array<[string, string]> = [
 async function main(): Promise<void> {
   await get('/dashboard/agents') // session refresh (TMK for search)
 
-  const spa = await get('/dashboard/')
+  const spa = await get('/dashboard.html')
   const missing = PANEL_IDS.filter(id => !spa.text.includes(`<section id="${id}"`))
   record('spa-serves', spa.status === 200 && spa.text.includes('HAETSAL — Dashboard'), `status=${spa.status}, ${spa.text.length} chars`)
   record('all-8-panels', missing.length === 0, missing.length ? `missing: ${missing.join(',')}` : '8/8 panel sections present')

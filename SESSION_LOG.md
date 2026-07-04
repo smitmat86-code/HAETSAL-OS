@@ -5,6 +5,19 @@
 
 ---
 
+## Mission Phase 10 - Compiled markdown pages - 2026-07-04
+
+**Spec:** HAETSAL_MISSION.md Phase 10. Named person/project/topic views regenerable from canonical.
+**Built:**
+- src/services/compiled/page.ts - page layer over the EXISTING 11.x compiled-synthesis compiler: rebuild runs compileProjectSynthesisFromCanonicalTruth (dossier + context pack + what-changed persisted in canonical Postgres); the page endpoint re-renders markdown FROM the persisted views (regenerable from canonical by construction). Frontmatter: title, kind, stable_key, compiled_document_id, sources[] (canonical capture/document ids), source_count, freshness, review_status, generated_by, regenerable.
+- Subject kind threaded through the compiler (ProjectCompilationSubject.kind -> dossierKind person_dossier|project_dossier|topic_dossier, subjectType) - taxonomy already supported all three. Kind-embedded compile subject key (person-alice vs project-alice) prevents cross-kind slug collisions on the compiler's segment-derived document keys (contract-tested).
+- D1 compiled_pages registry (content-free: kind, slug, stable key, segment, counts; migration 1025 + lazy DDL). Delete = deregister (compiled records stay in canonical, overwritten on rebuild - full row deletion is a Phase 13 store item).
+- /api/compiled: GET list, GET :kind/:key (text/markdown), POST :kind/:key/rebuild, DELETE :kind/:key (CF Access).
+- FLAGGED pre-existing (11.x): persistCompiledArtifactPayload writes its `contentEncrypted` field VERBATIM to R2 while the render layer fills it with plaintext markdown - compiled artifacts rest unencrypted in R2. Not touched this phase (pages render from Postgres views, not artifacts); Phase 13 ADR: encrypt or accept like raw media.
+**Verification:** tests/mission-10.0 (5 contracts: three kinds + kind threading, frontmatter fields, list/delete/rebuild regenerability, cross-kind collision, honest 404). Postflight green.
+
+---
+
 ## Mission Phase 9 - Sessions working context + external-client round-trip - 2026-07-04
 
 **Spec:** HAETSAL_MISSION.md Phase 9. Working conversation context across surfaces; sessions non-canonical with evidence-summary flow into canonical; structured reasoning traces encrypted.

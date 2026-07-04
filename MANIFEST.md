@@ -112,11 +112,12 @@ Last updated: 2026-04-18 | Session: 7.1 (Hindsight Projection Adapter)
 | src\services\chief-of-staff-context-runtime.ts | 75 | — | ✅ |
 | src\services\chief-of-staff-context-shared.ts | 67 | QueryPlan, AssembledContextCore, POLICY... | ✅ |
 | src\services\chief-of-staff-context.ts | 20 | — | ✅ |
+| src\services\compiled\page.ts | 152 | CompiledPageKind, CompiledPageRef, familyKeys... | ⚠️ OVER LIMIT |
 | src\services\compiled-synthesis-artifacts.ts | 72 | CompiledArtifactPayloadInput, PersistedCompiledArtifactPayload, buildCompiledArtifactR2Key | ✅ |
 | src\services\compiled-synthesis-assemble-support.ts | 139 | buildFactInputs, buildRelationshipInputs, buildContradictionInputs | ✅ |
 | src\services\compiled-synthesis-assemble.ts | 131 | assembleProjectCompiledSynthesis | ✅ |
-| src\services\compiled-synthesis-compile.ts | 128 | — | ✅ |
-| src\services\compiled-synthesis-compiler-types.ts | 128 | ProjectCompilationSubject, CompileProjectSynthesisFromCanonicalTruthInput, SelectedCanonicalCompilationSource... | ✅ |
+| src\services\compiled-synthesis-compile.ts | 129 | — | ✅ |
+| src\services\compiled-synthesis-compiler-types.ts | 130 | ProjectCompilationSubject, CompileProjectSynthesisFromCanonicalTruthInput, SelectedCanonicalCompilationSource... | ✅ |
 | src\services\compiled-synthesis-inputs.ts | 78 | CompiledDocumentUpsertInput, CompiledDocumentSourceInput, CompiledDocumentArtifactInput... | ✅ |
 | src\services\compiled-synthesis-models.ts | 119 | CompiledDossierView, CompiledContextPackView, CompiledChangeView... | ✅ |
 | src\services\compiled-synthesis-output-inputs.ts | 91 | CompiledContradictionUpsertInput, CompiledDossierUpsertInput, CompiledContextPackUpsertInput... | ✅ |
@@ -255,6 +256,7 @@ Last updated: 2026-04-18 | Session: 7.1 (Hindsight Projection Adapter)
 | src\workers\mcpagent\routes\auth.ts | 45 | — | ✅ |
 | src\workers\mcpagent\routes\automations.ts | 79 | automations | ✅ |
 | src\workers\mcpagent\routes\canary.ts | 15 | canary, hasCanonicalHyperdriveBinding | ✅ |
+| src\workers\mcpagent\routes\compiled.ts | 55 | compiled | ✅ |
 | src\workers\mcpagent\routes\dream.ts | 66 | dream | ✅ |
 | src\workers\mcpagent\routes\ingest.ts | 130 | — | ✅ |
 | src\workers\mcpagent\routes\session.ts | 31 | session | ✅ |

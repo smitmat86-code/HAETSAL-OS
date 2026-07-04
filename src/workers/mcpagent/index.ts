@@ -16,6 +16,7 @@ import { agentDashboard, agentRuns } from './routes/agent-runs'
 import { automations } from './routes/automations' // Phase 7
 import { dream } from './routes/dream' // Phase 8
 import { session } from './routes/session' // Phase 9
+import { compiled } from './routes/compiled' // Phase 10
 import type { Env } from '../../types/env'
 import { getMcpAgentObjectName } from './do/identity'
 import { registerPublicWebhooks } from './public-webhooks'
@@ -54,10 +55,8 @@ app.use('*', auditMiddleware())
 app.use('/mcp/*', dlpMiddleware())
 app.use('/mcp', dlpMiddleware())
 
-// Auth routes (Google OAuth — Phase 2.2)
+// Auth routes (Google OAuth - 2.2) + action routes (undo - 2.3)
 app.route('/auth', auth)
-
-// Action routes (undo — Phase 2.3)
 app.route('/actions', actions)
 app.route('/api/actions', actions)
 app.route('/api/actions', approval)
@@ -69,6 +68,7 @@ app.route('/dashboard/agents', agentDashboard)
 app.route('/api/automations', automations)
 app.route('/api/dream', dream)
 app.route('/api/session', session)
+app.route('/api/compiled', compiled)
 
 // Read-only diagnostic view over the caller's own canonical memory (no bodies).
 app.get('/debug/memory-inventory', renderMemoryInventory)

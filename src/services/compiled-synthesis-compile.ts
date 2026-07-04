@@ -1,4 +1,5 @@
 import type { Env } from '../types/env'
+import type { CompiledDossierKind } from './compiled-synthesis-taxonomy'
 import { persistCompiledSynthesis } from './compiled-synthesis-persist'
 import { assembleProjectCompiledSynthesis } from './compiled-synthesis-assemble'
 import type {
@@ -34,8 +35,8 @@ export async function compileProjectSynthesisFromCanonicalTruth(
     dossier: {
       stableKey: assembled.dossier.stableKey,
       scope: assembled.scope,
-      dossierKind: 'project_dossier',
-      subjectType: 'project',
+      dossierKind: (input.subject.kind ? `${input.subject.kind}_dossier` : 'project_dossier') as CompiledDossierKind,
+      subjectType: input.subject.kind ?? 'project',
       subjectStableKey: assembled.subject.stableKey,
       subjectName: assembled.subject.name,
       whyItMatters: assembled.dossier.whyItMatters,

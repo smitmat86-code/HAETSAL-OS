@@ -23,6 +23,8 @@ export interface ProjectCompilationSubject {
   name: string
   scope: string
   keywords?: string[]
+  /** Phase 10: person|project|topic pages ride the same compiler. */
+  kind?: 'person' | 'project' | 'topic'
 }
 
 export interface CompileProjectSynthesisFromCanonicalTruthInput {

@@ -1,10 +1,11 @@
 // src/agents/chief-of-staff.ts
 // Layer 2 orchestrator — full context, delegates or handles directly
 // parent_trace_id chaining for causal tracing across agent calls
+// Phase 6: the text-parsed [DELEGATE:...] signal (parseDelegation) is gone —
+// delegation is native sub-agent dispatch (services/agents/delegation.ts).
 
 import { BaseAgent } from './base-agent'
 import type { Env } from '../types/env'
-import type { DelegationSignal } from './types'
 
 export class ChiefOfStaff extends BaseAgent {
   readonly domain = 'general'
@@ -49,20 +50,5 @@ You cannot:
     await this.close(synthesis)
 
     return response
-  }
-
-  /** Detect delegation signal in agent response (Phase 3.1: signal only, not programmatic) */
-  parseDelegation(response: string): DelegationSignal | null {
-    try {
-      const match = response.match(/\[DELEGATE:(\w+)\|(.+?)\|(.+?)\]/)
-      if (!match) return null
-      return {
-        delegateTo: match[1] as DelegationSignal['delegateTo'],
-        reason: match[2],
-        context: match[3],
-      }
-    } catch {
-      return null
-    }
   }
 }

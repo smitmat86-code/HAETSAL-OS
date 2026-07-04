@@ -57,6 +57,16 @@ export default defineConfig(async () => {
       }),
     ],
     test: {
+      // vitest-pool-workers known issue: CJS deps reached through the `agents`
+      // package root (ajv via @modelcontextprotocol/sdk) need Vite bundling.
+      deps: {
+        optimizer: {
+          ssr: {
+            enabled: true,
+            include: ['ajv', 'ajv-formats'],
+          },
+        },
+      },
       include: ['tests/**/*.test.ts', '**/*.test.ts'],
       exclude: [
         '**/node_modules/**',

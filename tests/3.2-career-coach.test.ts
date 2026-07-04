@@ -4,7 +4,7 @@
 import { describe, it, expect } from 'vitest'
 import { CareerCoach } from '../src/agents/career-coach'
 import { BaseAgent } from '../src/agents/base-agent'
-import type { DelegationSignal, CareerContext, EpistemicMemoryType } from '../src/agents/types'
+import type { CareerContext, EpistemicMemoryType } from '../src/agents/types'
 
 describe('CareerCoach — class structure', () => {
   it('CareerCoach extends BaseAgent', () => {
@@ -51,16 +51,9 @@ describe('CareerCoach — career context type', () => {
   })
 })
 
-describe('CareerCoach — delegation and trace chaining', () => {
-  it('DelegationSignal supports career_coach target', () => {
-    const signal: DelegationSignal = {
-      delegateTo: 'career_coach',
-      reason: 'career domain question',
-      context: 'user asking about promotion',
-    }
-    expect(signal.delegateTo).toBe('career_coach')
-  })
-
+describe('CareerCoach — trace chaining', () => {
+  // DelegationSignal removed in mission Phase 6 — delegation is native
+  // sub-agent dispatch now (services/agents/delegation.ts).
   it('Career Coach gets own traceId, not reusing parent', () => {
     const cosTraceId = crypto.randomUUID()
     const ccTraceId = crypto.randomUUID()

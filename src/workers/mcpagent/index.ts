@@ -12,6 +12,7 @@ import { approval } from './routes/approval'
 import { settings } from './routes/settings'
 import { audit } from './routes/audit'
 import { canary } from './routes/canary'
+import { agentDashboard, agentRuns } from './routes/agent-runs'
 import type { Env } from '../../types/env'
 import { getMcpAgentObjectName } from './do/identity'
 import { registerPublicWebhooks } from './public-webhooks'
@@ -64,6 +65,9 @@ app.route('/api/actions', actions)
 app.route('/api/actions', approval)
 app.route('/api/settings', settings)
 app.route('/api/audit', audit)
+// Phase 6: sub-agent run ledger + cancel/retry + live-agent panel (CF Access)
+app.route('/api/agents', agentRuns)
+app.route('/dashboard/agents', agentDashboard)
 
 // Read-only diagnostic view over the caller's own canonical memory (no bodies).
 app.get('/debug/memory-inventory', renderMemoryInventory)
@@ -135,6 +139,8 @@ app.get('/ws', async (c) => {
 })
 
 export { McpAgentDO }
+// Phase 6 facet class — resolved via ctx.exports; export name MUST stay `ExecutionAgent`.
+export { ExecutionAgent } from '../../agents/execution-agent'
 export { BootstrapWorkflow } from '../../workflows/bootstrap'
 export default {
   fetch: app.fetch,

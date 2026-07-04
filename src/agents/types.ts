@@ -58,13 +58,6 @@ export interface ReasoningTrace {
   contextFlushes: number
 }
 
-/** Delegation signal from Chief of Staff */
-export interface DelegationSignal {
-  delegateTo: AgentType
-  reason: string
-  context: string
-}
-
 /** Career Coach extended context */
 export interface CareerContext extends AgentContext {
   careerRelationships: AgentContext['memories']

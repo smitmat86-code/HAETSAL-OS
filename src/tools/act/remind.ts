@@ -10,7 +10,9 @@ import type { ActionQueueMessage } from '../../types/action'
 export const remindSchema = z.object({
   message: z.string().describe('Reminder message text'),
   remind_at: z.string().describe('ISO 8601 datetime for reminder'),
-  channel: z.enum(['sms', 'push', 'both']).optional().describe('Notification channel'),
+  // Aligned with the canonical MessageChannel (integrations/messaging.ts) in
+  // Phase 6 — the Phase-1 'push'/'both' values never had a delivery path.
+  channel: z.enum(['sms', 'imessage', 'telegram', 'email']).optional().describe('Delivery channel'),
 })
 
 export async function remindStub(

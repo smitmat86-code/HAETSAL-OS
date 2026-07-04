@@ -5,6 +5,26 @@
 
 ---
 
+## Mission Phase 6 - Sub-agent spawn + cancel/retry - 2026-07-04
+
+**Spec:** HAETSAL_MISSION.md Phase 6 (+ docs/implementation-plans/phase-6-kickoff-context.md). Native sub-agent orchestration on Agents SDK 0.17.0 primitives.
+**Built:**
+- src/agents/execution-agent.ts + src/agents/execution/{types,tool-registry,tool-loop,run-store}.ts — ExecutionAgent facet class implementing the SDK agent-tool child adapter directly (startAgentToolRun returns 'running' immediately, loop finishes under keepAliveWhile via ctx.waitUntil; cancelAgentToolRun flips the ledger to aborted instantly and the loop observes the flag at every checkpoint; tailAgentToolRun = empty stream that closes at terminal so the parent's warm fast path delivers detached completions ~1s after the loop ends, durable backbone as fallback). Decision: did NOT adopt @cloudflare/think (0.12.1 Preview, AI-SDK-shaped; our G4 env.AI.run/collectLog:false pipeline stays) — revisit at Phase 9 where the mission scopes it.
+- Real function-calling tool loop on MODEL_DEEP (llama-3.3-70b-fp8-fast, function calling verified against current CF model docs): tolerant tool_calls parser (flat + OpenAI-nested + stringified args), per-spawn tool scoping enforced STRUCTURALLY (model only sees scoped defs; out-of-scope calls return an error result and never execute), doom-loop guard reused, READ tools execute inline (GREEN floor, audited: web_search/recall_memory), WRITE tools only PROPOSE through the existing act stubs → authorization gate.
+- src/workers/mcpagent/do/agent-dispatch.ts + agent-task-store.ts + agent-runs-view.ts — parent-side dispatch (runAgentTool detached, onFinish 'onExecutionTaskFinish', maxBudgetMs 15min = boop stuck-agent auto-fail, noProgressBudgetMs 5min), TMK-encrypted task specs in the DO ledger for retry, claim-slot idempotent finish delivery (give-up slot separate from final so a late real result still lands), channel delivery (telegram/sendblue/sms) + episodic memory + audit rows on finish, listAgentRuns (content-free view w/ live progress+heartbeat age via child inspect), cancelAgentRun, retryAgentRun (decrypt spec, re-dispatch with retry_of lineage).
+- McpAgentDO: 5 thin RPC methods (dispatchExecutionTask/onExecutionTaskFinish/listAgentRuns/cancelAgentRun/retryAgentRun); ensureTenantContext + WS hub extracted to do/tenant-context.ts for the 150-line limit. ExecutionAgent exported from the worker entry (ctx.exports resolution requirement).
+- src/services/agents/delegation.ts — decideDelegation (pattern-first research/memory + MODEL_CHAT classifier fallback, conservative inline default, short-message short-circuit) + maybeDelegateExecutionTask wired into BOTH channel text paths (telegram-inbound, sendblue-inbound); honest inline fallback when the DO has no session key. parseDelegation()/[DELEGATE:...] text signal + DelegationSignal type REMOVED (was never wired into a live path).
+- Dashboard surface (demo clause 6): GET /dashboard/agents (minimal live-agent panel, 2s refresh, cancel+retry buttons) + GET /api/agents/runs + POST /api/agents/runs/:id/{cancel,retry}, all behind CF Access auth middleware.
+- Fold-in: act_remind channel enum 'sms'|'push'|'both' → canonical 'sms'|'imessage'|'telegram'|'email'.
+- vitest.config.ts: deps.optimizer.ssr include ajv + ajv-formats (agents-package CJS deps; pool known issue).
+**Law 2:** cf_agent_tool_runs (parent DO SQLite) receives ONLY TMK-ciphertext output + content-free summaries/previews/progress (fixed vocabulary: profile, tool names, counters, phase labels). Task specs TMK-encrypted at rest; plaintext task crosses only the in-process facet RPC. Child re-derives the TMK from jwtSub exactly as initTenant (ciphertext interop).
+**Verification:** tests/mission-6.{0,1,2} (29 contracts: scoping structural, parser tolerance, doom break, cancel latency, deadline, gate-preserving propose_*, tail-at-terminal, dispatch budgets, content-free previews/views, encrypted specs, idempotent delivery slots, give-up-then-late-completion, retry lineage + active-run refusal, delegation routing + fallbacks, remind enum). Full suite 71 files / 424 passed / 1 skipped. Postflight green. tsc: no new src errors (new test files add only the pre-existing cloudflare:test class).
+**Gate reviews:** fresh-context verifier PASS/APPROVE (all 4 criteria, file:line evidence, defect sweep clear). Law-2 audit PASS-WITH-NOTES + TMK-symmetry confirmed; its one MEDIUM (raw error messages could reach the platform-visible run ledger) fixed same-session via sanitizeExecutionError fixed-vocabulary guard + contract test. Pre-existing notes (retain-queue plaintext content field, GATEWAY_CHAT_EMPTY preview log, oauth-prefixed test fakes) recorded in the lessons file for Phase 13.
+**Known limitation:** vitest pool cannot exercise real ctx.facets spawns (test entry excludes the agents-SDK DO by design) — facet availability at compatibility_date 2026-06-01 is verified at the live-smoke gate; if unavailable, bump compatibility_date (rollback-safe knob, see deploy memo).
+**Next:** Phase 6 gate (verifier, Law-2 audit, prod deploy tagged, live smoke = demo clause 6 mechanism via Telegram + dashboard cancel), then Phase 7 user automations.
+
+---
+
 ## Mission Phase 5 - Real action executors - 2026-07-03
 
 **Spec:** HAETSAL_MISSION.md Phase 5. Built on the native primitives the SDK 0.17 upgrade unlocked.

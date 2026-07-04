@@ -12,7 +12,7 @@ Last updated: 2026-04-18 | Session: 7.1 (Hindsight Projection Adapter)
 
 <!-- AUTO-GENERATED MODULE REGISTRY - DO NOT EDIT -->
 
-*Auto-generated: 2026-07-03*
+*Auto-generated: 2026-07-04*
 
 ### src/
 
@@ -20,9 +20,14 @@ Last updated: 2026-04-18 | Session: 7.1 (Hindsight Projection Adapter)
 |------|-------|------------|--------|
 | src\agents\base-agent.ts | 132 | — | ✅ |
 | src\agents\career-coach.ts | 105 | CareerCoach | ✅ |
-| src\agents\chief-of-staff.ts | 69 | ChiefOfStaff | ✅ |
+| src\agents\chief-of-staff.ts | 55 | ChiefOfStaff | ✅ |
+| src\agents\execution\run-store.ts | 142 | RunSql, ExecutionRunRow, ensureRunTable... | ✅ |
+| src\agents\execution\tool-loop.ts | 142 | ToolLoopConfig, parseToolCalls | ✅ |
+| src\agents\execution\tool-registry.ts | 130 | ToolRuntime, EXECUTION_TOOLS, toolDefinitionsFor | ✅ |
+| src\agents\execution\types.ts | 82 | ExecutionProfile, ExecutionToolName, PROFILE_TOOLS... | ✅ |
+| src\agents\execution-agent.ts | 146 | ExecutionAgent | ✅ |
 | src\agents\helpers.ts | 49 | MODEL_CONTEXT_LIMIT, FLUSH_THRESHOLD, shouldFlush | ✅ |
-| src\agents\types.ts | 73 | EpistemicMemoryType, AgentType, AgentContext... | ✅ |
+| src\agents\types.ts | 66 | EpistemicMemoryType, AgentType, AgentContext... | ✅ |
 | src\config\models.ts | 52 | MODEL_CHAT, MODEL_VISION, MODEL_DEEP... | ✅ |
 | src\cron\brief-sections.ts | 92 | — | ✅ |
 | src\cron\consolidation.ts | 69 | — | ✅ |
@@ -55,6 +60,7 @@ Last updated: 2026-04-18 | Session: 7.1 (Hindsight Projection Adapter)
 | src\services\action\router.ts | 111 | — | ✅ |
 | src\services\action\toctou.ts | 23 | — | ✅ |
 | src\services\action\tool-dispatch.ts | 69 | ToolExecutionResult | ✅ |
+| src\services\agents\delegation.ts | 79 | DelegationDecision, DelegationRoute | ✅ |
 | src\services\agents\router.ts | 50 | — | ✅ |
 | src\services\bootstrap\historical-import.ts | 140 | historicalSalienceMultiplier | ✅ |
 | src\services\bootstrap\interview.ts | 76 | createInitialState, currentQuestion, currentDomain... | ✅ |
@@ -159,8 +165,8 @@ Last updated: 2026-04-18 | Session: 7.1 (Hindsight Projection Adapter)
 | src\services\postgres-sql.ts | 95 | PostgresStatement, PostgresSql, createPostgresStatement... | ✅ |
 | src\services\retrieval-modes.ts | 149 | resolveTemporalWindow | ✅ |
 | src\services\retrieval-support.ts | 122 | CANONICAL_EMBEDDING_MODEL, citationOf, toRetrievalItem... | ✅ |
-| src\services\sendblue-inbound.ts | 97 | SendblueInboundBody, generateGroundedReply | ✅ |
-| src\services\telegram-inbound.ts | 123 | TelegramPhotoSize, TelegramMessage, TelegramUpdate | ✅ |
+| src\services\sendblue-inbound.ts | 103 | SendblueInboundBody, generateGroundedReply | ✅ |
+| src\services\telegram-inbound.ts | 129 | TelegramPhotoSize, TelegramMessage, TelegramUpdate | ✅ |
 | src\services\telnyx.ts | 35 | — | ✅ |
 | src\services\tenant.ts | 133 | — | ✅ |
 | src\services\workers-ai-chat.ts | 109 | CHAT_MODEL, ChatContentPart, ChatMessage... | ✅ |
@@ -170,7 +176,7 @@ Last updated: 2026-04-18 | Session: 7.1 (Hindsight Projection Adapter)
 | src\tools\act\create-event.ts | 34 | createEventSchema | ✅ |
 | src\tools\act\draft.ts | 33 | draftSchema | ✅ |
 | src\tools\act\modify-event.ts | 34 | modifyEventSchema | ✅ |
-| src\tools\act\remind.ts | 33 | remindSchema | ✅ |
+| src\tools\act\remind.ts | 35 | remindSchema | ✅ |
 | src\tools\act\run-playbook.ts | 32 | runPlaybookSchema | ✅ |
 | src\tools\act\search.ts | 33 | searchSchema | ✅ |
 | src\tools\act\send-message.ts | 33 | sendMessageSchema | ✅ |
@@ -207,16 +213,22 @@ Last updated: 2026-04-18 | Session: 7.1 (Hindsight Projection Adapter)
 | src\workers\ingestion\handlers.ts | 112 | — | ✅ |
 | src\workers\ingestion\media-handlers.ts | 74 | — | ✅ |
 | src\workers\ingestion\retain-consumer.ts | 21 | — | ✅ |
+| src\workers\mcpagent\dashboard-agents-html.ts | 49 | AGENT_DASHBOARD_HTML | ✅ |
 | src\workers\mcpagent\debug-inventory.ts | 64 | — | ✅ |
 | src\workers\mcpagent\do\action-scheduling.ts | 52 | ReminderSchedulePayload | ✅ |
+| src\workers\mcpagent\do\agent-dispatch.ts | 150 | EXECUTION_MAX_BUDGET_MS, EXECUTION_NO_PROGRESS_BUDGET_MS, ReplyChannel... | ✅ |
+| src\workers\mcpagent\do\agent-runs-view.ts | 120 | RunsHost | ✅ |
+| src\workers\mcpagent\do\agent-task-store.ts | 109 | TaskSql, AgentTaskRow, TaskRecord... | ✅ |
 | src\workers\mcpagent\do\identity.ts | 13 | MCP_STREAMABLE_HTTP_PREFIX, getMcpAgentObjectName, getMcpAgentObjectId | ✅ |
 | src\workers\mcpagent\do\inbound-message.ts | 35 | — | ✅ |
-| src\workers\mcpagent\do\McpAgent.ts | 148 | McpAgentDO | ✅ |
+| src\workers\mcpagent\do\McpAgent.ts | 143 | McpAgentDO | ✅ |
 | src\workers\mcpagent\do\register-tools.ts | 87 | registerLegacyMemoryTools, registerActTools | ✅ |
 | src\workers\mcpagent\do\session-store.ts | 57 | PersistedSessionRow, ensureSessionTable, readPersistedSession... | ✅ |
-| src\workers\mcpagent\index.ts | 144 | — | ✅ |
+| src\workers\mcpagent\do\tenant-context.ts | 58 | ResolvedTenantContext, acceptSessionWebSocket, broadcastToSessions | ✅ |
+| src\workers\mcpagent\index.ts | 150 | — | ✅ |
 | src\workers\mcpagent\public-webhooks.ts | 80 | registerPublicWebhooks | ✅ |
 | src\workers\mcpagent\routes\actions.ts | 79 | actions | ✅ |
+| src\workers\mcpagent\routes\agent-runs.ts | 84 | agentRuns, agentDashboard | ✅ |
 | src\workers\mcpagent\routes\approval.ts | 82 | approval | ✅ |
 | src\workers\mcpagent\routes\audit.ts | 51 | audit | ✅ |
 | src\workers\mcpagent\routes\auth.ts | 45 | — | ✅ |

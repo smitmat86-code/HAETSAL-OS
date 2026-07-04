@@ -159,6 +159,18 @@ name = "brain-dream-cycle"
 binding = "DREAM_WORKFLOW"
 class_name = "DreamCycleWorkflow"
 
+# ── Static Assets (Phase 11 dashboard) ───────────────────────────────────────
+# Served asset-first for matching paths; everything else falls through to the
+# Worker. CF Access protects the whole hostname (G5), so assets are gated at
+# the edge exactly like API routes.
+[assets]
+directory = "./public"
+binding = "ASSETS"
+# Explicit: unmatched asset paths fall through to the Worker (default, pinned
+# so a future config change can't silently shadow Worker routes like
+# /dashboard/agents — never add files under public/ that collide with routes).
+not_found_handling = "none"
+
 # ── Cron Triggers ────────────────────────────────────────────────────────────
 [triggers]
 crons = ["*/1 * * * *", "*/15 * * * *", "0 7 * * *", "*/30 * * * *", "0 17 * * 5", "0 2 * * *"]

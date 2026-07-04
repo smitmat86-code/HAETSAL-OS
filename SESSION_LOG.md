@@ -5,6 +5,17 @@
 
 ---
 
+## Mission Phase 11 - Dashboard (8 panels) - 2026-07-04
+
+**Spec:** HAETSAL_MISSION.md Phase 11 / demo clause 7. Full dashboard on Workers Static Assets, same Worker, CF Access enforced.
+**Built:**
+- public/dashboard/index.html - single-file SPA (vanilla JS, dark theme): 8 panels = memory browser + graph (search across all 7 broker modes, graph edges surfaced), live agent status/heartbeat (cancel/retry, 4s auto-refresh), agent timeline (lineage), consolidation reasoning viewer (latest dream run + report + pending review inbox), automations manager (toggle/delete, fire events incl. reply-window skips), connections/integrations (Telegram/iMessage/Google/MCP presence booleans + compiled-pages index), usage (audit-derived 7d operational counts; model spend pointed at the AI Gateway dashboard - AE is write-only from Workers), retrieval-trace inspector (recent broker traces + full trace JSON drill-in).
+- src/workers/mcpagent/routes/dashboard-data.ts - /api/memory/search (mode-validated, session-TMK reads), /api/traces/{recent,:id}, /api/usage/summary, /api/connections (presence only, never token material).
+- wrangler [assets] ./public (asset-first for matching paths; Worker fallthrough): CF Access gates the hostname (G5) so assets are edge-protected exactly like API routes; authMiddleware continues to gate every /api route.
+**Verification:** feeds are thin over verified services; SPA is a static asset (not subject to src line limits). Gate smoke asserts the SPA + all 8 panel sections + every panel feed 200 + a broker trace recorded end-to-end.
+
+---
+
 ## Mission Phase 10 - Compiled markdown pages - 2026-07-04
 
 **Spec:** HAETSAL_MISSION.md Phase 10. Named person/project/topic views regenerable from canonical.

@@ -112,7 +112,7 @@ Last updated: 2026-04-18 | Session: 7.1 (Hindsight Projection Adapter)
 | src\services\chief-of-staff-context-runtime.ts | 75 | — | ✅ |
 | src\services\chief-of-staff-context-shared.ts | 67 | QueryPlan, AssembledContextCore, POLICY... | ✅ |
 | src\services\chief-of-staff-context.ts | 20 | — | ✅ |
-| src\services\compiled\page.ts | 152 | CompiledPageKind, CompiledPageRef, familyKeys... | ⚠️ OVER LIMIT |
+| src\services\compiled\page.ts | 150 | CompiledPageKind, CompiledPageRef, familyKeys... | ✅ |
 | src\services\compiled-synthesis-artifacts.ts | 72 | CompiledArtifactPayloadInput, PersistedCompiledArtifactPayload, buildCompiledArtifactR2Key | ✅ |
 | src\services\compiled-synthesis-assemble-support.ts | 139 | buildFactInputs, buildRelationshipInputs, buildContradictionInputs | ✅ |
 | src\services\compiled-synthesis-assemble.ts | 131 | assembleProjectCompiledSynthesis | ✅ |
@@ -213,7 +213,7 @@ Last updated: 2026-04-18 | Session: 7.1 (Hindsight Projection Adapter)
 | src\types\canonical-memory-query.ts | 114 | MemoryQueryMode, MemoryQueryModePreference, CanonicalRetrievalCitation... | ✅ |
 | src\types\canonical-memory.ts | 71 | CanonicalProjectionKind, CanonicalArtifactMode, CanonicalArtifactRef... | ✅ |
 | src\types\chief-of-staff-context.ts | 81 | ContextBundleIntent, ContextConfidenceLevel, PrepareContextForAgentInput... | ✅ |
-| src\types\cloudflare-env.generated.d.ts | 48 | — | ✅ |
+| src\types\cloudflare-env.generated.d.ts | 49 | — | ✅ |
 | src\types\env.ts | 25 | Env | ✅ |
 | src\types\external-brain.ts | 89 | BrainSurfaceId, BrainSurfaceStatus, BrainRiskLevel... | ✅ |
 | src\types\external-client-memory.ts | 73 | ExternalClientCaptureMode, BrainMemorySurfaceProfile, ExternalClientCaptureInput... | ✅ |
@@ -257,6 +257,7 @@ Last updated: 2026-04-18 | Session: 7.1 (Hindsight Projection Adapter)
 | src\workers\mcpagent\routes\automations.ts | 79 | automations | ✅ |
 | src\workers\mcpagent\routes\canary.ts | 15 | canary, hasCanonicalHyperdriveBinding | ✅ |
 | src\workers\mcpagent\routes\compiled.ts | 55 | compiled | ✅ |
+| src\workers\mcpagent\routes\dashboard-data.ts | 101 | dashboardData | ✅ |
 | src\workers\mcpagent\routes\dream.ts | 66 | dream | ✅ |
 | src\workers\mcpagent\routes\ingest.ts | 130 | — | ✅ |
 | src\workers\mcpagent\routes\session.ts | 31 | session | ✅ |

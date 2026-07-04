@@ -17,6 +17,7 @@ import { automations } from './routes/automations' // Phase 7
 import { dream } from './routes/dream' // Phase 8
 import { session } from './routes/session' // Phase 9
 import { compiled } from './routes/compiled' // Phase 10
+import { dashboardData } from './routes/dashboard-data' // Phase 11 feeds
 import type { Env } from '../../types/env'
 import { getMcpAgentObjectName } from './do/identity'
 import { registerPublicWebhooks } from './public-webhooks'
@@ -29,8 +30,7 @@ type Variables = { tenantId: string; jwtSub: string; traceId: string }
 const app = new Hono<{ Bindings: Env; Variables: Variables }>()
 const mcpHandler = McpAgentDO.serve('/mcp', { binding: 'MCPAGENT' })
 
-// Security headers — skip on WebSocket 101 (immutable in workerd)
-// LESSON: WebSocket 101 headers are immutable — mutating throws TypeError
+// Security headers — skip on WebSocket 101 (immutable in workerd; mutating throws)
 app.use('*', async (c, next) => {
   const isWebSocket = c.req.header('Upgrade') === 'websocket'
   try {
@@ -69,7 +69,7 @@ app.route('/api/automations', automations)
 app.route('/api/dream', dream)
 app.route('/api/session', session)
 app.route('/api/compiled', compiled)
-
+app.route('/api', dashboardData)
 // Read-only diagnostic view over the caller's own canonical memory (no bodies).
 app.get('/debug/memory-inventory', renderMemoryInventory)
 

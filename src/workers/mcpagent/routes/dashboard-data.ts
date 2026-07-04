@@ -1,0 +1,100 @@
+// src/workers/mcpagent/routes/dashboard-data.ts
+// Phase 11 dashboard data feeds (CF Access): memory search + graph, retrieval
+// traces, usage summary (audit-derived operational counts — AI Gateway spend
+// lives in the CF dashboard; Analytics Engine is write-only from Workers),
+// and connection statuses (presence booleans only, never token material).
+
+import { Hono } from 'hono'
+import type { Env } from '../../../types/env'
+import { deriveTmk } from '../../../middleware/auth'
+import { listRecentCanonicalMemories, searchCanonicalMemory } from '../../../services/canonical-memory-query'
+import { getCanonicalBrokerTrace, listRecentCanonicalBrokerTraces } from '../../../services/canonical-broker-trace-read'
+import type { MemoryQueryMode } from '../../../types/canonical-memory-query'
+
+type Variables = { tenantId: string; jwtSub: string; traceId: string }
+
+const MODES = new Set<MemoryQueryMode>(['raw', 'lexical', 'semantic', 'graph', 'temporal', 'compiled', 'composed'])
+
+export const dashboardData = new Hono<{ Bindings: Env; Variables: Variables }>()
+
+dashboardData.get('/memory/search', async (c) => {
+  const tenantId = c.get('tenantId')
+  const tmk = await deriveTmk(c.get('jwtSub'), c.env.CF_ACCESS_AUD)
+  const query = c.req.query('q')?.trim()
+  if (!query) {
+    // Browser default view: most recent memories (no query yet).
+    const recent = await listRecentCanonicalMemories({ tenantId, limit: 12 }, c.env, tenantId, { tmk })
+    return c.json({ query: '', mode: 'recent', status: 'ok', items: recent.items })
+  }
+  const modeRaw = c.req.query('mode') as MemoryQueryMode | undefined
+  const mode = modeRaw && MODES.has(modeRaw) ? modeRaw : 'composed'
+  const result = await searchCanonicalMemory(
+    { tenantId, query, mode, limit: 12 }, c.env, tenantId, { tmk },
+  )
+  return c.json(result)
+})
+
+dashboardData.get('/traces/recent', async (c) => {
+  const tenantId = c.get('tenantId')
+  const result = await listRecentCanonicalBrokerTraces({ tenantId, limit: 15 }, c.env, tenantId)
+  return c.json(result)
+})
+
+dashboardData.get('/traces/:queryId', async (c) => {
+  const tenantId = c.get('tenantId')
+  try {
+    return c.json(await getCanonicalBrokerTrace({ tenantId, queryId: c.req.param('queryId') }, c.env, tenantId))
+  } catch (error) {
+    return c.json({ error: (error instanceof Error ? error.message : String(error)).slice(0, 160) }, 404)
+  }
+})
+
+dashboardData.get('/usage/summary', async (c) => {
+  const tenantId = c.get('tenantId')
+  const since = Date.now() - 7 * 86_400_000
+  const [operations, runs, automations] = await Promise.all([
+    c.env.D1_US.prepare(
+      `SELECT operation, COUNT(*) AS n FROM memory_audit
+       WHERE tenant_id = ? AND created_at > ? GROUP BY operation ORDER BY n DESC LIMIT 20`,
+    ).bind(tenantId, since).all<{ operation: string; n: number }>(),
+    c.env.D1_US.prepare(
+      `SELECT COUNT(*) AS n FROM memory_audit WHERE tenant_id = ? AND created_at > ? AND operation LIKE 'agent_run.%'`,
+    ).bind(tenantId, since).first<{ n: number }>(),
+    c.env.D1_US.prepare(
+      `SELECT COUNT(*) AS n FROM memory_audit WHERE tenant_id = ? AND created_at > ? AND operation LIKE 'automation.%'`,
+    ).bind(tenantId, since).first<{ n: number }>(),
+  ])
+  return c.json({
+    windowDays: 7,
+    operations: operations.results ?? [],
+    agentRunEvents: runs?.n ?? 0,
+    automationEvents: automations?.n ?? 0,
+    note: 'Operational counts from the audit ledger. Model spend: Cloudflare dashboard → AI Gateway (haetsal-brain-gateway).',
+  })
+})
+
+dashboardData.get('/connections', async (c) => {
+  const tenantId = c.get('tenantId')
+  const [google, telegram, phones] = await Promise.all([
+    c.env.D1_US.prepare(
+      'SELECT scope FROM google_oauth_tokens WHERE tenant_id = ?',
+    ).bind(tenantId).all<{ scope: string }>().catch(() => ({ results: [] as Array<{ scope: string }> })),
+    c.env.D1_US.prepare(
+      'SELECT COUNT(*) AS n FROM telegram_chats WHERE tenant_id = ?',
+    ).bind(tenantId).first<{ n: number }>().catch(() => null),
+    c.env.D1_US.prepare(
+      'SELECT COUNT(*) AS n FROM tenant_phone_numbers WHERE tenant_id = ?',
+    ).bind(tenantId).first<{ n: number }>().catch(() => null),
+  ])
+  const googleScopes = (google.results ?? []).map(r => r.scope)
+  return c.json({
+    telegram: { connected: (telegram?.n ?? 0) > 0 },
+    imessage_sms: { connected: (phones?.n ?? 0) > 0, line: 'Sendblue shared line + Telnyx' },
+    google: {
+      connected: googleScopes.length > 0,
+      scopes: googleScopes,
+      note: googleScopes.length === 0 ? 'Google OAuth not provisioned (see docs/lessons/phase-5-google-oauth-setup.md)' : undefined,
+    },
+    mcp: { connected: true, endpoint: '/mcp (CF Access)' },
+  })
+})

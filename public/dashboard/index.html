@@ -1,0 +1,319 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>HAETSAL — Dashboard</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+  :root{--bg:#0b0f14;--panel:#11161d;--line:#22303c;--text:#e6edf3;--muted:#8b949e;--accent:#e3b341;--ok:#3fb950;--bad:#f85149}
+  *{box-sizing:border-box}
+  body{font-family:system-ui;margin:0;background:var(--bg);color:var(--text);line-height:1.5}
+  header{display:flex;gap:.6rem;align-items:center;padding:.7rem 1rem;border-bottom:1px solid var(--line);flex-wrap:wrap}
+  header h1{font-size:1rem;margin:0 1rem 0 0}
+  nav{display:flex;gap:.3rem;flex-wrap:wrap}
+  nav button{background:transparent;color:var(--muted);border:1px solid transparent;border-radius:6px;padding:.3rem .65rem;cursor:pointer;font-size:.85rem}
+  nav button.active{color:var(--text);border-color:var(--line);background:var(--panel)}
+  main{max-width:72rem;margin:1rem auto;padding:0 1rem}
+  section{display:none}section.active{display:block}
+  table{width:100%;border-collapse:collapse;font-size:.85rem}
+  th,td{text-align:left;padding:.4rem .5rem;border-bottom:1px solid var(--line);vertical-align:top}
+  .muted{color:var(--muted);font-size:.8rem}
+  .ok{color:var(--ok)}.bad{color:var(--bad)}.warn{color:var(--accent)}
+  button.act{background:#21262d;color:var(--text);border:1px solid #30363d;border-radius:6px;padding:.2rem .6rem;cursor:pointer}
+  input,select{background:var(--panel);color:var(--text);border:1px solid var(--line);border-radius:6px;padding:.35rem .5rem}
+  pre{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:.8rem;overflow-x:auto;font-size:.8rem;white-space:pre-wrap}
+  .cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:.7rem}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:.7rem;margin:.35rem 0}
+  .bar{height:6px;background:#21262d;border-radius:3px;overflow:hidden;min-width:80px}
+  .bar>div{height:100%;background:var(--accent)}
+  h2{font-size:1rem}h3{font-size:.9rem}
+  a{color:var(--accent)}
+</style>
+</head>
+<body>
+<header>
+  <h1>HAETSAL</h1>
+  <nav id="nav"></nav>
+  <span id="tick" class="muted" style="margin-left:auto"></span>
+</header>
+<main>
+  <section id="memory">
+    <h2>Memory browser + graph</h2>
+    <p><input id="memq" placeholder="search memory…" size="34">
+      <select id="memmode"><option>composed</option><option>lexical</option><option>semantic</option><option>graph</option><option>temporal</option><option>raw</option><option>compiled</option></select>
+      <button class="act" id="membtn">Search</button></p>
+    <div id="memout" class="muted">Loading recent memories…</div>
+  </section>
+
+  <section id="agents">
+    <h2>Live agent status / heartbeat</h2>
+    <p class="muted">Execution agents with scoped tools. Cancel stops a run; retry re-dispatches it.</p>
+    <table><thead><tr><th>Run</th><th>Tools</th><th>Status</th><th>Progress</th><th>Heartbeat</th><th></th></tr></thead>
+    <tbody id="agentrows"></tbody></table>
+  </section>
+
+  <section id="timeline">
+    <h2>Agent timeline</h2>
+    <p class="muted">Recent runs, newest first, with lineage and cancel/retry.</p>
+    <div id="timelineout"></div>
+  </section>
+
+  <section id="dream">
+    <h2>Consolidation reasoning (dream cycle)</h2>
+    <div id="dreamout"></div>
+    <h3>Review inbox (report-only proposals)</h3>
+    <div id="reviewout"></div>
+  </section>
+
+  <section id="automations">
+    <h2>Automations</h2>
+    <p class="muted">Chat-created schedules. Sendblue deliveries outside the 24h reply window are skipped (never retried) — text the brain to re-open the window.</p>
+    <table><thead><tr><th>Task</th><th>Schedule</th><th>State</th><th>Last</th><th>Recent events</th><th></th></tr></thead>
+    <tbody id="autorows"></tbody></table>
+  </section>
+
+  <section id="connections">
+    <h2>Connections</h2>
+    <div id="connout" class="cards"></div>
+    <h3 style="margin-top:1rem">Compiled pages</h3>
+    <div id="pagesout"></div>
+  </section>
+
+  <section id="usage">
+    <h2>Usage</h2>
+    <div id="usageout"></div>
+  </section>
+
+  <section id="traces">
+    <h2>Retrieval-trace inspector</h2>
+    <p class="muted">Every broker query leaves a trace: mode routing, boosts, and what was retrieved with what authority.</p>
+    <div id="traceout"></div>
+    <pre id="tracedetail" style="display:none"></pre>
+  </section>
+</main>
+<script>
+'use strict';
+// All API data enters the DOM via textContent (el/frag helpers) — never via
+// innerHTML interpolation. Actions use data-* attributes + one delegated
+// listener; URLs are encodeURIComponent-composed.
+
+const PANELS=[["memory","Memory"],["agents","Live agents"],["timeline","Timeline"],["dream","Consolidation"],["automations","Automations"],["connections","Connections"],["usage","Usage"],["traces","Traces"]];
+const $=id=>document.getElementById(id);
+
+function el(tag,attrs,children){
+  const node=document.createElement(tag);
+  for(const [k,v] of Object.entries(attrs||{})){
+    if(k==='class')node.className=v;
+    else if(k==='text')node.textContent=v==null?'':String(v);
+    else if(k.startsWith('data-'))node.setAttribute(k,String(v));
+    else if(k==='href')node.setAttribute('href',v);
+    else if(k==='style')node.setAttribute('style',v);
+    else if(k==='target')node.setAttribute('target',v);
+  }
+  for(const child of children||[]){ if(child!=null) node.appendChild(typeof child==='string'?document.createTextNode(child):child) }
+  return node;
+}
+function replaceChildren(id,nodes){const host=$(id);host.textContent='';for(const n of nodes)host.appendChild(n)}
+const apiPath=(...segs)=>'/'+['api',...segs.map(encodeURIComponent)].join('/');
+async function j(path,opts){const r=await fetch(path,opts);if(!r.ok)throw new Error(path+': '+r.status);const ct=r.headers.get('content-type')||'';return ct.includes('json')?r.json():r.text()}
+const age=ms=>ms==null?'—':(ms<60000?Math.round(ms/1000)+'s':Math.round(ms/60000)+'m')+' ago';
+const when=ts=>ts?new Date(ts).toLocaleString():'';
+
+const nav=$('nav');
+for(const [id,label] of PANELS){
+  nav.appendChild(el('button',{'data-panel':id,text:label},[]));
+}
+nav.addEventListener('click',e=>{const p=e.target.getAttribute('data-panel');if(p)show(p)});
+
+function show(id){
+  document.querySelectorAll('section').forEach(s=>s.classList.toggle('active',s.id===id));
+  document.querySelectorAll('nav button').forEach(b=>b.classList.toggle('active',b.getAttribute('data-panel')===id));
+  refresh(id);
+}
+
+// One delegated listener for every action button.
+document.addEventListener('click',async e=>{
+  const target=e.target.closest('[data-action]');if(!target)return;
+  const action=target.getAttribute('data-action'),id=target.getAttribute('data-id')||'';
+  try{
+    if(action==='cancel-run')await fetch(apiPath('agents','runs',id,'cancel')+'',{method:'POST'});
+    else if(action==='retry-run')await fetch(apiPath('agents','runs',id,'retry'),{method:'POST'});
+    else if(action==='toggle-auto')await fetch(apiPath('automations',id)+'/toggle?enabled='+(target.getAttribute('data-enabled')==='true'),{method:'POST'});
+    else if(action==='delete-auto')await fetch(apiPath('automations',id),{method:'DELETE'});
+    else if(action==='open-trace')return openTrace(id);
+    else if(action==='search-memory')return searchMemory();
+  }catch(err){console.warn(err)}
+  const active=document.querySelector('section.active');if(active)refresh(active.id);
+});
+$('membtn').setAttribute('data-action','search-memory');
+$('memq').addEventListener('keydown',e=>{if(e.key==='Enter')searchMemory()});
+
+function memoryCard(item,fallbackMode){
+  const meta=[item.mode||fallbackMode,item.trustState,item.capturedAt?when(item.capturedAt):null].filter(Boolean).join(' · ');
+  const kids=[
+    el('b',{text:item.title||item.sourceSystem||'memory'},[]),' ',
+    el('span',{class:'muted',text:meta},[]),
+    el('br',{},[]),
+    (item.preview||'').slice(0,320),
+  ];
+  if(item.graphContext){
+    kids.push(el('br',{},[]),el('span',{class:'warn',
+      text:(item.graphContext.entityLabel||'')+' —'+(item.graphContext.relation||'rel')+'→ '+(item.graphContext.relatedEntityLabel||'')},[]));
+  }
+  return el('div',{class:'card'},kids);
+}
+async function loadMemory(){
+  try{
+    const res=await j('/api/memory/search');
+    replaceChildren('memout',(res.items||[]).map(i=>memoryCard(i,'recent')));
+    if(!(res.items||[]).length)replaceChildren('memout',[el('span',{class:'muted',text:'no memories yet'},[])]);
+  }catch(e){replaceChildren('memout',[el('span',{class:'bad',text:e.message},[])])}
+}
+async function searchMemory(){
+  const q=$('memq').value.trim();if(!q)return loadMemory();
+  const mode=$('memmode').value;
+  replaceChildren('memout',[el('span',{class:'muted',text:'searching…'},[])]);
+  try{
+    const res=await j('/api/memory/search?q='+encodeURIComponent(q)+'&mode='+encodeURIComponent(mode));
+    const cards=(res.items||[]).map(i=>memoryCard(i,mode));
+    replaceChildren('memout',cards.length?cards:[el('span',{class:'muted',text:'no results ('+(res.status||'ok')+')'},[])]);
+  }catch(e){replaceChildren('memout',[el('span',{class:'bad',text:e.message},[])])}
+}
+
+function runActionButton(run){
+  const live=run.status==='running'||run.status==='starting';
+  return el('button',{class:'act','data-action':live?'cancel-run':'retry-run','data-id':run.runId,text:live?'Cancel':'Retry'},[]);
+}
+async function loadAgents(){
+  const runs=await j('/api/agents/runs?limit=25');
+  replaceChildren('agentrows',runs.map(r=>{
+    const live=r.status==='running'||r.status==='starting';
+    const frac=r.progress?Math.round(r.progress.fraction*100):null;
+    const progress=frac!=null
+      ?el('td',{},[el('div',{class:'bar'},[el('div',{style:'width:'+Math.max(0,Math.min(100,frac))+'%'},[])]),el('span',{class:'muted',text:r.progress.phase||''},[])])
+      :el('td',{class:'muted',text:'—'},[]);
+    return el('tr',{},[
+      el('td',{},[el('code',{text:(r.runId||'').slice(0,8)},[]),el('br',{},[]),el('span',{class:'muted',text:(r.profile||'')+(r.retryOf?' · retry':'')},[])]),
+      el('td',{class:'muted',text:(r.tools||[]).join(', ')},[]),
+      el('td',{class:r.status==='completed'?'ok':live?'warn':'bad'},[r.status||'',r.error?el('div',{class:'muted',text:(r.error||'').slice(0,50)},[]):null]),
+      progress,
+      el('td',{class:'muted',text:age(r.heartbeatAgeMs)},[]),
+      el('td',{},[runActionButton(r)]),
+    ]);
+  }));
+  if(!runs.length)replaceChildren('agentrows',[el('tr',{},[el('td',{class:'muted',text:'no runs yet'},[])])]);
+  replaceChildren('timelineout',runs.map(r=>el('div',{class:'card'},[
+    when(r.startedAt)+' — ',
+    el('b',{text:r.profile||r.agentType||''},[]),' ',
+    el('span',{class:r.status==='completed'?'ok':'muted',text:r.status||''},[]),
+    r.completedAt?el('span',{class:'muted',text:' ('+Math.round((r.completedAt-r.startedAt)/1000)+'s)'},[]):null,
+    r.retryOf?el('span',{class:'warn',text:' retry of '+(r.retryOf||'').slice(0,8)},[]):null,
+    ' ',runActionButton(r),
+  ])));
+}
+
+async function loadDream(){
+  const latest=await j('/api/dream/latest');
+  const run=latest.run;
+  const out=[];
+  if(run){
+    out.push(el('div',{class:'card'},[
+      'Last cycle: ',el('b',{class:run.status==='completed'?'ok':'bad',text:run.status},[]),' ',
+      el('span',{class:'muted',text:when(run.started_at)},[]),el('br',{},[]),
+      'window '+run.events_seen+' memories · '+run.proposals_written+' proposals filed',
+    ]));
+    out.push(latest.report?el('pre',{text:latest.report},[]):el('p',{class:'muted',text:'report body unavailable'},[]));
+  }else out.push(el('p',{class:'muted',text:'no completed cycle yet — it runs nightly at 2:00 UTC'},[]));
+  replaceChildren('dreamout',out);
+  const reviews=await j('/api/dream/reviews?status=pending');
+  replaceChildren('reviewout',reviews.length?reviews.map(r=>el('div',{class:'card'},[
+    el('b',{text:r.kind||''},[]),' ',el('span',{class:'muted',text:when(r.createdAt)},[]),el('br',{},[]),
+    (r.proposal&&r.proposal.statement)||'',el('br',{},[]),
+    el('span',{class:'muted',text:((r.proposal&&r.proposal.rationale)||'')+' · confidence '+((r.proposal&&r.proposal.confidence)??'?')},[]),
+  ])):[el('p',{class:'muted',text:'review inbox is empty'},[])]);
+}
+
+async function loadAutomations(){
+  const autos=await j('/api/automations');
+  replaceChildren('autorows',autos.map(a=>el('tr',{},[
+    el('td',{},[a.task||'',el('br',{},[]),el('code',{class:'muted',text:a.idShort||''},[])]),
+    el('td',{class:'muted'},[a.schedule||'',a.nextFireAt?el('div',{text:'next '+when(a.nextFireAt)},[]):null]),
+    el('td',{class:a.enabled?'ok':'muted',text:a.enabled?'on':'paused'},[]),
+    el('td',{class:'muted'},[a.lastStatus||'—',a.lastFiredAt?el('div',{text:when(a.lastFiredAt)},[]):null]),
+    el('td',{class:'muted',text:(a.events||[]).map(e=>e.status).join(', ')},[]),
+    el('td',{},[
+      el('button',{class:'act','data-action':'toggle-auto','data-id':a.id,'data-enabled':String(!a.enabled),text:a.enabled?'Pause':'Resume'},[]),' ',
+      el('button',{class:'act','data-action':'delete-auto','data-id':a.id,text:'Delete'},[]),
+    ]),
+  ])));
+  if(!autos.length)replaceChildren('autorows',[el('tr',{},[el('td',{class:'muted',text:'none yet — text the brain: "every weekday at 8am, brief me on my day"'},[])])]);
+}
+
+async function loadConnections(){
+  const c=await j('/api/connections');
+  const card=(name,ok,detail)=>el('div',{class:'card'},[
+    el('b',{text:name},[]),el('br',{},[]),
+    el('span',{class:ok?'ok':'bad',text:ok?'connected':'not connected'},[]),
+    detail?el('div',{class:'muted',text:detail},[]):null,
+  ]);
+  replaceChildren('connout',[
+    card('Telegram',c.telegram.connected,''),
+    card('iMessage / SMS',c.imessage_sms.connected,c.imessage_sms.line||''),
+    card('Google (Gmail/Calendar)',c.google.connected,c.google.note||(c.google.scopes||[]).join(', ')),
+    card('MCP clients',c.mcp.connected,c.mcp.endpoint||''),
+  ]);
+  const pages=await j('/api/compiled');
+  replaceChildren('pagesout',pages.length?pages.map(p=>el('div',{class:'card'},[
+    el('b',{text:(p.kind||'')+':'+(p.key||'')},[]),' ',
+    el('span',{class:'muted',text:p.sourceCount+' sources · '+when(p.updatedAt)},[]),' ',
+    el('a',{href:apiPath('compiled',p.kind,p.key),target:'_blank',text:'open'},[]),
+  ])):[el('p',{class:'muted',text:'no compiled pages yet'},[])]);
+}
+
+async function loadUsage(){
+  const u=await j('/api/usage/summary');
+  const rows=(u.operations||[]).map(o=>el('tr',{},[
+    el('td',{class:'muted',text:o.operation},[]),el('td',{text:String(o.n)},[]),
+  ]));
+  replaceChildren('usageout',[
+    el('div',{class:'cards'},[
+      el('div',{class:'card'},[el('b',{text:String(u.agentRunEvents)},[]),el('div',{class:'muted',text:'agent-run events / '+u.windowDays+'d'},[])]),
+      el('div',{class:'card'},[el('b',{text:String(u.automationEvents)},[]),el('div',{class:'muted',text:'automation events / '+u.windowDays+'d'},[])]),
+    ]),
+    el('table',{style:'margin-top:.6rem'},[
+      el('thead',{},[el('tr',{},[el('th',{text:'Operation'},[]),el('th',{text:'Count'},[])])]),
+      el('tbody',{},rows),
+    ]),
+    el('p',{class:'muted',text:u.note||''},[]),
+  ]);
+}
+
+async function loadTraces(){
+  const t=await j('/api/traces/recent');
+  const traces=t.items||[];
+  replaceChildren('traceout',traces.length?[el('table',{},[
+    el('thead',{},[el('tr',{},[el('th',{text:'When'},[]),el('th',{text:'Mode'},[]),el('th',{text:'Query id'},[]),el('th',{},[])])]),
+    el('tbody',{},traces.map(x=>el('tr',{},[
+      el('td',{class:'muted',text:when(x.createdAt)},[]),
+      el('td',{text:x.primaryMode||''},[]),
+      el('td',{},[el('code',{text:(x.queryId||'').slice(0,12)},[])]),
+      el('td',{},[el('button',{class:'act','data-action':'open-trace','data-id':x.queryId||'',text:'Inspect'},[])]),
+    ]))),
+  ])]:[el('p',{class:'muted',text:'no traces yet — run a memory search first'},[])]);
+}
+async function openTrace(id){
+  const pre=$('tracedetail');pre.style.display='block';pre.textContent='loading…';
+  try{pre.textContent=JSON.stringify(await j(apiPath('traces',id)),null,2)}catch(e){pre.textContent=e.message}
+}
+
+const LOADERS={memory:loadMemory,agents:loadAgents,timeline:loadAgents,dream:loadDream,automations:loadAutomations,connections:loadConnections,usage:loadUsage,traces:loadTraces};
+async function refresh(id){
+  $('tick').textContent='· refreshing…';
+  try{await LOADERS[id]()}catch(e){console.warn(e)}
+  $('tick').textContent='· '+new Date().toLocaleTimeString();
+}
+setInterval(()=>{const active=document.querySelector('section.active');if(active&&(active.id==='agents'||active.id==='timeline'))refresh(active.id)},4000);
+show('agents');
+</script>
+</body>
+</html>

@@ -95,6 +95,18 @@ registry/G4 wiring) for no Phase 6 capability. Re-evaluate at Phase 9
   model output on the null-parse path (workers-ai-chat.ts); (c) synthetic
   OAuth-prefixed test tokens in tests/2.2 could false-positive secret scans.
 
+## Live-gate finding: transient InferenceUpstreamError
+
+Workers AI (llama-3.3-70b-fp8-fast via AI Gateway) threw a one-off
+`InferenceUpstreamError` that killed a live run; the identical request
+succeeded on direct replay seconds later. The execution loop now retries a
+failed model call once (800ms backoff, never after cancellation). Related
+workerd testing gotcha: `return promise` from inside a catch trips the
+unhandled-rejection tracker in vitest-pool-workers even when the caller
+awaits — use `return await` (the SDK's own source documents the same trap).
+Also observed live: llama-3.3 returns numeric tool arguments as STRINGS
+(`"max_results": "5"`) — coerce, don't trust the schema.
+
 ## Sendblue Free Tier note (carried forward)
 
 Execution-agent results delivered to the `sendblue` channel are subject to the

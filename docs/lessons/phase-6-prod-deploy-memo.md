@@ -1,8 +1,22 @@
 # Phase 6 Prod Deploy Memo — Sub-Agent Spawn + Cancel/Retry
 
 Date: 2026-07-04. Worker: `the-brain` at haetsalos.specialdarksystems.com.
-Rollback tag: `deploy-phase-6-prev` (captured immediately before deploy).
-Deploy tag: `phase-6-complete`.
+Rollback tag: `deploy-phase-6-prev` (= 54e39e6, the pre-phase code).
+Deploy tag: `phase-6-complete` (= 73e7428).
+
+## OUTCOME (post-deploy)
+
+- Deploy 1: version `7eca2b7d` (commit 6aa9cd0). Smoke 7/8 — the retried run
+  lost its first model call to a transient `InferenceUpstreamError` (the
+  identical request succeeded via direct API replay and a fresh spawn
+  completed end-to-end in 52s, so: upstream blip, not a request-shape bug).
+- Hardening: one model-call retry w/ 800ms backoff (commit 73e7428).
+- Deploy 2: version `3bedf36e`. **Smoke GREEN 8/8**:
+  dashboard-panel 200 · runs-list 200 · spawn 201 · visibility with scoped
+  tools [web_search, recall_memory] · cancel→aborted in 408ms (bar: 5s) ·
+  retry 200 · retry lineage · retried run completed in 17s.
+- `ctx.facets` confirmed available at compatibility_date 2026-06-01 — the
+  pre-deploy S3 risk is retired; no compat bump needed.
 
 ## What this deploy changes on the exposed surface
 

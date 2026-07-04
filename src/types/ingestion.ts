@@ -12,6 +12,7 @@ export type IngestionSource =
   | 'mcp_retain'
   | 'mcp:memory_write'
   | 'cron:consolidation'
+  | 'cron:dream'
   | `agent:${string}`
 
 export interface IngestionArtifact {

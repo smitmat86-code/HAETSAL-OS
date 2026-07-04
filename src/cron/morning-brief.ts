@@ -15,6 +15,7 @@ import {
   fetchCalendar, fetchPending, fetchHighlights, fetchOpenLoop,
   fetchGift, fetchNews, fetchVerse,
 } from './brief-sections'
+import { fetchDreamSection } from '../services/dream/brief-section'
 
 // ── Assembly + Delivery ────────────────────────────────────────────────────
 
@@ -32,10 +33,11 @@ async function buildAndDeliver(
   const kek = await fetchAndValidateKek(tenantId, env)
   if (!kek) return
 
-  const [cal, pend, hl, loop, gift, news, verse] = await Promise.allSettled([
+  const [cal, pend, hl, loop, gift, news, verse, dream] = await Promise.allSettled([
     fetchCalendar(tenantId, kek, env), fetchPending(tenantId, env),
     fetchHighlights(tenantId, kek, env), fetchOpenLoop(tenantId, env),
     fetchGift(tenantId, kek, env), fetchNews(env), fetchVerse(env),
+    fetchDreamSection(tenantId, kek, env), // Phase 8 (demo clause 9)
   ])
 
   const r = <T>(s: PromiseSettledResult<T>, fb: T): T =>
@@ -44,6 +46,7 @@ async function buildAndDeliver(
   const today = new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })
   const parts: string[] = [`<b>Good morning — ${today}</b>`, '', '<b>Today</b>', r(cal, '_Calendar unavailable_')]
 
+  const dreamStr = r(dream, ''); if (dreamStr) parts.push('', '<b>While You Slept</b>', dreamStr)
   const pendStr = r(pend, '');    if (pendStr) parts.push('', '<b>Pending Your Approval</b>', pendStr)
   const hlStr = r(hl, '');        if (hlStr) parts.push('', '<b>From Your Brain</b>', hlStr)
   const loopStr = r(loop, '');    if (loopStr) parts.push('', '<b>Open Loop</b>', loopStr)

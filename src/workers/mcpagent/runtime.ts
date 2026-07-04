@@ -2,7 +2,7 @@ import { handleMorningBrief } from '../../cron/morning-brief'
 import { handleObsidianPoll } from '../../cron/obsidian-poll'
 import { runPredictiveHeartbeat } from '../../cron/heartbeat'
 import { runWeeklySynthesis } from '../../cron/weekly-synthesis'
-import { handleNightlyConsolidation } from '../../cron/consolidation'
+import { handleDreamCron } from '../../cron/dream'
 import type { ActionQueueMessage } from '../../types/action'
 import type { Env } from '../../types/env'
 import type { IngestionQueueMessage } from '../../types/ingestion'
@@ -38,6 +38,7 @@ export async function handleBrainScheduled(
     case '0 17 * * 5':
       return runWeeklySynthesis(env, ctx)
     case '0 2 * * *':
-      return handleNightlyConsolidation(env, ctx)
+      // Phase 8: dream cycle replaces the parked pass-1..4 consolidation.
+      return handleDreamCron(env, ctx)
   }
 }

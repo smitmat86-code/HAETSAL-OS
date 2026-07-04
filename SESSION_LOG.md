@@ -5,6 +5,19 @@
 
 ---
 
+## Mission Phase 8 - Dream/janitor consolidation loop - 2026-07-04
+
+**Spec:** HAETSAL_MISSION.md Phase 8. Nightly dream cycle as a durable Workflow, REPORT-ONLY: findings become pending reviews + a canonical report; nothing auto-promotes.
+**Built:**
+- src/workflows/dream-cycle.ts — DreamCycleWorkflow (C4). Law-2 Workflows discipline: step.do() RETURN VALUES are persisted by the Workflows engine, so the single content-bearing stage (window read → MODEL_DEEP extraction via gateway collectLog:false → proposal writes → report capture) runs inside ONE step and returns counts/ids only. Window excludes cron:dream captures (no dreaming about dream reports).
+- src/services/dream/{types,extract,proposals,report,brief-section}.ts — bounded extraction (9k-char window cap, 6 findings/kind, 0.5 confidence floor, defensive JSON parse degrades to empty), proposals into the canonical reviews table (review_type dream_proposal; SHA-based subject dedup vs pending inbox), report captured via governed retain (source cron:dream), D1 dream_runs ledger (content-free counts/ids; INSERT OR IGNORE per tenant/date; lazy DDL per Phase 5 precedent + migration 1024), morning-brief "While You Slept" section (26h freshness window, honest fallbacks).
+- Wiring: 2am cron → handleDreamCron (replaces parked pass-1..4 invocation; consolidation.ts kept unwired), wrangler [[workflows]] brain-dream-cycle + DREAM_WORKFLOW binding + regenerated env types, /api/dream/{run,latest,reviews} (CF Access) for the gate smoke + Phase 11 consolidation panel.
+**Law 3:** dream cycle runs as consolidation_cron identity; report-only means even pattern-grade findings (promotions) wait in the review inbox.
+**Verification:** tests/mission-8.0 (9 contracts: parse tolerance + confidence floor + caps, report composition incl. no-auto-promotion line + quiet night, proposal dedup vs pending reviews, D1 claim/dedup/finish/latest, brief-section fallbacks). Full suite + postflight at gate.
+**Next:** Phase 8 gate (verifier, Law-2 audit, deploy, manual-trigger smoke; overnight cron validates clause 9 in tomorrow's brief), then Phase 9.
+
+---
+
 ## Mission Phase 7 - User automations - 2026-07-04
 
 **Spec:** HAETSAL_MISSION.md Phase 7. Chat-created recurring automations that fire scoped execution-agent runs.

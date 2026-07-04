@@ -153,6 +153,12 @@ name = "brain-bootstrap"
 binding = "BOOTSTRAP_WORKFLOW"
 class_name = "BootstrapWorkflow"
 
+# Phase 8: nightly dream/consolidation cycle (report-only proposals)
+[[workflows]]
+name = "brain-dream-cycle"
+binding = "DREAM_WORKFLOW"
+class_name = "DreamCycleWorkflow"
+
 # ── Cron Triggers ────────────────────────────────────────────────────────────
 [triggers]
 crons = ["*/1 * * * *", "*/15 * * * *", "0 7 * * *", "*/30 * * * *", "0 17 * * 5", "0 2 * * *"]

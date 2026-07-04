@@ -14,6 +14,7 @@ import { audit } from './routes/audit'
 import { canary } from './routes/canary'
 import { agentDashboard, agentRuns } from './routes/agent-runs'
 import { automations } from './routes/automations' // Phase 7
+import { dream } from './routes/dream' // Phase 8
 import type { Env } from '../../types/env'
 import { getMcpAgentObjectName } from './do/identity'
 import { registerPublicWebhooks } from './public-webhooks'
@@ -21,11 +22,7 @@ import { registerPhoneQuery, registerTelegramQuery } from './self-registration'
 import { renderMemoryInventory } from './debug-inventory'
 import { handleBrainQueue, handleBrainScheduled } from './runtime'
 
-type Variables = {
-  tenantId: string
-  jwtSub: string
-  traceId: string
-}
+type Variables = { tenantId: string; jwtSub: string; traceId: string }
 
 const app = new Hono<{ Bindings: Env; Variables: Variables }>()
 const mcpHandler = McpAgentDO.serve('/mcp', { binding: 'MCPAGENT' })
@@ -69,6 +66,7 @@ app.route('/api/audit', audit)
 app.route('/api/agents', agentRuns)
 app.route('/dashboard/agents', agentDashboard)
 app.route('/api/automations', automations)
+app.route('/api/dream', dream)
 
 // Read-only diagnostic view over the caller's own canonical memory (no bodies).
 app.get('/debug/memory-inventory', renderMemoryInventory)
@@ -141,6 +139,7 @@ export { McpAgentDO }
 // Phase 6 facet class — resolved via ctx.exports; export name MUST stay `ExecutionAgent`.
 export { ExecutionAgent } from '../../agents/execution-agent'
 export { BootstrapWorkflow } from '../../workflows/bootstrap'
+export { DreamCycleWorkflow } from '../../workflows/dream-cycle' // Phase 8
 export default {
   fetch: app.fetch,
   queue: handleBrainQueue,

@@ -29,11 +29,12 @@ export interface ToolLoopConfig {
 }
 
 const MAX_CALLS_PER_TURN = 4
-const MODEL_RETRY_BACKOFF_MS = 800
+// Two retries, exponential backoff. Live observation (Phase 6/7 gate smokes):
+// upstream InferenceUpstreamError blips cluster for a few seconds, so a lone
+// 800ms retry can land inside the same blip — 2/5 runs still died with one
+// retry. Never retries after cancellation.
+const MODEL_RETRY_BACKOFFS_MS = [800, 3200]
 
-/** One retry on model-call failure: a transient InferenceUpstreamError killed
- *  a live run during the Phase 6 gate smoke while the identical request
- *  succeeded moments later. Never retries after cancellation. */
 async function callModelOnceWithRetry(
   cfg: ToolLoopConfig,
   payload: { messages: unknown; tools: unknown; max_tokens: number },
@@ -41,15 +42,17 @@ async function callModelOnceWithRetry(
   const run = () => (cfg.env.AI as { run: (m: string, i: unknown, o?: unknown) => Promise<unknown> }).run(
     MODEL_DEEP, payload, { gateway: { id: cfg.env.AI_GATEWAY_ID, collectLog: false } },
   )
-  try {
-    return await run()
-  } catch (error) {
-    if (cfg.isCancelled()) throw error
-    await new Promise(resolve => setTimeout(resolve, MODEL_RETRY_BACKOFF_MS))
-    // `await` so a second rejection is observed in this frame (workerd's
-    // unhandled-rejection tracker fires on un-awaited returns).
-    return await run()
+  for (const backoffMs of MODEL_RETRY_BACKOFFS_MS) {
+    try {
+      return await run()
+    } catch (error) {
+      if (cfg.isCancelled()) throw error
+      await new Promise(resolve => setTimeout(resolve, backoffMs))
+    }
   }
+  // `await` so a final rejection is observed in this frame (workerd's
+  // unhandled-rejection tracker fires on un-awaited returns).
+  return await run()
 }
 
 export async function runExecutionToolLoop(cfg: ToolLoopConfig): Promise<ExecutionLoopResult> {

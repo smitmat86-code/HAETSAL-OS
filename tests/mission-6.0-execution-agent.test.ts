@@ -135,25 +135,27 @@ describe('mission 6.0 — in-scope tool execution', () => {
 })
 
 describe('mission 6.0 — transient model-failure retry', () => {
-  it('retries a failed model call once and completes', async () => {
+  it('recovers when the first two calls fail (blip-cluster resilience)', async () => {
     let calls = 0
     const fakeEnv = {
       ...env, AI_GATEWAY_ID: 'g',
-      AI: { run: async () => { if (++calls === 1) throw new Error('InferenceUpstreamError: upstream 5xx'); return { response: 'recovered' } } },
+      AI: { run: async () => { if (++calls <= 2) throw new Error('InferenceUpstreamError: upstream 5xx'); return { response: 'recovered' } } },
     } as unknown as Env
     const result = await runExecutionToolLoop(await loopConfig({ env: fakeEnv }))
     expect(result.status).toBe('completed')
     expect(result.resultText).toBe('recovered')
-    expect(calls).toBe(2)
-  })
+    expect(calls).toBe(3)
+  }, 15_000)
 
-  it('two consecutive failures surface as a real error (no infinite retry)', async () => {
+  it('persistent failure surfaces as a real error after bounded retries', async () => {
+    let calls = 0
     const fakeEnv = {
       ...env, AI_GATEWAY_ID: 'g',
-      AI: { run: async () => { throw new Error('InferenceUpstreamError: upstream 5xx') } },
+      AI: { run: async () => { calls++; throw new Error('InferenceUpstreamError: upstream 5xx') } },
     } as unknown as Env
     await expect(runExecutionToolLoop(await loopConfig({ env: fakeEnv }))).rejects.toThrow(/InferenceUpstreamError/)
-  })
+    expect(calls).toBe(3) // original + two retries, no infinite loop
+  }, 15_000)
 })
 
 describe('mission 6.0 — doom loop, cancellation, deadline', () => {

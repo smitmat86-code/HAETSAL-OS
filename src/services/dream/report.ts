@@ -36,7 +36,10 @@ export async function persistDreamReport(
   tenantId: string,
   reportBody: string,
   runDate: string,
+  kek: CryptoKey,
 ): Promise<{ captureId: string | null; documentId: string | null }> {
+  // The Cron KEK is the tenant TMK raw bytes (kek.ts) — the retain path's
+  // archival sidecar encrypts with it, so Matt's session can decrypt later.
   const result = await retainContent({
     tenantId,
     content: reportBody,
@@ -46,7 +49,7 @@ export async function persistDreamReport(
     domain: DREAM_REPORT_SCOPE,
     provenance: 'dream_cycle_report',
     occurredAt: Date.now(),
-  }, null, env)
+  }, kek, env)
   return {
     captureId: result?.canonicalCaptureId ?? null,
     documentId: result?.canonicalDocumentId ?? null,
@@ -98,11 +101,17 @@ export async function finishDreamRun(
   ).run()
 }
 
-export async function latestDreamRun(env: Env, tenantId: string): Promise<DreamRunRow | null> {
+export async function latestDreamRun(
+  env: Env, tenantId: string, options?: { completedOnly?: boolean },
+): Promise<DreamRunRow | null> {
   await ensureDreamRunsTable(env)
-  const row = await env.D1_US.prepare(
-    `SELECT * FROM dream_runs WHERE tenant_id = ? AND status = 'completed'
-     ORDER BY started_at DESC LIMIT 1`,
-  ).bind(tenantId).first<DreamRunRow>()
+  const completedOnly = options?.completedOnly ?? true
+  const row = completedOnly
+    ? await env.D1_US.prepare(
+      `SELECT * FROM dream_runs WHERE tenant_id = ? AND status = 'completed'
+       ORDER BY started_at DESC LIMIT 1`).bind(tenantId).first<DreamRunRow>()
+    : await env.D1_US.prepare(
+      `SELECT * FROM dream_runs WHERE tenant_id = ? AND status != 'running'
+       ORDER BY started_at DESC LIMIT 1`).bind(tenantId).first<DreamRunRow>()
   return row ?? null
 }

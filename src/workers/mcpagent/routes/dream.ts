@@ -24,7 +24,9 @@ dream.post('/run', async (c) => {
 
 dream.get('/latest', async (c) => {
   const tenantId = c.get('tenantId')
-  const run = await latestDreamRun(c.env, tenantId)
+  // Any terminal run (incl. failed/deferred) — the smoke and the dashboard
+  // need failure visibility; the morning brief separately reads completedOnly.
+  const run = await latestDreamRun(c.env, tenantId, { completedOnly: false })
   if (!run) return c.json({ run: null, report: null })
   let report: string | null = null
   if (run.report_document_id) {

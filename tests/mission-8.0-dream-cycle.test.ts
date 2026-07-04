@@ -11,13 +11,16 @@ import {
   claimDreamRun, composeDreamReport, ensureDreamRunsTable, finishDreamRun, latestDreamRun,
 } from '../src/services/dream/report'
 import { fetchDreamSection } from '../src/services/dream/brief-section'
+import { executeDreamStage } from '../src/services/dream/stage'
 import { installCanonicalGovernanceTestStore } from '../src/services/canonical-governance-memory'
+import { installCanonicalMemoryTestStore } from '../src/services/canonical-postgres'
 import type { DreamCounts, DreamFindings } from '../src/services/dream/types'
 import type { Env } from '../src/types/env'
 
 const SUITE = crypto.randomUUID()
 const TENANT = `test-tenant-mission-80-${SUITE}`
 const store = installCanonicalGovernanceTestStore(env as unknown as Env)
+installCanonicalMemoryTestStore(env as unknown as Env)
 
 const FINDING = (statement: string, confidence = 0.8) =>
   ({ kind: 'contradiction' as const, statement, rationale: 'seen in window', confidence, refs: [] })
@@ -120,6 +123,51 @@ describe('mission 8.0 — D1 run ledger', () => {
     })
     const latest = await latestDreamRun(env as unknown as Env, TENANT)
     expect(latest).toMatchObject({ status: 'completed', proposals_written: 2, report_document_id: 'doc-1' })
+  })
+})
+
+describe('mission 8.0 — stage KEK discipline (Law 2 corollary)', () => {
+  it('defers when the Cron KEK is unavailable — never bypasses', async () => {
+    const bare = `kekless-${SUITE}`
+    const now = Date.now()
+    await env.D1_US.prepare(
+      `INSERT OR IGNORE INTO tenants (id, created_at, updated_at, data_region, primary_channel, hindsight_tenant_id, ai_cost_reset_at)
+       VALUES (?, ?, ?, 'us', 'sms', ?, ?)`,
+    ).bind(bare, now, now, `h-${bare}`, now).run()
+    const result = await executeDreamStage(env as unknown as Env, bare, '2026-07-05')
+    expect(result).toEqual({ deferred: true })
+  })
+
+  it('runs end-to-end with a valid KEK: proposals + encrypted report persisted', async () => {
+    const now = Date.now()
+    await env.D1_US.prepare(
+      'UPDATE tenants SET cron_kek_expires_at = ? WHERE id = ?',
+    ).bind(now + 3600_000, TENANT).run()
+    const raw = crypto.getRandomValues(new Uint8Array(32))
+    await env.KV_SESSION.put(`cron_kek:${TENANT}`, btoa(String.fromCharCode(...raw)))
+
+    const findingsPayload = '{"facts":["Fact from window"],"contradictions":[],"supersessions":[],"promotions":[{"statement":"Reads news each morning","rationale":"repeated","confidence":0.7,"refs":[]}],"entity_links":[],"gaps":[]}'
+    const fakeEnv = {
+      ...env,
+      AI_GATEWAY_ID: 'g',
+      AI: { run: async () => ({ response: findingsPayload }) },
+    } as unknown as Env
+
+    // Seed one window memory so extraction runs.
+    const { retainContent } = await import('../src/services/ingestion/retain')
+    const kek = await crypto.subtle.importKey('raw', raw, { name: 'AES-GCM' }, false, ['encrypt', 'decrypt'])
+    await retainContent({
+      tenantId: TENANT, content: 'Matt read the morning news digest today.',
+      source: 'telegram', memoryType: 'episodic', occurredAt: now,
+    }, kek, fakeEnv)
+
+    const result = await executeDreamStage(fakeEnv, TENANT, '2026-07-06')
+    expect(result.deferred).toBe(false)
+    if (!result.deferred) {
+      expect(result.counts.eventsSeen).toBeGreaterThanOrEqual(1)
+      expect(result.counts.proposalsWritten).toBeGreaterThanOrEqual(1)
+      expect(result.captureId).not.toBeNull()
+    }
   })
 })
 

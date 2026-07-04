@@ -10,6 +10,7 @@ import { sendTelegramReply } from './delivery/telegram'
 import { buildGroundedReply, describeInboundPhoto } from './messaging-helpers'
 import { maybeDelegateExecutionTask } from './agents/delegation'
 import { maybeHandleAutomationChat } from './agents/automation-chat'
+import { fetchSessionBlock, recordSessionExchange } from './session/client'
 
 export interface TelegramPhotoSize { file_id: string; width?: number; height?: number; file_size?: number }
 export interface TelegramMessage {
@@ -118,11 +119,15 @@ export async function processTelegramInbound(
   ctx.waitUntil(env.QUEUE_HIGH.send(message))
 
   // Phase 7: automation intent/commands first; Phase 6: multi-step asks spawn
-  // a scoped execution agent; everything else keeps the grounded reply.
+  // a scoped execution agent; everything else gets the grounded reply with
+  // the Phase 9 working-session window as conversation context.
   const route = { channel: 'telegram' as const, replyTo: String(chatId) }
+  const sessionKey = `telegram:${chatId}`
   const reply = await maybeHandleAutomationChat(env, tenantId, text, route)
     ?? await maybeDelegateExecutionTask(env, tenantId, text, route)
-    ?? await buildGroundedReply(env, tenantId, text, 'Telegram')
+    ?? await buildGroundedReply(env, tenantId, text, 'Telegram',
+      await fetchSessionBlock(env, tenantId, sessionKey))
+  recordSessionExchange(env, tenantId, sessionKey, text, reply, ctx)
   const sent = await sendTelegramReply(chatId, reply, env)
   if (!sent) console.warn('TELEGRAM_REPLY_NOT_DELIVERED', { suffix: String(chatId).slice(-4) })
   return { handled: true, kind: 'text' }

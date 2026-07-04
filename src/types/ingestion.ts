@@ -14,6 +14,7 @@ export type IngestionSource =
   | 'cron:consolidation'
   | 'cron:dream'
   | `agent:${string}`
+  | `session:${string}`
 
 export interface IngestionArtifact {
   tenantId: string

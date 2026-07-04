@@ -18,7 +18,8 @@ export interface AutomationChatRoute {
 
 async function tenantStub(env: Env, tenantId: string): Promise<McpAgentDO> {
   const namespace = env.MCPAGENT as unknown as DurableObjectNamespace<McpAgentDO>
-  return getAgentByName(namespace, getMcpAgentObjectName(tenantId)) as unknown as Promise<McpAgentDO>
+  // `await` so a failure is observed in this frame (workerd rejection tracker).
+  return await (getAgentByName(namespace, getMcpAgentObjectName(tenantId)) as unknown as Promise<McpAgentDO>)
 }
 
 export async function maybeHandleAutomationChat(

@@ -11,6 +11,7 @@ import { sendSendblueMessage } from './delivery/sendblue'
 import { buildGroundedReply, describeInboundPhoto } from './messaging-helpers'
 import { maybeDelegateExecutionTask } from './agents/delegation'
 import { maybeHandleAutomationChat } from './agents/automation-chat'
+import { fetchSessionBlock, recordSessionExchange } from './session/client'
 
 export interface SendblueInboundBody {
   content?: string
@@ -28,9 +29,6 @@ export async function resolveSendblueTenant(fromNumber: string, env: Env): Promi
   ).bind(fromNumber).first<{ tenant_id: string }>()
   return row?.tenant_id ?? null
 }
-
-export const generateGroundedReply = (env: Env, tenantId: string, text: string) =>
-  buildGroundedReply(env, tenantId, text, 'iMessage')
 
 export async function processSendblueInbound(
   body: SendblueInboundBody,
@@ -90,11 +88,15 @@ export async function processSendblueInbound(
   ctx.waitUntil(env.QUEUE_HIGH.send(message))
 
   // Phase 7: automation intent/commands first; Phase 6: multi-step asks spawn
-  // a scoped execution agent; everything else keeps the grounded reply.
+  // a scoped execution agent; everything else gets the grounded reply with
+  // the Phase 9 working-session window as conversation context.
   const route = { channel: 'sendblue' as const, replyTo: body.from_number }
+  const sessionKey = `sendblue:${body.from_number}`
   const reply = await maybeHandleAutomationChat(env, tenantId, text, route)
     ?? await maybeDelegateExecutionTask(env, tenantId, text, route)
-    ?? await generateGroundedReply(env, tenantId, text)
+    ?? await buildGroundedReply(env, tenantId, text, 'iMessage',
+      await fetchSessionBlock(env, tenantId, sessionKey))
+  recordSessionExchange(env, tenantId, sessionKey, text, reply, ctx)
   const sent = await sendSendblueMessage(body.from_number, reply, env)
   if (!sent.success) {
     console.warn('SENDBLUE_REPLY_NOT_DELIVERED', { status: sent.status, errorCode: sent.errorCode ?? null })

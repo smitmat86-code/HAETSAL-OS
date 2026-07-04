@@ -1,29 +1,20 @@
 // src/agents/execution-agent.ts
 // Phase 6 execution agent — a sub-agent facet spawned by McpAgentDO via
-// runAgentTool. Implements the SDK agent-tool child adapter directly
-// (startAgentToolRun / cancelAgentToolRun / inspectAgentToolRun /
-// getAgentToolChunks / tailAgentToolRun) on a lean Agent subclass instead of
-// adopting the @cloudflare/think Preview harness — see docs/implementation-
-// plans/phase-6-subagent-plan.md for the decision record.
-//
-// Dispatch contract: the parent AWAITS startAgentToolRun before returning the
-// detached handle, so this method must return `running` immediately and let
-// the loop finish in background (waitUntil + keepAliveWhile). Completion is
-// then observed through tailAgentToolRun (warm fast path — closes when the
-// run goes terminal) with the parent's durable reconcile backbone as the
-// eviction-surviving fallback.
-//
-// Law 2: the plaintext task arrives over in-process RPC and lives in memory
-// only. The result is TMK-encrypted before it is persisted here, and the
-// parent ledger (cf_agent_tool_runs) receives only that ciphertext plus
-// content-free counters. The TMK is re-derived from jwtSub exactly as
-// McpAgentDO.initTenant does, so parent and child ciphertexts interoperate.
+// runAgentTool, implementing the SDK agent-tool child adapter directly on a
+// lean Agent subclass (Think deferred; see phase-6-subagent-plan.md).
+// Dispatch contract: the parent AWAITS startAgentToolRun, so it returns
+// `running` immediately and the loop finishes under waitUntil+keepAliveWhile;
+// tailAgentToolRun closes at terminal for fast detached delivery (durable
+// backbone fallback). Law 2: plaintext task lives in memory only; the result
+// is TMK-encrypted before rest (TMK re-derived from jwtSub, same derivation
+// as initTenant so parent/child ciphertexts interoperate).
 
 import { Agent } from 'agents'
 import type { Env } from '../types/env'
 import { deriveTmk } from '../middleware/auth'
 import { encryptWithKek } from '../cron/kek'
 import { runExecutionToolLoop } from './execution/tool-loop'
+import { persistExecutionTrace } from './execution/trace'
 import type { ExecutionProgress, ExecutionRunOutput, ExecutionTaskInput } from './execution/types'
 import {
   buildTerminalTailStream, ensureRunTable, finishRun, insertRun, isCancelled,
@@ -66,6 +57,7 @@ export class ExecutionAgent extends Agent<Env> {
 
   private async executeRun(input: ExecutionTaskInput, runId: string): Promise<void> {
     const sql = this.runSql()
+    const startedAt = Date.now()
     try {
       const tmk = await deriveTmk(input.jwtSub, this.env.CF_ACCESS_AUD)
       const result = await runExecutionToolLoop({
@@ -96,6 +88,12 @@ export class ExecutionAgent extends Agent<Env> {
         outputJson: JSON.stringify(output),
         summary: `completed:${input.profile}:${result.toolCalls} tool calls`,
       })
+      // Phase 9: encrypted structured reasoning trace (fire-and-forget).
+      this.ctx.waitUntil(persistExecutionTrace(this.env, tmk, {
+        runId, tenantId: input.tenantId, profile: input.profile, task: input.task,
+        status: result.status, turns: result.turns, toolCalls: result.toolCalls,
+        toolsUsed: result.toolsUsed, resultText: result.resultText, startedAt, endedAt: Date.now(),
+      }))
     } catch (error) {
       // Fixed-vocabulary only (Law 2): raw messages could embed content.
       finishRun(sql, runId, { status: 'error', error: sanitizeExecutionError(error) })

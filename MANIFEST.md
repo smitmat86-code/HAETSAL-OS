@@ -25,8 +25,9 @@ Last updated: 2026-04-18 | Session: 7.1 (Hindsight Projection Adapter)
 | src\agents\execution\run-store.ts | 142 | RunSql, ExecutionRunRow, ensureRunTable... | ✅ |
 | src\agents\execution\tool-loop.ts | 142 | ToolLoopConfig | ✅ |
 | src\agents\execution\tool-registry.ts | 130 | ToolRuntime, EXECUTION_TOOLS, toolDefinitionsFor | ✅ |
+| src\agents\execution\trace.ts | 35 | ExecutionTrace | ✅ |
 | src\agents\execution\types.ts | 82 | ExecutionProfile, ExecutionToolName, PROFILE_TOOLS... | ✅ |
-| src\agents\execution-agent.ts | 146 | ExecutionAgent | ✅ |
+| src\agents\execution-agent.ts | 144 | ExecutionAgent | ✅ |
 | src\agents\helpers.ts | 49 | MODEL_CONTEXT_LIMIT, FLUSH_THRESHOLD, shouldFlush | ✅ |
 | src\agents\types.ts | 66 | EpistemicMemoryType, AgentType, AgentContext... | ✅ |
 | src\config\models.ts | 52 | MODEL_CHAT, MODEL_VISION, MODEL_DEEP... | ✅ |
@@ -34,7 +35,7 @@ Last updated: 2026-04-18 | Session: 7.1 (Hindsight Projection Adapter)
 | src\cron\consolidation.ts | 69 | — | ✅ |
 | src\cron\dream.ts | 32 | — | ✅ |
 | src\cron\heartbeat.ts | 62 | — | ✅ |
-| src\cron\kek.ts | 61 | — | ✅ |
+| src\cron\kek.ts | 64 | — | ✅ |
 | src\cron\morning-brief.ts | 96 | — | ✅ |
 | src\cron\obsidian-poll.ts | 41 | — | ✅ |
 | src\cron\passes\pass1-contradiction.ts | 13 | — | ✅ |
@@ -62,7 +63,7 @@ Last updated: 2026-04-18 | Session: 7.1 (Hindsight Projection Adapter)
 | src\services\action\router.ts | 111 | — | ✅ |
 | src\services\action\toctou.ts | 23 | — | ✅ |
 | src\services\action\tool-dispatch.ts | 69 | ToolExecutionResult | ✅ |
-| src\services\agents\automation-chat.ts | 76 | AutomationChatRoute | ✅ |
+| src\services\agents\automation-chat.ts | 77 | AutomationChatRoute | ✅ |
 | src\services\agents\delegation.ts | 79 | DelegationDecision, DelegationRoute | ✅ |
 | src\services\agents\router.ts | 50 | — | ✅ |
 | src\services\automations\nl-parse.ts | 88 | ParsedAutomation, parseAutomationIntent, AutomationCommand... | ✅ |
@@ -152,7 +153,8 @@ Last updated: 2026-04-18 | Session: 7.1 (Hindsight Projection Adapter)
 | src\services\dream\brief-section.ts | 33 | — | ✅ |
 | src\services\dream\extract.ts | 106 | DreamWindowItem, buildWindowBlock, parseFindings | ✅ |
 | src\services\dream\proposals.ts | 70 | DREAM_REVIEW_TYPE, allFindings | ✅ |
-| src\services\dream\report.ts | 109 | composeDreamReport | ✅ |
+| src\services\dream\report.ts | 118 | composeDreamReport | ✅ |
+| src\services\dream\stage.ts | 65 | DreamStageResult | ✅ |
 | src\services\dream\types.ts | 65 | DreamFindingKind, DreamFinding, DreamFindings... | ✅ |
 | src\services\external-brain-contract.ts | 123 | EXTERNAL_BRAIN_SURFACES, EXTERNAL_BRAIN_CLIENT_MAPPINGS, EXTERNAL_CLIENT_FIXTURES... | ✅ |
 | src\services\external-client-memory-write.ts | 48 | — | ✅ |
@@ -171,12 +173,15 @@ Last updated: 2026-04-18 | Session: 7.1 (Hindsight Projection Adapter)
 | src\services\ingestion\retain.ts | 109 | — | ✅ |
 | src\services\ingestion\salience.ts | 80 | scoreSalience | ✅ |
 | src\services\ingestion\write-policy.ts | 65 | WritePolicyResult | ✅ |
-| src\services\messaging-helpers.ts | 90 | — | ✅ |
+| src\services\messaging-helpers.ts | 95 | — | ✅ |
 | src\services\postgres-sql.ts | 95 | PostgresStatement, PostgresSql, createPostgresStatement... | ✅ |
 | src\services\retrieval-modes.ts | 149 | resolveTemporalWindow | ✅ |
 | src\services\retrieval-support.ts | 122 | CANONICAL_EMBEDDING_MODEL, citationOf, toRetrievalItem... | ✅ |
-| src\services\sendblue-inbound.ts | 104 | SendblueInboundBody, generateGroundedReply | ✅ |
-| src\services\telegram-inbound.ts | 130 | TelegramPhotoSize, TelegramMessage, TelegramUpdate | ✅ |
+| src\services\sendblue-inbound.ts | 106 | SendblueInboundBody | ✅ |
+| src\services\session\client.ts | 54 | recordSessionExchange | ✅ |
+| src\services\session\close-summary.ts | 65 | — | ✅ |
+| src\services\session\working-session.ts | 119 | SessionSql, WorkingSessionMessage, SESSION_WINDOW_LIMIT... | ✅ |
+| src\services\telegram-inbound.ts | 135 | TelegramPhotoSize, TelegramMessage, TelegramUpdate | ✅ |
 | src\services\telnyx.ts | 35 | — | ✅ |
 | src\services\tenant.ts | 133 | — | ✅ |
 | src\services\workers-ai-chat.ts | 109 | CHAT_MODEL, ChatContentPart, ChatMessage... | ✅ |
@@ -213,7 +218,7 @@ Last updated: 2026-04-18 | Session: 7.1 (Hindsight Projection Adapter)
 | src\types\external-client-memory.ts | 73 | ExternalClientCaptureMode, BrainMemorySurfaceProfile, ExternalClientCaptureInput... | ✅ |
 | src\types\google-source-read.ts | 29 | GoogleSourceKind, GoogleSourceRef, GoogleSourceReadAttribution... | ✅ |
 | src\types\google.ts | 53 | GoogleOAuthTokens, GoogleThread, GoogleMessage... | ✅ |
-| src\types\ingestion.ts | 78 | IngestionSource, IngestionArtifact, SalienceResult... | ✅ |
+| src\types\ingestion.ts | 79 | IngestionSource, IngestionArtifact, SalienceResult... | ✅ |
 | src\types\tenant.ts | 30 | TenantContext, TenantRow | ✅ |
 | src\types\tools.ts | 59 | RetainInput, RetainOutput, RecallInput... | ✅ |
 | src\workers\action\index.ts | 113 | — | ✅ |
@@ -235,12 +240,13 @@ Last updated: 2026-04-18 | Session: 7.1 (Hindsight Projection Adapter)
 | src\workers\mcpagent\do\automation-view.ts | 45 | — | ✅ |
 | src\workers\mcpagent\do\identity.ts | 13 | MCP_STREAMABLE_HTTP_PREFIX, getMcpAgentObjectName, getMcpAgentObjectId | ✅ |
 | src\workers\mcpagent\do\inbound-message.ts | 49 | — | ✅ |
-| src\workers\mcpagent\do\McpAgent.ts | 150 | McpAgentDO | ✅ |
+| src\workers\mcpagent\do\McpAgent.ts | 146 | McpAgentDO | ✅ |
 | src\workers\mcpagent\do\register-automation-tools.ts | 66 | registerAutomationTools | ✅ |
-| src\workers\mcpagent\do\register-tools.ts | 87 | registerLegacyMemoryTools, registerActTools | ✅ |
+| src\workers\mcpagent\do\register-tools.ts | 127 | registerLegacyMemoryTools, registerActTools, registerAllDoTools | ✅ |
+| src\workers\mcpagent\do\session-runtime.ts | 71 | SessionHost | ✅ |
 | src\workers\mcpagent\do\session-store.ts | 57 | PersistedSessionRow, ensureSessionTable, readPersistedSession... | ✅ |
 | src\workers\mcpagent\do\tenant-context.ts | 58 | ResolvedTenantContext, acceptSessionWebSocket, broadcastToSessions | ✅ |
-| src\workers\mcpagent\index.ts | 148 | — | ✅ |
+| src\workers\mcpagent\index.ts | 150 | — | ✅ |
 | src\workers\mcpagent\public-webhooks.ts | 80 | registerPublicWebhooks | ✅ |
 | src\workers\mcpagent\routes\actions.ts | 79 | actions | ✅ |
 | src\workers\mcpagent\routes\agent-runs.ts | 84 | agentRuns, agentDashboard | ✅ |
@@ -249,13 +255,14 @@ Last updated: 2026-04-18 | Session: 7.1 (Hindsight Projection Adapter)
 | src\workers\mcpagent\routes\auth.ts | 45 | — | ✅ |
 | src\workers\mcpagent\routes\automations.ts | 79 | automations | ✅ |
 | src\workers\mcpagent\routes\canary.ts | 15 | canary, hasCanonicalHyperdriveBinding | ✅ |
-| src\workers\mcpagent\routes\dream.ts | 59 | dream | ✅ |
+| src\workers\mcpagent\routes\dream.ts | 66 | dream | ✅ |
 | src\workers\mcpagent\routes\ingest.ts | 130 | — | ✅ |
+| src\workers\mcpagent\routes\session.ts | 31 | session | ✅ |
 | src\workers\mcpagent\routes\settings.ts | 73 | settings | ✅ |
 | src\workers\mcpagent\runtime.ts | 45 | — | ✅ |
 | src\workers\mcpagent\self-registration.ts | 39 | — | ✅ |
 | src\workflows\bootstrap.ts | 110 | BootstrapWorkflow | ✅ |
-| src\workflows\dream-cycle.ts | 97 | DreamCycleParams, DreamCycleWorkflow | ✅ |
+| src\workflows\dream-cycle.ts | 63 | DreamCycleParams, DreamCycleWorkflow | ✅ |
 
 ### pages/src/
 

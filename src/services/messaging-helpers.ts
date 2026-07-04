@@ -36,12 +36,14 @@ async function withTimeout<T>(p: Promise<T>, ms: number, tag: string): Promise<T
   ])
 }
 
-/** Memory-grounded reply. `channel` is only used in the system prompt phrasing. */
+/** Memory-grounded reply. `channel` is only used in the system prompt phrasing.
+ *  `sessionBlock` (Phase 9) is the decrypted recent-conversation window. */
 export async function buildGroundedReply(
   env: Env,
   tenantId: string,
   text: string,
   channel: string,
+  sessionBlock = '',
 ): Promise<string> {
   let contextBlock = ''
   // Warm the pool FIRST so the retrieval query reuses a hot connection.
@@ -59,10 +61,13 @@ export async function buildGroundedReply(
       .map((item) => `- [${item.sourceSystem ?? 'memory'}${item.capturedAt ? ', ' + new Date(item.capturedAt).toISOString().slice(0, 10) : ''}] ${item.preview}`)
       .join('\n')
   }
+  const sessionContext = sessionBlock
+    ? `\n\nConversation so far (continue it naturally):\n${sessionBlock}`
+    : ''
   const reply = await runGatewayChat(env, [
     {
       role: 'system',
-      content: `You are Haetsal, a warm and capable personal AI assistant reached over ${channel}. Keep replies concise and conversational. Ground answers in the provided memories when relevant; if a needed source (like Gmail or calendar) is not connected yet, say so honestly.` + contextBlock,
+      content: `You are Haetsal, a warm and capable personal AI assistant reached over ${channel}. Keep replies concise and conversational. Ground answers in the provided memories when relevant; if a needed source (like Gmail or calendar) is not connected yet, say so honestly.` + contextBlock + sessionContext,
     },
     { role: 'user', content: text },
   ])

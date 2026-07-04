@@ -15,6 +15,7 @@ import { canary } from './routes/canary'
 import { agentDashboard, agentRuns } from './routes/agent-runs'
 import { automations } from './routes/automations' // Phase 7
 import { dream } from './routes/dream' // Phase 8
+import { session } from './routes/session' // Phase 9
 import type { Env } from '../../types/env'
 import { getMcpAgentObjectName } from './do/identity'
 import { registerPublicWebhooks } from './public-webhooks'
@@ -67,6 +68,7 @@ app.route('/api/agents', agentRuns)
 app.route('/dashboard/agents', agentDashboard)
 app.route('/api/automations', automations)
 app.route('/api/dream', dream)
+app.route('/api/session', session)
 
 // Read-only diagnostic view over the caller's own canonical memory (no bodies).
 app.get('/debug/memory-inventory', renderMemoryInventory)

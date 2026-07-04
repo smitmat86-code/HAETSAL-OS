@@ -3,13 +3,11 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import type { Env } from '../../../types/env'
 import { deriveTmk } from '../../../middleware/auth'
 import { getOrCreateTenant, provisionOrRenewKek } from '../../../services/tenant'
-import { registerBrainMemorySurface } from '../../../tools/brain-memory-surface'
 import type { InterviewState } from '../../../types/bootstrap'
-import { registerBootstrapTools } from '../../../tools/bootstrap'
-import { registerMemoryTools } from '../../../tools/memory'
 import { handleInboundPost } from './inbound-message'
-import { registerActTools, registerLegacyMemoryTools } from './register-tools'
+import { registerAllDoTools } from './register-tools'
 import { ensureSessionTable, readPersistedSession, writePersistedSession } from './session-store'
+import { closeWorkingSession, recordExchange, sessionWindowBlock, type SessionHost } from './session-runtime'
 import { deliverReminder, scheduleReminder, type ReminderSchedulePayload } from './action-scheduling'
 import { acceptSessionWebSocket, broadcastToSessions, resolveTenantContext } from './tenant-context'
 import { dispatchExecutionTask, handleExecutionTaskFinish, type ExecutionTaskSpec } from './agent-dispatch'
@@ -18,8 +16,7 @@ import {
   createAutomation, fireAutomationTick, removeAutomation, toggleAutomation,
   type AutomationHost, type AutomationView, type CreateAutomationInput,
 } from './automation-runtime'
-import { defaultAutomationRoute, listAutomationsView } from './automation-view'
-import { registerAutomationTools } from './register-automation-tools'
+import { listAutomationsView } from './automation-view'
 import type { AgentRunView } from '../../../agents/execution/types'
 
 interface McpAgentProps extends Record<string, unknown> { tenantId?: string; jwtSub?: string }
@@ -33,21 +30,13 @@ export class McpAgentDO extends BaseMcpAgent<Env, unknown, McpAgentProps> {
   async init() {
     this.ensureSessionTable()
     await this.hydrateSessionState()
-    registerLegacyMemoryTools({
-      env: this.env, server: this.server, getTenantId: () => this._tenantId!,
-      getTmk: () => this.tmk, waitUntil: (promise) => this.ctx.waitUntil(promise),
-    })
-    registerActTools({ env: this.env, server: this.server, getTenantId: () => this._tenantId! })
-    registerAutomationTools({ server: this.server, getHost: () => this.automationHost(),
-      getDefaultRoute: () => defaultAutomationRoute(this.env, this._tenantId!) })
-    const ctx = { getEnv: () => this.env, getTenantId: () => this._tenantId!, getTmk: () => this.tmk,
-      getExecutionContext: () => ({ waitUntil: this.ctx.waitUntil.bind(this.ctx) }) }
-    registerBrainMemorySurface(this.server, ctx)
-    registerMemoryTools(this.server, ctx)
-    registerBootstrapTools(this.server, {
-      getEnv: () => this.env, getTenantId: () => this._tenantId!, getTmk: () => this.tmk,
+    registerAllDoTools({
+      env: this.env, server: this.server,
+      getTenantId: () => this._tenantId!, getTmk: () => this.tmk,
+      waitUntil: (promise) => this.ctx.waitUntil(promise),
       getInterviewState: () => this.interviewState,
       setInterviewState: (s) => { this.interviewState = s; this.persistSessionState({ interviewState: s }) },
+      getAutomationHost: () => this.automationHost(),
     })
   }
 
@@ -125,6 +114,13 @@ export class McpAgentDO extends BaseMcpAgent<Env, unknown, McpAgentProps> {
       cancelSchedule: (id) => this.cancelSchedule(id) }
   }
   async fireAutomation(payload: { automationId: string }): Promise<void> { await fireAutomationTick(this.automationHost(), payload) }
+
+  // Phase 9: working-session context (encrypted window; evidence on close).
+  private sessionHost(): SessionHost { return this.automationHost() }
+  async recordSessionExchange(sessionKey: string, userText: string, assistantText: string): Promise<{ recorded: boolean }> { return recordExchange(this.sessionHost(), sessionKey, userText, assistantText) }
+  async getSessionWindowBlock(sessionKey: string): Promise<string> { return sessionWindowBlock(this.sessionHost(), sessionKey) }
+  async closeIdleSession(payload: { sessionKey: string }): Promise<void> { await closeWorkingSession(this.sessionHost(), payload.sessionKey) }
+  async closeSessionRpc(sessionKey: string): Promise<{ closed: boolean }> { return closeWorkingSession(this.sessionHost(), sessionKey) }
   async createAutomationRpc(input: CreateAutomationInput): Promise<{ id: string; description: string }> { return createAutomation(this.automationHost(), input) }
   async listAutomationsRpc(): Promise<AutomationView[]> { return listAutomationsView(this.automationHost()) }
   async toggleAutomationRpc(idPrefix: string, enabled: boolean): Promise<{ id: string; enabled: boolean }> { return toggleAutomation(this.automationHost(), idPrefix, enabled) }

@@ -5,6 +5,20 @@
 
 ---
 
+## Mission Phase 9 - Sessions working context + external-client round-trip - 2026-07-04
+
+**Spec:** HAETSAL_MISSION.md Phase 9. Working conversation context across surfaces; sessions non-canonical with evidence-summary flow into canonical; structured reasoning traces encrypted.
+**Built:**
+- src/services/session/{working-session,close-summary,client}.ts + do/session-runtime.ts — per-channel working sessions on the tenant DO keyed `<channel>:<peer>`. Message shapes follow the SDK Sessions API (SessionMessage {id, role, parts}) so a later full Session/SessionProvider adoption is a drop-in; semantics are linear (channels don't branch). AS-BUILT DEVIATION (cited rationale): the experimental SDK Session/AgentSessionProvider persists plaintext parts in DO SQLite and its compaction internals assume readable rows — incompatible with Law 2 without owning the provider; we own the store (TMK-AES-GCM parts_ciphertext at rest), keep the SDK message shape as the compatibility seam, and revisit full adoption when the API stabilizes.
+- Lifecycle: record user+assistant turns per exchange; idle-close alarm (30min, re-armed each exchange, content-free {sessionKey} payload); turn ceiling 40 → early close. Close = MODEL_CHAT summary (gateway collectLog:false) → canonical capture source `session:<channel>` provenance session_close_summary (EVIDENCE-grade via Phase 1 defaults) → window cleared + audit. Honest fallback summary when the model fails.
+- Channel wiring: buildGroundedReply gains the decrypted window as conversation context (multi-turn chat!); both channels record exchanges fire-and-forget (session bookkeeping can never break a reply).
+- Phase 9 traces: execution runs persist a structured reasoning trace (task, tool usage, result) AES-GCM encrypted to R2 traces/<tenant>/exec-<runId> (agents/execution/trace.ts), fire-and-forget.
+- Surfaces: /api/session/:key/{window,close} (CF Access) for Phase 11 + smoke. McpAgentDO init() extracted to registerAllDoTools (register-tools.ts) for the line limit; session RPCs + closeIdleSession alarm callback added.
+**Verification:** tests/mission-9.0 (6 contracts: ciphertext at rest, ordered window + limit + unreadable-row skip, exchange lifecycle + alarm re-arm + content-free payloads, honest no-key degradation, close→evidence capture searchable in canonical, encrypted trace round-trip). Postflight green.
+**Gate:** deploy + scripts/mission-phase9-live-smoke.ts = demo clauses 3+4 mechanism (fresh external MCP client over Streamable HTTP: initialize → capture_memory → search_memory composed cites it with provenance within 30s) + session surface live. Claude Code/Codex sessions speak the same protocol against /mcp.
+
+---
+
 ## Mission Phase 8 - Dream/janitor consolidation loop - 2026-07-04
 
 **Spec:** HAETSAL_MISSION.md Phase 8. Nightly dream cycle as a durable Workflow, REPORT-ONLY: findings become pending reviews + a canonical report; nothing auto-promotes.

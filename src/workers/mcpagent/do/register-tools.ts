@@ -1,8 +1,15 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import type { Env } from '../../../types/env'
 import type { RecallInput, RetainInput } from '../../../types/tools'
+import type { InterviewState } from '../../../types/bootstrap'
 import { recallSchema, retainSchema } from '../../../types/tools'
 import { writeAuditLog } from '../../../middleware/audit'
+import { registerBrainMemorySurface } from '../../../tools/brain-memory-surface'
+import { registerBootstrapTools } from '../../../tools/bootstrap'
+import { registerMemoryTools } from '../../../tools/memory'
+import { registerAutomationTools } from './register-automation-tools'
+import { defaultAutomationRoute } from './automation-view'
+import type { AutomationHost } from './automation-runtime'
 import { browseSchema, browseStub } from '../../../tools/act/browse'
 import { createEventSchema, createEventStub } from '../../../tools/act/create-event'
 import { draftSchema, draftStub } from '../../../tools/act/draft'
@@ -83,4 +90,37 @@ export function registerActTools({
     remindSchema.shape, wrap(i => remindStub(i as Parameters<typeof remindStub>[0], env, getTenantId(), proposedBy)))
   server.tool('brain_v1_act_run_playbook', 'Run a multi-step playbook',
     runPlaybookSchema.shape, wrap(i => runPlaybookStub(i as Parameters<typeof runPlaybookStub>[0], env, getTenantId(), proposedBy)))
+}
+
+/** One-call registration of the DO's full MCP tool surface (Phase 9 line-
+ *  limit extraction from McpAgentDO.init — behavior-preserving). */
+export function registerAllDoTools(options: {
+  env: Env
+  server: McpServer
+  getTenantId: () => string
+  getTmk: () => CryptoKey | null
+  waitUntil: (promise: Promise<unknown>) => void
+  getInterviewState: () => InterviewState | null
+  setInterviewState: (s: InterviewState | null) => void
+  getAutomationHost: () => AutomationHost
+}): void {
+  const { env, server, getTenantId, getTmk, waitUntil } = options
+  registerLegacyMemoryTools({ env, server, getTenantId, getTmk, waitUntil })
+  registerActTools({ env, server, getTenantId })
+  registerAutomationTools({
+    server,
+    getHost: options.getAutomationHost,
+    getDefaultRoute: () => defaultAutomationRoute(env, getTenantId()),
+  })
+  const ctx = {
+    getEnv: () => env, getTenantId, getTmk,
+    getExecutionContext: () => ({ waitUntil }),
+  }
+  registerBrainMemorySurface(server, ctx)
+  registerMemoryTools(server, ctx)
+  registerBootstrapTools(server, {
+    getEnv: () => env, getTenantId, getTmk,
+    getInterviewState: options.getInterviewState,
+    setInterviewState: options.setInterviewState,
+  })
 }

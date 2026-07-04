@@ -13,6 +13,8 @@
 - src/workers/mcpagent/routes/dashboard-data.ts - /api/memory/search (mode-validated, session-TMK reads), /api/traces/{recent,:id}, /api/usage/summary, /api/connections (presence only, never token material).
 - wrangler [assets] ./public (asset-first for matching paths; Worker fallthrough): CF Access gates the hostname (G5) so assets are edge-protected exactly like API routes; authMiddleware continues to gate every /api route.
 **Verification:** feeds are thin over verified services; SPA is a static asset (not subject to src line limits). Gate smoke asserts the SPA + all 8 panel sections + every panel feed 200 + a broker trace recorded end-to-end.
+**Gate result:** Verifier REQUEST_CHANGES -> fixed same-session (SPA rewritten to textContent-only DOM + delegated actions, zero HTML-interpolation sinks; recent-memories default feed; timeline actions; assets config pinned). Live finding: directory-index 307 loop with a user Worker -> exact-file asset /dashboard.html. Deploys 25e9f5a3 -> 5a7a2b30. Smoke GREEN 12/12. Demo clause 7 MET: https://haetsalos.specialdarksystems.com/dashboard.html
+**Next:** Phase 12 decay pass.
 
 ---
 

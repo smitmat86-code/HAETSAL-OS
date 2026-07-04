@@ -33,4 +33,17 @@ the inspector feed (demo clause 7 mechanical assertion).
 
 ## OUTCOME
 
-- pending
+- Verifier REQUEST_CHANGES (XSS sinks, no-op memory loader, config nits) ->
+  all fixed: SPA rewritten to strict DOM discipline (every API value via
+  textContent, delegated data-* actions, encoded URLs; the sink grep's only
+  hit is a prose comment), memory panel auto-loads a recent-memories default
+  feed (new /api/memory/search no-q behavior), timeline gained cancel/retry,
+  assets config pinned.
+- Live finding: directory-index resolution 307-looped with a user Worker
+  attached (/dashboard/index.html -> /dashboard/ -> Worker 404) — served as
+  an exact-file asset /dashboard.html instead (deterministic; keeps
+  /dashboard/agents unshadowed).
+- Deploys 25e9f5a3 -> 5a7a2b30. **Smoke GREEN 12/12**: SPA 17.5k chars w/
+  8/8 panel sections; all 9 feeds 200; broker trace recorded end-to-end.
+- Demo clause 7 (all 8 panels visible + functional, CF Access enforced): MET.
+  Dashboard: https://haetsalos.specialdarksystems.com/dashboard.html

@@ -30,4 +30,12 @@ rebuild → 200 (gate: ≥3 pages generated and readable).
 
 ## OUTCOME
 
-- pending
+- Verifier REQUEST_CHANGES -> both blockers fixed same-session (union-typed
+  rebuild body, CompiledDossierKind cast + taxonomy import, fixed-namespace
+  note); tsc back below the HEAD baseline (133 vs 137).
+- Deploys `7ae2f399` -> `feef4544`. First smoke run raced deploy propagation
+  (instant 404s on the new routes; lesson: sleep ~10s between deploy and
+  smoke). **Smoke GREEN 9/9**: person:matt (6 sources), project:haetsal,
+  topic:serverless-postgres rebuilt from prod canonical; markdown pages
+  1.2-2.1k chars with full frontmatter; list=3; delete->404; rebuild->200.
+- Gate (>=3 compiled pages generated and readable): MET.

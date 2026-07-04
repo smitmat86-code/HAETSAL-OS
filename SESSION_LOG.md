@@ -15,6 +15,8 @@
 - /api/compiled: GET list, GET :kind/:key (text/markdown), POST :kind/:key/rebuild, DELETE :kind/:key (CF Access).
 - FLAGGED pre-existing (11.x): persistCompiledArtifactPayload writes its `contentEncrypted` field VERBATIM to R2 while the render layer fills it with plaintext markdown - compiled artifacts rest unencrypted in R2. Not touched this phase (pages render from Postgres views, not artifacts); Phase 13 ADR: encrypt or accept like raw media.
 **Verification:** tests/mission-10.0 (5 contracts: three kinds + kind threading, frontmatter fields, list/delete/rebuild regenerability, cross-kind collision, honest 404). Postflight green.
+**Gate result:** Verifier REQUEST_CHANGES -> 2 type-safety blockers fixed same-session; 11.x regressions 15/15. Deploys 7ae2f399 -> feef4544. Live smoke GREEN 9/9 (3 pages rebuilt from prod canonical w/ frontmatter; list/delete/regenerate). Lesson: wait ~10s after wrangler deploy before smoking (propagation race gave transient 404s).
+**Next:** Phase 11 dashboard (8 panels).
 
 ---
 

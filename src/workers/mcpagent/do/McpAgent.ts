@@ -7,13 +7,19 @@ import { registerBrainMemorySurface } from '../../../tools/brain-memory-surface'
 import type { InterviewState } from '../../../types/bootstrap'
 import { registerBootstrapTools } from '../../../tools/bootstrap'
 import { registerMemoryTools } from '../../../tools/memory'
-import { processInboundMessage } from './inbound-message'
+import { handleInboundPost } from './inbound-message'
 import { registerActTools, registerLegacyMemoryTools } from './register-tools'
 import { ensureSessionTable, readPersistedSession, writePersistedSession } from './session-store'
 import { deliverReminder, scheduleReminder, type ReminderSchedulePayload } from './action-scheduling'
 import { acceptSessionWebSocket, broadcastToSessions, resolveTenantContext } from './tenant-context'
 import { dispatchExecutionTask, handleExecutionTaskFinish, type ExecutionTaskSpec } from './agent-dispatch'
 import { cancelAgentRun, listAgentRuns, retryAgentRun, type RunsHost } from './agent-runs-view'
+import {
+  createAutomation, fireAutomationTick, removeAutomation, toggleAutomation,
+  type AutomationHost, type AutomationView, type CreateAutomationInput,
+} from './automation-runtime'
+import { defaultAutomationRoute, listAutomationsView } from './automation-view'
+import { registerAutomationTools } from './register-automation-tools'
 import type { AgentRunView } from '../../../agents/execution/types'
 
 interface McpAgentProps extends Record<string, unknown> { tenantId?: string; jwtSub?: string }
@@ -32,6 +38,8 @@ export class McpAgentDO extends BaseMcpAgent<Env, unknown, McpAgentProps> {
       getTmk: () => this.tmk, waitUntil: (promise) => this.ctx.waitUntil(promise),
     })
     registerActTools({ env: this.env, server: this.server, getTenantId: () => this._tenantId! })
+    registerAutomationTools({ server: this.server, getHost: () => this.automationHost(),
+      getDefaultRoute: () => defaultAutomationRoute(this.env, this._tenantId!) })
     const ctx = { getEnv: () => this.env, getTenantId: () => this._tenantId!, getTmk: () => this.tmk,
       getExecutionContext: () => ({ waitUntil: this.ctx.waitUntil.bind(this.ctx) }) }
     registerBrainMemorySurface(this.server, ctx)
@@ -55,17 +63,11 @@ export class McpAgentDO extends BaseMcpAgent<Env, unknown, McpAgentProps> {
     }
   }
 
-  private persistSessionState(update: {
-    tenantId?: string | null
-    jwtSub?: string | null
-    interviewState?: InterviewState | null
-  }): void {
+  private persistSessionState(update: { tenantId?: string | null; jwtSub?: string | null; interviewState?: InterviewState | null }): void {
     const current = readPersistedSession(this.sql.bind(this))
-    const tenantId = update.tenantId ?? current?.tenant_id ?? this._tenantId
-    const jwtSub = update.jwtSub ?? current?.jwt_sub ?? null
     writePersistedSession(this.sql.bind(this), {
-      tenantId,
-      jwtSub,
+      tenantId: update.tenantId ?? current?.tenant_id ?? this._tenantId,
+      jwtSub: update.jwtSub ?? current?.jwt_sub ?? null,
       interviewState: update.interviewState ?? this.interviewState,
     })
   }
@@ -110,15 +112,23 @@ export class McpAgentDO extends BaseMcpAgent<Env, unknown, McpAgentProps> {
       subAgent: (cls, name) => this.subAgent(cls, name) as ReturnType<RunsHost['subAgent']>,
     }
   }
-  async dispatchExecutionTask(spec: ExecutionTaskSpec): Promise<{ runId: string }> {
-    return dispatchExecutionTask(this.runsHost(), spec)
-  }
-  async onExecutionTaskFinish(runInfo: { runId: string; status: string }, lifecycle: { status: string; error?: string }): Promise<void> {
-    await handleExecutionTaskFinish(this.runsHost(), runInfo, lifecycle)
-  }
+  async dispatchExecutionTask(spec: ExecutionTaskSpec): Promise<{ runId: string }> { return dispatchExecutionTask(this.runsHost(), spec) }
+  async onExecutionTaskFinish(run: { runId: string; status: string }, lifecycle: { status: string; error?: string }): Promise<void> { await handleExecutionTaskFinish(this.runsHost(), run, lifecycle) }
   async listAgentRuns(limit?: number): Promise<AgentRunView[]> { return listAgentRuns(this.runsHost(), limit) }
   async cancelAgentRun(runId: string): Promise<{ cancelled: boolean }> { return cancelAgentRun(this.runsHost(), runId) }
   async retryAgentRun(runId: string): Promise<{ runId: string }> { return retryAgentRun(this.runsHost(), runId) }
+
+  // Phase 7: user automations (tz-correct one-shot alarms that re-arm on fire).
+  private automationHost(): AutomationHost {
+    return { ...this.runsHost(),
+      schedule: (when, callback, payload) => this.schedule(when, callback as never, payload),
+      cancelSchedule: (id) => this.cancelSchedule(id) }
+  }
+  async fireAutomation(payload: { automationId: string }): Promise<void> { await fireAutomationTick(this.automationHost(), payload) }
+  async createAutomationRpc(input: CreateAutomationInput): Promise<{ id: string; description: string }> { return createAutomation(this.automationHost(), input) }
+  async listAutomationsRpc(): Promise<AutomationView[]> { return listAutomationsView(this.automationHost()) }
+  async toggleAutomationRpc(idPrefix: string, enabled: boolean): Promise<{ id: string; enabled: boolean }> { return toggleAutomation(this.automationHost(), idPrefix, enabled) }
+  async deleteAutomationRpc(idPrefix: string): Promise<{ id: string }> { return removeAutomation(this.automationHost(), idPrefix) }
 
   async fetch(request: Request): Promise<Response> {
     await this.ensureTenantContext(request)
@@ -127,15 +137,12 @@ export class McpAgentDO extends BaseMcpAgent<Env, unknown, McpAgentProps> {
       return acceptSessionWebSocket(this.wsConnections, this._tenantId)
     }
     if (url.pathname === '/inbound' && request.method === 'POST') {
-      const { tenantId, text, channel, replyTo } = await request.json() as {
-        tenantId: string; text: string; channel: 'sms' | 'telegram'; replyTo: string
-      }
-      if (!this._tenantId) {
-        this._tenantId = tenantId
-        this.persistSessionState({ tenantId })
-      }
-      const result = await processInboundMessage(this.env, tenantId, text, channel, replyTo)
-      return new Response(JSON.stringify(result), { headers: { 'Content-Type': 'application/json' } })
+      return handleInboundPost(request, this.env, (tenantId) => {
+        if (!this._tenantId) {
+          this._tenantId = tenantId
+          this.persistSessionState({ tenantId })
+        }
+      })
     }
     return super.fetch(request)
   }

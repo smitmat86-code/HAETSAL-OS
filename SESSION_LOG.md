@@ -5,6 +5,20 @@
 
 ---
 
+## Mission Phase 7 - User automations - 2026-07-04
+
+**Spec:** HAETSAL_MISSION.md Phase 7. Chat-created recurring automations that fire scoped execution-agent runs.
+**Built:**
+- src/services/automations/{recurrence,nl-parse}.ts — tz-correct recurrence (daily|weekdays|weekly at HH:MM in an IANA tz) computed as one-shot alarms that RE-ARM after each fire (fixed UTC cron drifts across DST; wall-clock math does not — DST spring/fall contract-tested at the 2026 boundaries). Conservative NL intent parser ("every weekday at 8am, brief me on my day") + management commands (list/pause/resume/delete automation <id>).
+- src/workers/mcpagent/do/automation-{store,runtime,view}.ts — DO-SQLite automations + fire-event tables (Law 2: task text rests TMK-encrypted in spec_ciphertext; alarm payloads carry only {automationId}); create/fire/toggle/delete lifecycle; fires dispatch through the Phase 6 dispatchExecutionTask with origin='automation:<id>'; no-session fires record an honest skipped_no_session event and still re-arm (next occurrence IS the retry — mission forbids retry workarounds).
+- Sendblue reply-window rule: agent-finish.ts (split from agent-dispatch for the line limit) logs delivered | skipped_outside_reply_window | delivery_failed events on automation-origin runs; a rejected Sendblue send is never retried.
+- Surfaces: MCP CRUD tools (create/list/toggle/delete_automation, register-automation-tools.ts), /api/automations REST (list/create/toggle/delete, CF Access), chat seam (automation-chat.ts) wired ahead of the delegation decider in both channels.
+- McpAgentDO: fireAutomation alarm callback + 5 automation RPCs; persistSessionState/inbound-fetch compressed + handleInboundPost extracted to fit the 150-line limit.
+**Verification:** tests/mission-7.0 (18 contracts: DST-boundary recurrence, NL parse incl. demo phrase, lifecycle create/fire/re-arm/toggle/delete vs scripted host, encrypted-at-rest + content-free alarm payloads, stale-alarm no-fire, sendblue skip event idempotent, telegram delivered event). Full suite 447 passed / 1 skipped. Postflight green.
+**Next:** Phase 7 gate (verifier, Law-2 audit, deploy, live smoke = create→fire→run→re-arm→toggle→delete via scripts/mission-phase7-live-smoke.ts), then Phase 8 dream cycle.
+
+---
+
 ## Mission Phase 6 - Sub-agent spawn + cancel/retry - 2026-07-04
 
 **Spec:** HAETSAL_MISSION.md Phase 6 (+ docs/implementation-plans/phase-6-kickoff-context.md). Native sub-agent orchestration on Agents SDK 0.17.0 primitives.

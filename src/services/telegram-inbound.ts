@@ -9,6 +9,7 @@ import type { IngestionQueueMessage } from '../types/ingestion'
 import { sendTelegramReply } from './delivery/telegram'
 import { buildGroundedReply, describeInboundPhoto } from './messaging-helpers'
 import { maybeDelegateExecutionTask } from './agents/delegation'
+import { maybeHandleAutomationChat } from './agents/automation-chat'
 
 export interface TelegramPhotoSize { file_id: string; width?: number; height?: number; file_size?: number }
 export interface TelegramMessage {
@@ -116,12 +117,12 @@ export async function processTelegramInbound(
   }
   ctx.waitUntil(env.QUEUE_HIGH.send(message))
 
-  // Phase 6: multi-step asks spawn a scoped execution agent (native sub-agent
-  // dispatch); everything else keeps the existing single-turn grounded reply.
-  const delegatedAck = await maybeDelegateExecutionTask(env, tenantId, text, {
-    channel: 'telegram', replyTo: String(chatId),
-  })
-  const reply = delegatedAck ?? await buildGroundedReply(env, tenantId, text, 'Telegram')
+  // Phase 7: automation intent/commands first; Phase 6: multi-step asks spawn
+  // a scoped execution agent; everything else keeps the grounded reply.
+  const route = { channel: 'telegram' as const, replyTo: String(chatId) }
+  const reply = await maybeHandleAutomationChat(env, tenantId, text, route)
+    ?? await maybeDelegateExecutionTask(env, tenantId, text, route)
+    ?? await buildGroundedReply(env, tenantId, text, 'Telegram')
   const sent = await sendTelegramReply(chatId, reply, env)
   if (!sent) console.warn('TELEGRAM_REPLY_NOT_DELIVERED', { suffix: String(chatId).slice(-4) })
   return { handled: true, kind: 'text' }

@@ -61,8 +61,11 @@ Last updated: 2026-04-18 | Session: 7.1 (Hindsight Projection Adapter)
 | src\services\action\router.ts | 111 | — | ✅ |
 | src\services\action\toctou.ts | 23 | — | ✅ |
 | src\services\action\tool-dispatch.ts | 69 | ToolExecutionResult | ✅ |
+| src\services\agents\automation-chat.ts | 76 | AutomationChatRoute | ✅ |
 | src\services\agents\delegation.ts | 79 | DelegationDecision, DelegationRoute | ✅ |
 | src\services\agents\router.ts | 50 | — | ✅ |
+| src\services\automations\nl-parse.ts | 88 | ParsedAutomation, parseAutomationIntent, AutomationCommand... | ✅ |
+| src\services\automations\recurrence.ts | 84 | RecurrenceKind, RecurrenceSpec, DEFAULT_TZ... | ✅ |
 | src\services\bootstrap\historical-import.ts | 140 | historicalSalienceMultiplier | ✅ |
 | src\services\bootstrap\interview.ts | 76 | createInitialState, currentQuestion, currentDomain... | ✅ |
 | src\services\canonical-broker-shadow.ts | 122 | summaryOf, statusOf, traceOf... | ✅ |
@@ -166,8 +169,8 @@ Last updated: 2026-04-18 | Session: 7.1 (Hindsight Projection Adapter)
 | src\services\postgres-sql.ts | 95 | PostgresStatement, PostgresSql, createPostgresStatement... | ✅ |
 | src\services\retrieval-modes.ts | 149 | resolveTemporalWindow | ✅ |
 | src\services\retrieval-support.ts | 122 | CANONICAL_EMBEDDING_MODEL, citationOf, toRetrievalItem... | ✅ |
-| src\services\sendblue-inbound.ts | 103 | SendblueInboundBody, generateGroundedReply | ✅ |
-| src\services\telegram-inbound.ts | 129 | TelegramPhotoSize, TelegramMessage, TelegramUpdate | ✅ |
+| src\services\sendblue-inbound.ts | 104 | SendblueInboundBody, generateGroundedReply | ✅ |
+| src\services\telegram-inbound.ts | 130 | TelegramPhotoSize, TelegramMessage, TelegramUpdate | ✅ |
 | src\services\telnyx.ts | 35 | — | ✅ |
 | src\services\tenant.ts | 133 | — | ✅ |
 | src\services\workers-ai-chat.ts | 109 | CHAT_MODEL, ChatContentPart, ChatMessage... | ✅ |
@@ -217,22 +220,28 @@ Last updated: 2026-04-18 | Session: 7.1 (Hindsight Projection Adapter)
 | src\workers\mcpagent\dashboard-agents-html.ts | 49 | AGENT_DASHBOARD_HTML | ✅ |
 | src\workers\mcpagent\debug-inventory.ts | 64 | — | ✅ |
 | src\workers\mcpagent\do\action-scheduling.ts | 52 | ReminderSchedulePayload | ✅ |
-| src\workers\mcpagent\do\agent-dispatch.ts | 150 | EXECUTION_MAX_BUDGET_MS, EXECUTION_NO_PROGRESS_BUDGET_MS, ReplyChannel... | ✅ |
+| src\workers\mcpagent\do\agent-dispatch.ts | 89 | EXECUTION_MAX_BUDGET_MS, EXECUTION_NO_PROGRESS_BUDGET_MS, ReplyChannel... | ✅ |
+| src\workers\mcpagent\do\agent-finish.ts | 92 | — | ✅ |
 | src\workers\mcpagent\do\agent-runs-view.ts | 120 | RunsHost | ✅ |
-| src\workers\mcpagent\do\agent-task-store.ts | 109 | TaskSql, AgentTaskRow, TaskRecord... | ✅ |
+| src\workers\mcpagent\do\agent-task-store.ts | 116 | TaskSql, AgentTaskRow, TaskRecord... | ✅ |
+| src\workers\mcpagent\do\automation-runtime.ts | 137 | AutomationHost, CreateAutomationInput, AutomationView... | ✅ |
+| src\workers\mcpagent\do\automation-store.ts | 140 | AutoSql, AutomationRow, ensureAutomationTables... | ✅ |
+| src\workers\mcpagent\do\automation-view.ts | 45 | — | ✅ |
 | src\workers\mcpagent\do\identity.ts | 13 | MCP_STREAMABLE_HTTP_PREFIX, getMcpAgentObjectName, getMcpAgentObjectId | ✅ |
-| src\workers\mcpagent\do\inbound-message.ts | 35 | — | ✅ |
-| src\workers\mcpagent\do\McpAgent.ts | 143 | McpAgentDO | ✅ |
+| src\workers\mcpagent\do\inbound-message.ts | 49 | — | ✅ |
+| src\workers\mcpagent\do\McpAgent.ts | 150 | McpAgentDO | ✅ |
+| src\workers\mcpagent\do\register-automation-tools.ts | 66 | registerAutomationTools | ✅ |
 | src\workers\mcpagent\do\register-tools.ts | 87 | registerLegacyMemoryTools, registerActTools | ✅ |
 | src\workers\mcpagent\do\session-store.ts | 57 | PersistedSessionRow, ensureSessionTable, readPersistedSession... | ✅ |
 | src\workers\mcpagent\do\tenant-context.ts | 58 | ResolvedTenantContext, acceptSessionWebSocket, broadcastToSessions | ✅ |
-| src\workers\mcpagent\index.ts | 150 | — | ✅ |
+| src\workers\mcpagent\index.ts | 149 | — | ✅ |
 | src\workers\mcpagent\public-webhooks.ts | 80 | registerPublicWebhooks | ✅ |
 | src\workers\mcpagent\routes\actions.ts | 79 | actions | ✅ |
 | src\workers\mcpagent\routes\agent-runs.ts | 84 | agentRuns, agentDashboard | ✅ |
 | src\workers\mcpagent\routes\approval.ts | 82 | approval | ✅ |
 | src\workers\mcpagent\routes\audit.ts | 51 | audit | ✅ |
 | src\workers\mcpagent\routes\auth.ts | 45 | — | ✅ |
+| src\workers\mcpagent\routes\automations.ts | 79 | automations | ✅ |
 | src\workers\mcpagent\routes\canary.ts | 15 | canary, hasCanonicalHyperdriveBinding | ✅ |
 | src\workers\mcpagent\routes\ingest.ts | 130 | — | ✅ |
 | src\workers\mcpagent\routes\settings.ts | 73 | settings | ✅ |

@@ -3,6 +3,20 @@ import { sendSmsReply } from '../../../services/delivery/sms'
 import { sendTelegramMessage } from '../../../services/delivery/telegram'
 import { runGatewayChat } from '../../../services/workers-ai-chat'
 
+/** DO fetch branch for POST /inbound, extracted for the McpAgent line limit. */
+export async function handleInboundPost(
+  request: Request,
+  env: Env,
+  adoptTenant: (tenantId: string) => void,
+): Promise<Response> {
+  const { tenantId, text, channel, replyTo } = await request.json() as {
+    tenantId: string; text: string; channel: 'sms' | 'telegram'; replyTo: string
+  }
+  adoptTenant(tenantId)
+  const result = await processInboundMessage(env, tenantId, text, channel, replyTo)
+  return new Response(JSON.stringify(result), { headers: { 'Content-Type': 'application/json' } })
+}
+
 export async function processInboundMessage(
   env: Env,
   tenantId: string,

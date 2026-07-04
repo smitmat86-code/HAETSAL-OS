@@ -17,6 +17,7 @@ export interface AgentTaskRow {
   reply_channel: string
   reply_to: string
   retry_of: string | null
+  origin: string | null
   created_at: number
   delivered_final: number
   delivered_giveup: number
@@ -30,6 +31,8 @@ export interface TaskRecord {
   replyChannel: string
   replyTo: string
   retryOf: string | null
+  /** Content-free provenance tag, e.g. 'automation:<id>' (Phase 7). */
+  origin: string | null
 }
 
 export function ensureTaskTable(sql: TaskSql): void {
@@ -42,20 +45,23 @@ export function ensureTaskTable(sql: TaskSql): void {
       reply_channel TEXT NOT NULL,
       reply_to TEXT NOT NULL,
       retry_of TEXT,
+      origin TEXT,
       created_at INTEGER NOT NULL,
       delivered_final INTEGER NOT NULL DEFAULT 0,
       delivered_giveup INTEGER NOT NULL DEFAULT 0
     )
   `
+  // Phase 7 forward-migration for tables created by the Phase 6 deploy.
+  try { sql`ALTER TABLE haetsal_agent_tasks ADD COLUMN origin TEXT` } catch { /* exists */ }
 }
 
 export function insertTaskRow(sql: TaskSql, record: TaskRecord): void {
   sql`
     INSERT INTO haetsal_agent_tasks
-      (run_id, profile, tools_json, task_ciphertext, reply_channel, reply_to, retry_of, created_at)
+      (run_id, profile, tools_json, task_ciphertext, reply_channel, reply_to, retry_of, origin, created_at)
     VALUES (${record.runId}, ${record.profile}, ${JSON.stringify(record.tools)},
             ${record.taskCiphertext}, ${record.replyChannel}, ${record.replyTo},
-            ${record.retryOf}, ${Date.now()})
+            ${record.retryOf}, ${record.origin}, ${Date.now()})
     ON CONFLICT(run_id) DO NOTHING
   `
 }
@@ -63,7 +69,7 @@ export function insertTaskRow(sql: TaskSql, record: TaskRecord): void {
 export function readTaskRow(sql: TaskSql, runId: string): TaskRecord | null {
   const row = sql<AgentTaskRow>`
     SELECT run_id, profile, tools_json, task_ciphertext, reply_channel, reply_to,
-           retry_of, created_at, delivered_final, delivered_giveup
+           retry_of, origin, created_at, delivered_final, delivered_giveup
     FROM haetsal_agent_tasks WHERE run_id = ${runId}
   `[0]
   if (!row) return null
@@ -75,6 +81,7 @@ export function readTaskRow(sql: TaskSql, runId: string): TaskRecord | null {
     replyChannel: row.reply_channel,
     replyTo: row.reply_to,
     retryOf: row.retry_of,
+    origin: row.origin,
   }
 }
 

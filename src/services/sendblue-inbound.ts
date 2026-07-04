@@ -10,6 +10,7 @@ import type { IngestionQueueMessage } from '../types/ingestion'
 import { sendSendblueMessage } from './delivery/sendblue'
 import { buildGroundedReply, describeInboundPhoto } from './messaging-helpers'
 import { maybeDelegateExecutionTask } from './agents/delegation'
+import { maybeHandleAutomationChat } from './agents/automation-chat'
 
 export interface SendblueInboundBody {
   content?: string
@@ -88,12 +89,12 @@ export async function processSendblueInbound(
   }
   ctx.waitUntil(env.QUEUE_HIGH.send(message))
 
-  // Phase 6: multi-step asks spawn a scoped execution agent (native sub-agent
-  // dispatch); everything else keeps the existing single-turn grounded reply.
-  const delegatedAck = await maybeDelegateExecutionTask(env, tenantId, text, {
-    channel: 'sendblue', replyTo: body.from_number,
-  })
-  const reply = delegatedAck ?? await generateGroundedReply(env, tenantId, text)
+  // Phase 7: automation intent/commands first; Phase 6: multi-step asks spawn
+  // a scoped execution agent; everything else keeps the grounded reply.
+  const route = { channel: 'sendblue' as const, replyTo: body.from_number }
+  const reply = await maybeHandleAutomationChat(env, tenantId, text, route)
+    ?? await maybeDelegateExecutionTask(env, tenantId, text, route)
+    ?? await generateGroundedReply(env, tenantId, text)
   const sent = await sendSendblueMessage(body.from_number, reply, env)
   if (!sent.success) {
     console.warn('SENDBLUE_REPLY_NOT_DELIVERED', { status: sent.status, errorCode: sent.errorCode ?? null })

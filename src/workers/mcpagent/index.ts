@@ -13,6 +13,7 @@ import { settings } from './routes/settings'
 import { audit } from './routes/audit'
 import { canary } from './routes/canary'
 import { agentDashboard, agentRuns } from './routes/agent-runs'
+import { automations } from './routes/automations' // Phase 7
 import type { Env } from '../../types/env'
 import { getMcpAgentObjectName } from './do/identity'
 import { registerPublicWebhooks } from './public-webhooks'
@@ -58,24 +59,22 @@ app.use('/mcp', dlpMiddleware())
 // Auth routes (Google OAuth — Phase 2.2)
 app.route('/auth', auth)
 
-
 // Action routes (undo — Phase 2.3)
 app.route('/actions', actions)
 app.route('/api/actions', actions)
 app.route('/api/actions', approval)
 app.route('/api/settings', settings)
 app.route('/api/audit', audit)
-// Phase 6: sub-agent run ledger + cancel/retry + live-agent panel (CF Access)
+// Phase 6/7: sub-agent runs + live-agent panel + automations (CF Access)
 app.route('/api/agents', agentRuns)
 app.route('/dashboard/agents', agentDashboard)
+app.route('/api/automations', automations)
 
 // Read-only diagnostic view over the caller's own canonical memory (no bodies).
 app.get('/debug/memory-inventory', renderMemoryInventory)
 
-// Root status page — doubles as a browser-clickable session/KEK refresh.
-// Opening this URL after CF Access login initializes the tenant session in
-// the DO, which provisions/renews the 24h Cron KEK (needed by the morning
-// brief, consolidation, and any cron that reads tenant-encrypted artifacts).
+// Root status page - doubles as a session/KEK refresh: opening it after CF
+// Access login initializes the tenant session + provisions the 24h Cron KEK.
 app.get('/', async (c) => {
   const tenantId = c.get('tenantId')
   const jwtSub = c.get('jwtSub')

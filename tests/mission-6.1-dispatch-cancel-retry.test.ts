@@ -29,7 +29,7 @@ async function testTmk(): Promise<CryptoKey> {
 
 interface TaskRow {
   run_id: string; profile: string; tools_json: string; task_ciphertext: string
-  reply_channel: string; reply_to: string; retry_of: string | null
+  reply_channel: string; reply_to: string; retry_of: string | null; origin: string | null
   created_at: number; delivered_final: number; delivered_giveup: number
 }
 interface LedgerRow {
@@ -43,13 +43,15 @@ function fakeSql(tasks: Map<string, TaskRow>, runs: Map<string, LedgerRow>) {
   return (<T,>(strings: TemplateStringsArray, ...values: Array<string | number | boolean | null>): T[] => {
     const sql = strings.join('?').replace(/\s+/g, ' ').trim()
     if (sql.startsWith('CREATE TABLE')) return []
+    if (sql.startsWith('ALTER TABLE')) throw new Error('no-op: column exists')
     if (sql.startsWith('INSERT INTO haetsal_agent_tasks')) {
-      const [runId, profile, tools, ciphertext, channel, replyTo, retryOf, createdAt] = values
+      const [runId, profile, tools, ciphertext, channel, replyTo, retryOf, origin, createdAt] = values
       if (!tasks.has(String(runId))) {
         tasks.set(String(runId), {
           run_id: String(runId), profile: String(profile), tools_json: String(tools),
           task_ciphertext: String(ciphertext), reply_channel: String(channel), reply_to: String(replyTo),
-          retry_of: retryOf === null ? null : String(retryOf), created_at: Number(createdAt),
+          retry_of: retryOf === null ? null : String(retryOf),
+          origin: origin === null ? null : String(origin), created_at: Number(createdAt),
           delivered_final: 0, delivered_giveup: 0,
         })
       }

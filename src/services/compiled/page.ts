@@ -33,10 +33,8 @@ export async function ensurePageRegistry(env: Env): Promise<void> {
   await env.D1_US.prepare(REGISTRY_DDL).run()
 }
 
-/** The compiler persists documents under family keys derived from the subject
- *  segment; 'project' here is the compiler's FIXED persistence namespace
- *  (assemble.ts hardcodes it for every kind) — if a kind-aware compiler ever
- *  changes that prefix, update this lookup in the same commit. */
+/** Family keys under the compiler's FIXED 'project' persistence namespace
+ *  (assemble.ts hardcodes it for every kind — change both together). */
 export function familyKeys(segment: string): { dossier: string; pack: string; changes: string } {
   return {
     dossier: `dossier:project:${segment}`,

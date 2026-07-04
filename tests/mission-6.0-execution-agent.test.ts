@@ -134,6 +134,28 @@ describe('mission 6.0 — in-scope tool execution', () => {
   })
 })
 
+describe('mission 6.0 — transient model-failure retry', () => {
+  it('retries a failed model call once and completes', async () => {
+    let calls = 0
+    const fakeEnv = {
+      ...env, AI_GATEWAY_ID: 'g',
+      AI: { run: async () => { if (++calls === 1) throw new Error('InferenceUpstreamError: upstream 5xx'); return { response: 'recovered' } } },
+    } as unknown as Env
+    const result = await runExecutionToolLoop(await loopConfig({ env: fakeEnv }))
+    expect(result.status).toBe('completed')
+    expect(result.resultText).toBe('recovered')
+    expect(calls).toBe(2)
+  })
+
+  it('two consecutive failures surface as a real error (no infinite retry)', async () => {
+    const fakeEnv = {
+      ...env, AI_GATEWAY_ID: 'g',
+      AI: { run: async () => { throw new Error('InferenceUpstreamError: upstream 5xx') } },
+    } as unknown as Env
+    await expect(runExecutionToolLoop(await loopConfig({ env: fakeEnv }))).rejects.toThrow(/InferenceUpstreamError/)
+  })
+})
+
 describe('mission 6.0 — doom loop, cancellation, deadline', () => {
   it('breaks out after repeated identical calls instead of spinning', async () => {
     // web_search here: its executor makes no AI calls, so aiCalls counts loop

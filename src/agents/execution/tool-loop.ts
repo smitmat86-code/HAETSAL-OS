@@ -11,6 +11,8 @@ import type { DoomLoopState } from '../types'
 import type { Env } from '../../types/env'
 import type { ExecutionLoopResult, ExecutionToolName } from './types'
 import { EXECUTION_TOOLS, toolDefinitionsFor, type ToolRuntime } from './tool-registry'
+import { parseToolCalls, readResponseText } from './model-io'
+export { parseToolCalls } from './model-io'
 
 export interface ToolLoopConfig {
   env: Env
@@ -26,30 +28,29 @@ export interface ToolLoopConfig {
   onProgress: (fraction: number, phase: string) => void
 }
 
-interface RawToolCall { name?: string; arguments?: unknown; function?: { name?: string; arguments?: unknown } }
-
-/** Tolerant reader for the two tool_call encodings Workers AI models emit. */
-export function parseToolCalls(result: unknown): Array<{ name: string; args: Record<string, unknown> }> {
-  const calls = (result as { tool_calls?: RawToolCall[] })?.tool_calls
-  if (!Array.isArray(calls)) return []
-  return calls.flatMap((call) => {
-    const name = call.name ?? call.function?.name
-    if (!name) return []
-    let raw = call.arguments ?? call.function?.arguments ?? {}
-    if (typeof raw === 'string') {
-      try { raw = JSON.parse(raw) } catch { raw = {} }
-    }
-    return [{ name, args: (raw ?? {}) as Record<string, unknown> }]
-  })
-}
-
-function readResponseText(result: unknown): string {
-  if (typeof result === 'string') return result.trim()
-  const r = result as { response?: unknown }
-  return typeof r?.response === 'string' ? r.response.trim() : ''
-}
-
 const MAX_CALLS_PER_TURN = 4
+const MODEL_RETRY_BACKOFF_MS = 800
+
+/** One retry on model-call failure: a transient InferenceUpstreamError killed
+ *  a live run during the Phase 6 gate smoke while the identical request
+ *  succeeded moments later. Never retries after cancellation. */
+async function callModelOnceWithRetry(
+  cfg: ToolLoopConfig,
+  payload: { messages: unknown; tools: unknown; max_tokens: number },
+): Promise<unknown> {
+  const run = () => (cfg.env.AI as { run: (m: string, i: unknown, o?: unknown) => Promise<unknown> }).run(
+    MODEL_DEEP, payload, { gateway: { id: cfg.env.AI_GATEWAY_ID, collectLog: false } },
+  )
+  try {
+    return await run()
+  } catch (error) {
+    if (cfg.isCancelled()) throw error
+    await new Promise(resolve => setTimeout(resolve, MODEL_RETRY_BACKOFF_MS))
+    // `await` so a second rejection is observed in this frame (workerd's
+    // unhandled-rejection tracker fires on un-awaited returns).
+    return await run()
+  }
+}
 
 export async function runExecutionToolLoop(cfg: ToolLoopConfig): Promise<ExecutionLoopResult> {
   const rt: ToolRuntime = { env: cfg.env, tenantId: cfg.tenantId, tmk: cfg.tmk, agentIdentity: cfg.agentIdentity }
@@ -69,11 +70,7 @@ export async function runExecutionToolLoop(cfg: ToolLoopConfig): Promise<Executi
     }
     cfg.onProgress(turn / cfg.maxTurns, turn === 0 ? 'planning' : 'reasoning')
 
-    const result = await (cfg.env.AI as { run: (m: string, i: unknown, o?: unknown) => Promise<unknown> }).run(
-      MODEL_DEEP,
-      { messages, tools, max_tokens: 1024 },
-      { gateway: { id: cfg.env.AI_GATEWAY_ID, collectLog: false } },
-    )
+    const result = await callModelOnceWithRetry(cfg, { messages, tools, max_tokens: 1024 })
     if (cfg.isCancelled()) return aborted(turn + 1, toolCalls, toolsUsed)
 
     const calls = parseToolCalls(result).slice(0, MAX_CALLS_PER_TURN)

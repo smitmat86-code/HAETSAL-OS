@@ -21,8 +21,9 @@ Last updated: 2026-04-18 | Session: 7.1 (Hindsight Projection Adapter)
 | src\agents\base-agent.ts | 132 | — | ✅ |
 | src\agents\career-coach.ts | 105 | CareerCoach | ✅ |
 | src\agents\chief-of-staff.ts | 55 | ChiefOfStaff | ✅ |
+| src\agents\execution\model-io.ts | 30 | parseToolCalls, readResponseText | ✅ |
 | src\agents\execution\run-store.ts | 142 | RunSql, ExecutionRunRow, ensureRunTable... | ✅ |
-| src\agents\execution\tool-loop.ts | 142 | ToolLoopConfig, parseToolCalls | ✅ |
+| src\agents\execution\tool-loop.ts | 139 | ToolLoopConfig | ✅ |
 | src\agents\execution\tool-registry.ts | 130 | ToolRuntime, EXECUTION_TOOLS, toolDefinitionsFor | ✅ |
 | src\agents\execution\types.ts | 82 | ExecutionProfile, ExecutionToolName, PROFILE_TOOLS... | ✅ |
 | src\agents\execution-agent.ts | 146 | ExecutionAgent | ✅ |

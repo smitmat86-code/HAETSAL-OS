@@ -38,6 +38,18 @@ delivery event recorded (smoke tenant has no chat; delivery_failed expected)
 at 8am, brief me on my day" over Telegram) rides the same seam and is
 contract-tested; he can create one from his phone any time.
 
-## OUTCOME (filled post-deploy)
+## OUTCOME
 
-- pending
+- Deploy 1: version `99ca1c10` (commit 75d71fb). Smoke 8/9 — automation
+  mechanics all green (create → armed → FIRED on schedule → linked run →
+  re-armed 24h → toggle → delete); the spawned run itself died on another
+  `InferenceUpstreamError` (2/5 runs that evening even with one retry —
+  upstream blips cluster for seconds).
+- Hardening: model-call retry widened to 2 attempts, 800ms → 3200ms
+  exponential backoff (commit on phase-7-complete tag).
+- Deploy 2: version `595c137c`. **Smoke GREEN 9/9** including
+  run-terminal=completed. Gate reviews: verifier PASS/APPROVE (all 5
+  criteria + 8 checks, evidence-cited); Law-2 audit PASS (zero violations,
+  spec_ciphertext sole content column, content-free alarm payloads/events).
+- Demo clause 5 mechanism passes live; Matt's chat flow ("every weekday at
+  8am, brief me on my day" over Telegram) rides the same seam.

@@ -15,7 +15,8 @@
 - Surfaces: MCP CRUD tools (create/list/toggle/delete_automation, register-automation-tools.ts), /api/automations REST (list/create/toggle/delete, CF Access), chat seam (automation-chat.ts) wired ahead of the delegation decider in both channels.
 - McpAgentDO: fireAutomation alarm callback + 5 automation RPCs; persistSessionState/inbound-fetch compressed + handleInboundPost extracted to fit the 150-line limit.
 **Verification:** tests/mission-7.0 (18 contracts: DST-boundary recurrence, NL parse incl. demo phrase, lifecycle create/fire/re-arm/toggle/delete vs scripted host, encrypted-at-rest + content-free alarm payloads, stale-alarm no-fire, sendblue skip event idempotent, telegram delivered event). Full suite 447 passed / 1 skipped. Postflight green.
-**Next:** Phase 7 gate (verifier, Law-2 audit, deploy, live smoke = create→fire→run→re-arm→toggle→delete via scripts/mission-phase7-live-smoke.ts), then Phase 8 dream cycle.
+**Gate result:** Verifier PASS/APPROVE (5 criteria + 8 checks, file:line evidence; low-risk notes only — DO-serialized toggle/fire race, prefix-ambiguity test added same-session). Law-2 audit PASS (zero violations). Deploys 99ca1c10 → 595c137c (+model-retry widened to 2 attempts w/ 800/3200ms backoff after InferenceUpstreamError blips killed 2/5 runs with a single retry). Live smoke GREEN 9/9: create → armed → FIRED on schedule → linked run completed → re-armed 24h → delivery event → toggle-off disarms → delete. Demo clause 5 mechanism passes live.
+**Next:** Phase 8 dream cycle (in progress: DreamCycleWorkflow + proposals + report + morning-brief section).
 
 ---
 

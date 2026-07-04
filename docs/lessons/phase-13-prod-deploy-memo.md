@@ -28,7 +28,7 @@ Date: 2026-07-04. Worker: `the-brain` (haetsalos.specialdarksystems.com).
   (commit tagged `phase-13-complete`).
 - Closeout deploy (clause-10 fix + demo/docs): delta vs `phase-13-complete`
   is the tenant.ts rename/comments + docs/scripts — no behavior change.
-- Final closeout deploy version: PENDING (filled in post-deploy).
+- Final closeout deploy version: `716cb21f-88dc-42ba-abeb-36428d7591bb`.
 
 ## Verification at this gate
 
@@ -41,9 +41,9 @@ Date: 2026-07-04. Worker: `the-brain` (haetsalos.specialdarksystems.com).
   canary `note` field annotated as content-free (done); approve-route null-TMK
   path fails loudly via WebCrypto rather than a family-specific message;
   sealed-artifact reader gap already recorded as runbook ADR #5.
-- Full-demo sweep: `scripts/mission-phase13-full-demo.ts` — final-run counts
-  PENDING (filled in post-deploy; details in
-  `docs/lessons/phase-13-demo-verification.md`).
+- Full-demo sweep: `scripts/mission-phase13-full-demo.ts` — final run
+  **LIVE=5 MECHANISM=3 BLOCKED-S5=2 FAIL=0** (clause 6 cancel: 439 ms;
+  details in `docs/lessons/phase-13-demo-verification.md`).
 
 ## Rollback
 

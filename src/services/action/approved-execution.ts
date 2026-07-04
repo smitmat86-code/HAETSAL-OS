@@ -10,7 +10,7 @@
 
 import type { Env } from '../../types/env'
 import type { ActionQueueMessage, CapabilityClass } from '../../types/action'
-import { decryptWithKek } from '../../cron/kek'
+import { decryptWithKek, fetchAndValidateKek } from '../../cron/kek'
 import { executeAction } from './executor'
 
 interface ApprovedActionRow {
@@ -40,7 +40,17 @@ export async function executeApprovedAction(
 
   const stored = await env.R2_ARTIFACTS.get(row.payload_r2_key)
   if (!stored) throw new Error('approved action payload missing from R2')
-  const payload_stub = await decryptWithKek(await stored.text(), tmk)
+  // Family-tagged blobs (Phase 13): TMK1 = session key, KEK1 = cron fallback,
+  // untagged = pre-Phase-13 TMK blobs. The families are NOT interchangeable.
+  const blob = await stored.text()
+  let payload_stub: string
+  if (blob.startsWith('KEK1:')) {
+    const kek = await fetchAndValidateKek(tenantId, env)
+    if (!kek) throw new Error('approved action payload is KEK-sealed and the Cron KEK is unavailable — authenticate once to refresh it')
+    payload_stub = await decryptWithKek(blob.slice(5), kek)
+  } else {
+    payload_stub = await decryptWithKek(blob.startsWith('TMK1:') ? blob.slice(5) : blob, tmk)
+  }
 
   const msg: ActionQueueMessage = {
     action_id: row.id, tenant_id: tenantId, proposed_by: row.proposed_by,

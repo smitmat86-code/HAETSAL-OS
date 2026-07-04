@@ -5,6 +5,20 @@
 
 ---
 
+## Mission Phase 13 - Ops hardening + full-demo closeout - 2026-07-04
+
+**Spec:** HAETSAL_MISSION.md Phase 13.
+**Built:**
+- Cold-DO approved-action gap ROOT-CAUSED + FIXED: the action worker resolved the session DO by raw tenant id instead of getMcpAgentObjectName(tenant) - the TMK lookup could never succeed. Fixed identity + key-FAMILY-tagged payload sealing (TMK1: warm session / KEK1: cron-KEK cold fallback / legacy untagged = TMK), approve-route dual decrypt with an honest error when a KEK-sealed payload has no KEK (families are NOT interchangeable, Phase 8 proof applied).
+- Compiled R2 artifacts now actually TMK-encrypted (the contentEncrypted field name is true; 11.2 test updated to sealed semantics; nothing reads artifacts back today).
+- GATEWAY_CHAT_EMPTY log: shape metadata only (content previews removed).
+- Canary sweep: six probes (capture/recall/graph/contradiction-surface/compiled-regen/session-evidence) hourly on cron + /api/dream/canary/{run,latest}; content-free canary_runs rows.
+- docs/lessons/phase-13-ops-runbook.md: rebuild procedures (pgvector/compiled/dream/decay/rollback) + closeout ADRs (Secrets Store migration DEFERRED with rationale - token lacks store-provisioning perms, mechanical follow-up documented; AE metadata-only trivially holds with zero write sites; retain-queue transit plaintext ACCEPTED per two audits; key families structural; decay window follow-up).
+**Verification:** tests/mission-13.0 (4 contracts: KEK1 cross-key decrypt, TMK1 + legacy compat, cross-family honest failure, canary sweep + content-free rows - initial seeds were vacuous via INSERT OR IGNORE swallowing a NOT NULL, fixed to loud inserts). Full suite 479 passed / 77 files. Postflight green.
+**Full demo:** scripts/mission-phase13-full-demo.ts runs clauses 1-10 in one session (results in docs/lessons/phase-13-demo-verification.md post-deploy).
+
+---
+
 ## Mission Phase 12 - Memory decay + multimodal confirmation - 2026-07-04
 
 **Spec:** HAETSAL_MISSION.md Phase 12. Adaptive forgetting on metadata + encrypted refs; multimodal was Phase 4's clause 8.

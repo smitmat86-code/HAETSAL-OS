@@ -65,18 +65,17 @@ export async function runGatewayChat(
     const choice = (r.choices as Array<Record<string, unknown>> | undefined)?.[0]
     const message = choice?.message as Record<string, unknown> | undefined
     const content = message?.content
+    // Law 2 (Phase 13): shape metadata only — model output may echo tenant
+    // content, so no previews in logs.
     const contentType = content === null ? 'null' : Array.isArray(content) ? 'array' : typeof content
-    const contentPreview = typeof content === 'string' ? content.slice(0, 80)
-      : Array.isArray(content) ? JSON.stringify(content).slice(0, 200)
-      : content === null ? '(null)' : String(content).slice(0, 80)
     console.warn('GATEWAY_CHAT_EMPTY', {
       topKeys: Object.keys(r),
       choiceKeys: choice ? Object.keys(choice) : [],
       messageKeys: message ? Object.keys(message) : [],
       contentType,
-      contentPreview,
+      contentLength: typeof content === 'string' ? content.length : Array.isArray(content) ? content.length : 0,
       finishReason: choice?.finish_reason,
-      refusal: message?.refusal,
+      refusal: typeof message?.refusal === 'string' ? 'present' : undefined,
     })
   }
   return text

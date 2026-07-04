@@ -32,6 +32,7 @@ Last updated: 2026-04-18 | Session: 7.1 (Hindsight Projection Adapter)
 | src\agents\types.ts | 66 | EpistemicMemoryType, AgentType, AgentContext... | ✅ |
 | src\config\models.ts | 52 | MODEL_CHAT, MODEL_VISION, MODEL_DEEP... | ✅ |
 | src\cron\brief-sections.ts | 92 | — | ✅ |
+| src\cron\canary.ts | 17 | — | ✅ |
 | src\cron\consolidation.ts | 69 | — | ✅ |
 | src\cron\dream.ts | 32 | — | ✅ |
 | src\cron\heartbeat.ts | 62 | — | ✅ |
@@ -48,7 +49,7 @@ Last updated: 2026-04-18 | Session: 7.1 (Hindsight Projection Adapter)
 | src\middleware\cf-access.ts | 58 | CfAccessJwtPayload, deriveAccessPrincipalId | ✅ |
 | src\middleware\dlp.ts | 17 | dlpMiddleware | ✅ |
 | src\services\action\approval-api.ts | 132 | clampPositiveInt | ✅ |
-| src\services\action\approved-execution.ts | 53 | — | ✅ |
+| src\services\action\approved-execution.ts | 63 | — | ✅ |
 | src\services\action\authorization.ts | 131 | AuthGateResult | ✅ |
 | src\services\action\executor.ts | 89 | — | ✅ |
 | src\services\action\integrations\browser.ts | 39 | BrowseResult | ✅ |
@@ -70,6 +71,7 @@ Last updated: 2026-04-18 | Session: 7.1 (Hindsight Projection Adapter)
 | src\services\automations\recurrence.ts | 84 | RecurrenceKind, RecurrenceSpec, DEFAULT_TZ... | ✅ |
 | src\services\bootstrap\historical-import.ts | 140 | historicalSalienceMultiplier | ✅ |
 | src\services\bootstrap\interview.ts | 76 | createInitialState, currentQuestion, currentDomain... | ✅ |
+| src\services\canary\sweep.ts | 102 | CanaryResult | ✅ |
 | src\services\canonical-broker-shadow.ts | 122 | summaryOf, statusOf, traceOf... | ✅ |
 | src\services\canonical-broker-trace-read.ts | 63 | — | ✅ |
 | src\services\canonical-broker-trace-view.ts | 139 | CanonicalBrokerTraceRow, BROKER_TRACE_SELECT, viewFromRow... | ✅ |
@@ -116,7 +118,7 @@ Last updated: 2026-04-18 | Session: 7.1 (Hindsight Projection Adapter)
 | src\services\compiled-synthesis-artifacts.ts | 72 | CompiledArtifactPayloadInput, PersistedCompiledArtifactPayload, buildCompiledArtifactR2Key | ✅ |
 | src\services\compiled-synthesis-assemble-support.ts | 139 | buildFactInputs, buildRelationshipInputs, buildContradictionInputs | ✅ |
 | src\services\compiled-synthesis-assemble.ts | 131 | assembleProjectCompiledSynthesis | ✅ |
-| src\services\compiled-synthesis-compile.ts | 129 | — | ✅ |
+| src\services\compiled-synthesis-compile.ts | 140 | — | ✅ |
 | src\services\compiled-synthesis-compiler-types.ts | 130 | ProjectCompilationSubject, CompileProjectSynthesisFromCanonicalTruthInput, SelectedCanonicalCompilationSource... | ✅ |
 | src\services\compiled-synthesis-inputs.ts | 78 | CompiledDocumentUpsertInput, CompiledDocumentSourceInput, CompiledDocumentArtifactInput... | ✅ |
 | src\services\compiled-synthesis-models.ts | 119 | CompiledDossierView, CompiledContextPackView, CompiledChangeView... | ✅ |
@@ -186,7 +188,7 @@ Last updated: 2026-04-18 | Session: 7.1 (Hindsight Projection Adapter)
 | src\services\telegram-inbound.ts | 135 | TelegramPhotoSize, TelegramMessage, TelegramUpdate | ✅ |
 | src\services\telnyx.ts | 35 | — | ✅ |
 | src\services\tenant.ts | 133 | — | ✅ |
-| src\services\workers-ai-chat.ts | 109 | CHAT_MODEL, ChatContentPart, ChatMessage... | ✅ |
+| src\services\workers-ai-chat.ts | 108 | CHAT_MODEL, ChatContentPart, ChatMessage... | ✅ |
 | src\services\working-session-capture-bridge.ts | 147 | WorkingSessionSummaryCaptureInput, WorkingSessionAdapter, WorkingSessionEvidenceCaptureMetadata... | ✅ |
 | src\services\working-session.ts | 145 | WORKING_SESSION_BOUNDARY, WorkingSessionRole, WorkingSessionTranscriptEntry... | ✅ |
 | src\tools\act\browse.ts | 31 | browseSchema | ✅ |
@@ -223,7 +225,7 @@ Last updated: 2026-04-18 | Session: 7.1 (Hindsight Projection Adapter)
 | src\types\ingestion.ts | 79 | IngestionSource, IngestionArtifact, SalienceResult... | ✅ |
 | src\types\tenant.ts | 30 | TenantContext, TenantRow | ✅ |
 | src\types\tools.ts | 59 | RetainInput, RetainOutput, RecallInput... | ✅ |
-| src\workers\action\index.ts | 113 | — | ✅ |
+| src\workers\action\index.ts | 126 | — | ✅ |
 | src\workers\ingestion\bootstrap-handlers.ts | 91 | — | ✅ |
 | src\workers\ingestion\canonical-projection-consumer.ts | 28 | — | ✅ |
 | src\workers\ingestion\consumer.ts | 134 | — | ✅ |
@@ -259,11 +261,11 @@ Last updated: 2026-04-18 | Session: 7.1 (Hindsight Projection Adapter)
 | src\workers\mcpagent\routes\canary.ts | 15 | canary, hasCanonicalHyperdriveBinding | ✅ |
 | src\workers\mcpagent\routes\compiled.ts | 55 | compiled | ✅ |
 | src\workers\mcpagent\routes\dashboard-data.ts | 101 | dashboardData | ✅ |
-| src\workers\mcpagent\routes\dream.ts | 71 | dream | ✅ |
+| src\workers\mcpagent\routes\dream.ts | 76 | dream | ✅ |
 | src\workers\mcpagent\routes\ingest.ts | 130 | — | ✅ |
 | src\workers\mcpagent\routes\session.ts | 31 | session | ✅ |
 | src\workers\mcpagent\routes\settings.ts | 73 | settings | ✅ |
-| src\workers\mcpagent\runtime.ts | 45 | — | ✅ |
+| src\workers\mcpagent\runtime.ts | 48 | — | ✅ |
 | src\workers\mcpagent\self-registration.ts | 39 | — | ✅ |
 | src\workflows\bootstrap.ts | 110 | BootstrapWorkflow | ✅ |
 | src\workflows\dream-cycle.ts | 79 | DreamCycleParams, DreamCycleWorkflow | ✅ |

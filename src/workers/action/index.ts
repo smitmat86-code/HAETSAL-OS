@@ -7,7 +7,8 @@ import type { Env } from '../../types/env'
 import type { ActionQueueMessage } from '../../types/action'
 import { runAuthorizationGate } from '../../services/action/authorization'
 import { verifyPayloadHash } from '../../services/action/toctou'
-import { encryptWithKek } from '../../cron/kek'
+import { encryptWithKek, fetchAndValidateKek } from '../../cron/kek'
+import { getMcpAgentObjectName } from '../mcpagent/do/identity'
 import { broadcastEvent } from '../../services/action/executor'
 import { routeGreen, routeYellow, routeRed, writeAnomalyAndAudit } from '../../services/action/router'
 
@@ -87,17 +88,29 @@ export async function processAction(
   // TMK may be null in tests or when DO is cold — stub tools don't need it
   let tmk: CryptoKey | null = null
   try {
-    const doId = env.MCPAGENT.idFromName(msg.tenant_id)
+    // Phase 13 fix: the session DO is named getMcpAgentObjectName(tenant) —
+    // idFromName(raw tenant id) resolved a DIFFERENT, TMK-less DO, so this
+    // lookup could never succeed and YELLOW payloads were silently dropped
+    // on cold sessions (the Phase 5 verifier gap, root-caused).
+    const doId = env.MCPAGENT.idFromName(getMcpAgentObjectName(msg.tenant_id))
     const stub = env.MCPAGENT.get(doId)
     tmk = await stub.getTmk()
   } catch { /* tmk stays null */ }
 
   // YELLOW actions are deferred to human approval; the queue message (and its
-  // plaintext payload_stub) is gone by then, so persist the payload TMK-
-  // encrypted in R2 for executeApprovedAction to re-read. Ciphertext in R2 is
-  // Law-2 safe.
-  if (auth.effectiveLevel === 'YELLOW' && tmk) {
-    await env.R2_ARTIFACTS.put(msg.payload_r2_key, await encryptWithKek(msg.payload_stub, tmk))
+  // plaintext payload_stub) is gone by then, so persist the payload encrypted
+  // in R2 for executeApprovedAction. Key FAMILIES are not interchangeable
+  // (KEK != TMK, proven at the Phase 8 gate), so the blob is tagged with the
+  // family that sealed it: TMK when the session DO is warm, Cron KEK as the
+  // cold fallback. If neither key is available the proposal still queues and
+  // approval fails honestly (payload missing).
+  if (auth.effectiveLevel === 'YELLOW') {
+    if (tmk) {
+      await env.R2_ARTIFACTS.put(msg.payload_r2_key, 'TMK1:' + await encryptWithKek(msg.payload_stub, tmk))
+    } else {
+      const kek = await fetchAndValidateKek(msg.tenant_id, env)
+      if (kek) await env.R2_ARTIFACTS.put(msg.payload_r2_key, 'KEK1:' + await encryptWithKek(msg.payload_stub, kek))
+    }
   }
 
   switch (auth.effectiveLevel) {

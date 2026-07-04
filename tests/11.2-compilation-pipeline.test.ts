@@ -185,10 +185,15 @@ describe('11.2 compilation pipeline', () => {
     expect(contextJson?.r2_key).toContain('/context-pack/')
     expect(changeMarkdown?.r2_key).toContain('/what-changed/')
 
-    expect(await (await env.R2_ARTIFACTS.get(dossierMarkdown!.r2_key))?.text()).toContain('Aurora Anchor Project Dossier')
-    expect(await (await env.R2_ARTIFACTS.get(dossierJson!.r2_key))?.text()).toContain('"sourceFingerprint"')
-    expect(await (await env.R2_ARTIFACTS.get(contextJson!.r2_key))?.text()).toContain('"criticalFacts"')
-    expect(await (await env.R2_ARTIFACTS.get(changeMarkdown!.r2_key))?.text()).toContain('What Changed')
+    // Phase 13: artifact payloads rest TMK-encrypted in R2 (Law 2) — decrypt
+    // with the compile tmk to assert content; ciphertext must NOT leak it.
+    const { decryptWithKek } = await import('../src/cron/kek')
+    const readSealed = async (key: string) => decryptWithKek(await (await env.R2_ARTIFACTS.get(key))!.text(), tmk)
+    expect(await (await env.R2_ARTIFACTS.get(dossierMarkdown!.r2_key))?.text()).not.toContain('Aurora')
+    expect(await readSealed(dossierMarkdown!.r2_key)).toContain('Aurora Anchor Project Dossier')
+    expect(await readSealed(dossierJson!.r2_key)).toContain('"sourceFingerprint"')
+    expect(await readSealed(contextJson!.r2_key)).toContain('"criticalFacts"')
+    expect(await readSealed(changeMarkdown!.r2_key)).toContain('What Changed')
   })
 
   it('preserves stable compiled identity across repeated runs and versions artifacts safely when canonical truth changes', async () => {

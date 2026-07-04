@@ -3,6 +3,7 @@ import { handleObsidianPoll } from '../../cron/obsidian-poll'
 import { runPredictiveHeartbeat } from '../../cron/heartbeat'
 import { runWeeklySynthesis } from '../../cron/weekly-synthesis'
 import { handleDreamCron } from '../../cron/dream'
+import { runCanaryCron } from '../../cron/canary'
 import type { ActionQueueMessage } from '../../types/action'
 import type { Env } from '../../types/env'
 import type { IngestionQueueMessage } from '../../types/ingestion'
@@ -30,6 +31,8 @@ export async function handleBrainScheduled(
     case '*/1 * * * *':
       return handleObsidianPoll(event, env, ctx)
     case '*/15 * * * *':
+      // Phase 13: hourly canary sweep piggybacks the 15-min slot.
+      ctx.waitUntil(runCanaryCron(env))
       return handleObsidianPoll(event, env, ctx)
     case '0 7 * * *':
       return handleMorningBrief(env, ctx)

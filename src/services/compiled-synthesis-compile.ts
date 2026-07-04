@@ -1,4 +1,5 @@
 import type { Env } from '../types/env'
+import { encryptWithKek } from '../cron/kek'
 import type { CompiledDossierKind } from './compiled-synthesis-taxonomy'
 import { persistCompiledSynthesis } from './compiled-synthesis-persist'
 import { assembleProjectCompiledSynthesis } from './compiled-synthesis-assemble'
@@ -15,7 +16,17 @@ export async function compileProjectSynthesisFromCanonicalTruth(
 ): Promise<CompileProjectSynthesisFromCanonicalTruthResult> {
   const selection = await selectProjectCompilationSources(input, env)
   const assembled = assembleProjectCompiledSynthesis(selection)
-  const rendered = renderProjectCompiledArtifacts(assembled)
+  const renderedPlain = renderProjectCompiledArtifacts(assembled)
+  // Phase 13: make the artifact field name TRUE — R2 artifact payloads are
+  // tenant-key encrypted (the render layer produces plaintext; nothing reads
+  // these back today, so encrypting is behavior-preserving for consumers).
+  const sealArtifacts = async <T extends { contentEncrypted: string }>(items: T[]): Promise<T[]> =>
+    Promise.all(items.map(async item => ({ ...item, contentEncrypted: await encryptWithKek(item.contentEncrypted, input.tmk) })))
+  const rendered = {
+    dossier: await sealArtifacts(renderedPlain.dossier),
+    contextPack: await sealArtifacts(renderedPlain.contextPack),
+    whatChanged: await sealArtifacts(renderedPlain.whatChanged),
+  }
 
   const dossier = await persistCompiledSynthesis({
     tenantId: input.tenantId,

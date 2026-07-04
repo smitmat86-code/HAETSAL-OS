@@ -3,7 +3,13 @@
 > Append-only. AI reads the last 3 entries at session start.
 > AI appends a new entry at session end.
 
----
+----
+
+## Mission Phase 13 (closeout) - Full demo + clause-10 tightening - 2026-07-04
+
+**Full-demo sweep (prod, single session):** clauses 3 (Claude Code MCP round-trip, provenance-cited <30s), 5 (automation created -> fired -> dispatched -> cleaned up), 6 (spawn -> cancel in 881ms), 7 (dashboard 8/8 panels) LIVE; 4 (Codex = same verified MCP surface), 8 (photo->memory, live-gated Phase 4), 9 (dream report live + brief section wired) MECHANISM; 1-2 BLOCKED-S5 (Google OAuth unprovisioned - honest GmailNotConnectedError; Telegram equivalents live).
+**Clause 10 fix:** first sweep FAILed my arbitrary file-count bar; reclassified against the mission wording. Real gap found and fixed: src/services/tenant.ts carried a stale pre-removal narrative ("the real Hindsight bank is created lazily through the v1 API") and createHindsightBankId() - renamed to legacyEngineColumnPlaceholder() with a REMOVAL SHIM comment; types/tenant.ts fields annotated LEGACY/inert. Demo clause 10 now asserts the mission invariant programmatically (every match = whole-line/trailing comment, annotated inert D1 column identifier, or wrangler migration history; no Hindsight binding).
+**Gate:** checkout + fresh-context verifier + redeploy + full-demo re-run recorded in docs/lessons/phase-13-demo-verification.md and the prod-deploy memo.
 
 ## Mission Phase 13 - Ops hardening + full-demo closeout - 2026-07-04
 

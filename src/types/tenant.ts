@@ -3,7 +3,7 @@
 
 export interface TenantContext {
   tenantId: string           // Stable ID derived from CF Access JWT sub via HKDF
-  hindsightTenantId: string  // Hindsight's internal UUID for this tenant
+  hindsightTenantId: string  // LEGACY (engine retired mission Phase 3): inert placeholder, no reader
   region: 'us' | 'eu'
   isNewTenant: boolean       // True only on first-ever auth
 }
@@ -16,7 +16,7 @@ export interface TenantRow {
   primary_channel: string
   primary_phone: string | null
   primary_email: string | null
-  hindsight_tenant_id: string
+  hindsight_tenant_id: string  // LEGACY NOT NULL column (engine retired mission Phase 3); placeholder only
   cron_kek_encrypted: string | null
   cron_kek_expires_at: number | null
   ai_cost_daily_usd: number

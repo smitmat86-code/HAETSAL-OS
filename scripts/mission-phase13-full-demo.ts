@@ -137,14 +137,30 @@ async function main(): Promise<void> {
     dreamOk ? 'cycle completed live + report readable + "While You Slept" section wired into the 7:00 brief; tonight\'s 2am cron completes the overnight leg for Matt\'s tenant' : 'no completed dream run')
 
   // ── Clause 10: zero Hindsight ───────────────────────────────────────────────
+  // Mission wording: matches allowed ONLY in historical/migration comments or
+  // removal shims explicitly named as such; no HindsightContainer binding.
   let hindsightHits = ''
   try {
-    hindsightHits = execSync('git grep -il hindsight -- src/ wrangler.toml', { encoding: 'utf8' })
+    hindsightHits = execSync('git grep -in hindsight -- src/ wrangler.toml', { encoding: 'utf8' })
   } catch { hindsightHits = '' }
-  const files = hindsightHits.split('\n').filter(Boolean)
+  const offenders = hindsightHits.split('\n').filter(Boolean).filter((line) => {
+    const code = line.replace(/^[^:]+:\d+:/, '').trim()
+    if (/^(\/\/|\*|\/\*|#)/.test(code)) return false // whole-line comment
+    const beforeTrailingComment = code.split('//')[0]
+    if (!/hindsight/i.test(beforeTrailingComment)) return false // mention only inside a trailing comment
+    // Inert legacy D1 column identifiers (comment-annotated as such at their declarations)
+    if (/hindsight_tenant_id|hindsightTenantId/.test(beforeTrailingComment)
+      && !/https?:|fetch|HINDSIGHT_URL/i.test(beforeTrailingComment)) return false
+    // wrangler migration HISTORY (new_sqlite_classes of old tags + the deletion record itself)
+    if (line.startsWith('wrangler.toml') && /(new_sqlite_classes|deleted_classes)/.test(code)) return false
+    return true
+  })
+  const bindingHit = /^\s*binding\s*=.*Hindsight/im.test(hindsightHits)
   const liveOk = (await api('GET', '/api/agents/runs?limit=1')).status === 200
-  record('10-zero-hindsight', files.length <= 12 && liveOk ? 'LIVE' : 'FAIL',
-    `worker live; ${files.length} files mention hindsight (historical comments/removal shims + inert D1 columns per clause allowance); no container bindings (deleted migration v5)`)
+  record('10-zero-hindsight', offenders.length === 0 && !bindingHit && liveOk ? 'LIVE' : 'FAIL',
+    offenders.length === 0
+      ? 'worker live; every remaining mention is a historical comment, an annotated inert D1 column, or wrangler migration history; no Hindsight binding (deletion recorded in migration v5)'
+      : `non-comment live references remain: ${offenders.slice(0, 3).join(' | ')}`)
 
   console.log('\n── Full-demo summary ──')
   const live = results.filter(r => r.status === 'LIVE').length

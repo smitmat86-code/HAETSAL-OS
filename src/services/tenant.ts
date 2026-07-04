@@ -1,6 +1,5 @@
 // src/services/tenant.ts
 // Tenant bootstrap, KEK provision/renewal, scheduled_tasks seed.
-// Bank identity is local metadata; the real Hindsight bank is created lazily through the v1 API.
 
 import type { Env } from '../types/env'
 import type { TenantRow } from '../types/tenant'
@@ -11,9 +10,10 @@ const PLATFORM_DEFAULT_TASKS = [
   { task_name: 'weekly_synthesis', cron_expression: '0 8 * * 1', description: 'Weekly synthesis and reflection' },
 ]
 
-// The official Hindsight API does not require a separate tenant-registration call.
-// We generate a stable bank id locally and let the first bank-scoped API call materialize it.
-function createHindsightBankId(): string {
+// REMOVAL SHIM (Hindsight engine retired mission Phase 3): the D1 tenants
+// table keeps a legacy NOT NULL hindsight_tenant_id column; nothing reads it.
+// We fill it with a random placeholder to avoid a D1 table rebuild.
+function legacyEngineColumnPlaceholder(): string {
   return crypto.randomUUID()
 }
 
@@ -29,8 +29,8 @@ export async function getOrCreateTenant(
 
   if (existing) return { tenant: existing, isNew: false }
 
-  // First auth — register with Hindsight and create tenant row atomically
-  const hindsightTenantId = createHindsightBankId()
+  // First auth — create the tenant row atomically
+  const legacyColumnFill = legacyEngineColumnPlaceholder()
 
   const now = Date.now()
   const taskRows = PLATFORM_DEFAULT_TASKS.map(t => ({
@@ -51,7 +51,7 @@ export async function getOrCreateTenant(
     db.prepare(
       `INSERT INTO tenants (id, created_at, updated_at, hindsight_tenant_id, ai_cost_reset_at)
        VALUES (?, ?, ?, ?, ?)`,
-    ).bind(tenantId, now, now, hindsightTenantId, now),
+    ).bind(tenantId, now, now, legacyColumnFill, now),
     ...taskRows.map(t =>
       db.prepare(
         `INSERT INTO scheduled_tasks

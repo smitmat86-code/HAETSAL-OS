@@ -13,6 +13,8 @@ import { getCanonicalGovernanceStore } from '../canonical-governance-postgres'
 import { listCompiledPages } from '../compiled/page'
 import { fetchAndValidateKek } from '../../cron/kek'
 
+// note carries synthetic probe-status strings / error class names ONLY (never
+// tenant content) — kept out of the persisted detail_json regardless.
 export interface CanaryResult { probe: string; ok: boolean; ms: number; note: string }
 
 const CANARY_DDL = `CREATE TABLE IF NOT EXISTS canary_runs (

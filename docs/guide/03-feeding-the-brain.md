@@ -54,6 +54,32 @@ events are ingested with privacy reduction — attendee *counts*, never
 names/emails. Until then, any Gmail-touching request stops honestly with
 `GmailNotConnectedError`.
 
+## Bulk imports: bringing your history in
+
+OB1's `/recipes` catalog (ChatGPT exports, Perplexity, X/Twitter,
+Instagram, Google Takeout, Grok, Blogger, Gmail archives) is the right
+*shopping list*, and the intended HAETSAL pattern for all of them is the
+same: **a one-shot import script per source that parses the export file
+and feeds each item through the same governed front door** —
+`capture_memory` (or `retainContent()` directly) with real timestamps,
+`trusted_import` provenance, and the built-in dedup hash so re-running an
+import converges instead of duplicating. No new engine is needed: parsing
+is the only per-source work; deduplication, embedding, governance, decay,
+and retrieval already exist. Practical notes:
+
+- **Order of value**: ChatGPT/Claude conversation exports and Google
+  Takeout (Gmail archive) are the densest personal-context sources —
+  worth doing first. Social exports (X, Instagram) are thinner.
+- **Volume is fine**: imports enter as low-prominence classes and the
+  decay/reinforcement model surfaces what you actually use
+  ([chapter 6](06-memory-model.md)).
+- **Live Gmail vs archive import are different inlets**: the webhook
+  ingestion (below) covers new mail once OAuth lands; a Takeout import
+  covers the past. Same pipeline, different adapters.
+
+None of these import scripts exist yet — each is roughly an afternoon of
+adapter work in `scripts/`.
+
 ## What should you feed it?
 
 The system is calibrated for **decisions, facts, preferences, and

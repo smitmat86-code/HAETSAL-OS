@@ -134,7 +134,7 @@ Next migration number: **1027**.
 | Cron KEK TTL / renewal window | 24 h / < 2 h remaining | `services/tenant.ts` |
 | Decay half-life / archive / reinforce | 30 d / < 0.15 & > 21 d / ≥ 0.9 or ≥ 2 hits | `services/decay/pass.ts` |
 | Decay scoring window | 200 most recent docs per pass | same (follow-up noted) |
-| Model retry backoff | 800 ms, 3200 ms | `execution/tool-loop.ts` |
+| Model retry backoff (agents + chat) | 800 ms, 3200 ms | `execution/tool-loop.ts`, `services/workers-ai-chat.ts` |
 | Irreversible-send delay (undo window) | 120 s | `src/types/action.ts` |
 | Deploy propagation wait | ~12 s | smoke scripts |
 | Source-file line limit (postflight) | 150 | `scripts/postflight-check.ts` |

@@ -25,6 +25,8 @@ works while you sleep. This guide serves two readers at once:
 | 7 | [Security](07-security.md) | The Three Laws enforced — keys, encryption, action authorization |
 | 8 | [Operations](08-operations.md) | Deploys, rollback, tests, canaries, troubleshooting |
 | 9 | [Reference](09-reference.md) | Tables of everything: tools, endpoints, crons, stores, migrations |
+| 10 | [Connecting your tools](10-connecting-clients.md) | Step-by-step: claude.ai, Claude Code, Codex, anything MCP — and the identity rule |
+| 11 | [Working with Claude Code](11-working-with-claude-code.md) | What is (and is not) collected while you code |
 
 ## Sixty-second quick start
 

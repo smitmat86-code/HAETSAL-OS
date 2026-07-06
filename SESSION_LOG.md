@@ -3,7 +3,17 @@
 > Append-only. AI reads the last 3 entries at session start.
 > AI appends a new entry at session end.
 
------
+------
+
+## 14.3 Queue-side chat processing - 2026-07-06
+
+**Motivation:** 14.2 killed the Telegram redelivery storm but the chat pipeline still ran in the ambient Worker invocation - not crash-durable (eviction between ack and reply loses the reply) and no single trace per message.
+**Design:** one inbound message -> two durable queue jobs BOTH enqueued before ack: sms_inbound (canonical capture, needs TMK, unchanged) + chat_inbound NEW (reply pipeline, needs no key material - routes above the TMK block). Idempotence via KV marker tg_replied:<tenant>:<updateId> checked before pipeline, set only after successful send (24h TTL). Fail-before-send -> throw -> bounded retry (queue max_retries=3 -> brain-dead-letter). Post-send never throws. Photo path keeps waitUntil (one-shot fetches, not request-bound).
+**Verification:** mission-14.3 (4 contracts: reply-once+marker, redelivery no-double-reply, safe-retry, malformed), mission-4.1 updated (webhook enqueues 2 msgs no inline reply; processChatInbound sends for the queued job; photo test waits for detached leg). Suite 497 passed / 81 files. Postflight green.
+**Verifier:** PASS-WITH-NOTES 0 blockers APPROVE - all 8 ACs verified in code (webhook ack has no model call, idempotence ordering sound, Law 2 posture clean - queue-transit plaintext per ADR #3, Law 3 posture clean - read-side tools only, routing above TMK block confirmed, retry bounded to DLQ, test 3 catches marker-before-send regressions).
+**Follow-ups:** apply same shape to Sendblue when next touched; add no-credential webhook reachability canary (blind spot from the incident write-up); consider a helper if a third channel joins.
+
+--
 
 ## Hotfix 14.1/14.2 - Telegram inbound incident (55-min replies) - 2026-07-06
 

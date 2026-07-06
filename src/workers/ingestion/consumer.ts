@@ -10,6 +10,7 @@ import { getMcpAgentObjectId } from '../mcpagent/do/identity'
 import { fetchAndValidateKek } from '../../cron/kek'
 import { processCanonicalProjectionDispatch } from './canonical-projection-consumer'
 import { processQueuedRetainArtifact } from './retain-consumer'
+import { processChatInbound } from './chat-consumer'
 import {
   handleSendblueMedia,
   handleTelegramMedia,
@@ -56,6 +57,18 @@ async function processIngestionMessage(
   if (type === 'canonical_projection_dispatch') {
     await processCanonicalProjectionDispatch(tenantId, payload, env, ctx)
     msg.ack()
+    return
+  }
+
+  // 14.3: chat reply job — no TMK; bounded retry (max_retries→DLQ) so a
+  // transient gateway storm delays the reply instead of eating it.
+  if (type === 'chat_inbound') {
+    try { await processChatInbound(tenantId, payload, env, ctx); msg.ack() }
+    catch (error) {
+      console.warn('CHAT_INBOUND_RETRY', { tenantId, messageId: msg.id,
+        error: error instanceof Error ? error.message : String(error) })
+      msg.retry({ delaySeconds: 15 })
+    }
     return
   }
 

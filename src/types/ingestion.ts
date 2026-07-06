@@ -54,6 +54,7 @@ export interface RetainResult {
 export type IngestionQueueMessageType =
   | 'canonical_projection_dispatch'
   | 'retain_artifact'
+  | 'chat_inbound'
   | 'sms_inbound'
   | 'sendblue_media'
   | 'telegram_media'
@@ -63,6 +64,18 @@ export type IngestionQueueMessageType =
   | 'bootstrap_gmail_thread'
   | 'bootstrap_calendar_event'
   | 'bootstrap_drive_file'
+
+/** 14.3 queue-side chat: one durable reply job per inbound message. Carries
+ *  plaintext text in queue transit only — same accepted pattern as
+ *  sms_inbound (ops runbook ADR #3). */
+export interface ChatInboundPayload {
+  channel: 'telegram'
+  chatId: number
+  text: string
+  occurredAt: number
+  /** Telegram update_id — idempotence marker so a retry never double-replies. */
+  updateId?: number
+}
 
 export interface QueuedRetainPayload {
   requestId: string

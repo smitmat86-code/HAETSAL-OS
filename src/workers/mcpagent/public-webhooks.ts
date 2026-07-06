@@ -58,30 +58,27 @@ export function registerPublicWebhooks(
       return c.json({ status: 'error' }, 200)
     }
   })
-  // 14.2: ACK Telegram immediately and process detached. Inline processing
-  // (2-3 model calls + retries) blew past Telegram's ~60s read timeout under
-  // gateway degradation → the edge canceled the invocation mid-reply and
-  // Telegram re-delivered for up to an hour (observed live 2026-07-06,
-  // "Read timeout expired"). waitUntil keeps the pipeline alive after the
-  // 200; without a runtime ctx (tests) processing stays inline as before.
+  // 14.3 queue-side chat: processTelegramInbound is enqueue-only for text
+  // (two durable jobs, awaited so they exist before Telegram gets its 200)
+  // and detaches the photo pipeline internally — so awaiting here is
+  // milliseconds and the 14.2 timeout class (inline model calls blowing
+  // Telegram's ~60s read window → cancel + redelivery storm) cannot recur.
   app.post('/telegram/webhook', async (c) => {
     const secret = c.req.header('X-Telegram-Bot-Api-Secret-Token')
     if (secret !== c.env.TELEGRAM_WEBHOOK_SECRET) return c.json({}, 403)
     let update: TelegramUpdate
     try { update = await c.req.json<TelegramUpdate>() } catch { return c.json({ ok: true }) }
-    let realCtx: ExecutionContext | null
-    try { realCtx = c.executionCtx } catch { realCtx = null }
-    const inlineCtx: Pick<ExecutionContext, 'waitUntil'> =
-      realCtx ?? { waitUntil: (p: Promise<unknown>) => { void p.catch(() => {}) } }
-    const work = processTelegramInbound(update, c.env, inlineCtx)
-      .then(() => undefined)
-      .catch((err: unknown) => {
-        console.error('TELEGRAM_WEBHOOK_FAILED', {
-          error: err instanceof Error ? err.message : String(err),
-        })
+    let ctx: Pick<ExecutionContext, 'waitUntil'>
+    try { ctx = c.executionCtx } catch {
+      ctx = { waitUntil: (p: Promise<unknown>) => { void p.catch(() => {}) } }
+    }
+    try {
+      await processTelegramInbound(update, c.env, ctx)
+    } catch (err) {
+      console.error('TELEGRAM_WEBHOOK_FAILED', {
+        error: err instanceof Error ? err.message : String(err),
       })
-    if (realCtx) realCtx.waitUntil(work)
-    else await work
+    }
     return c.json({ ok: true })
   })
 }

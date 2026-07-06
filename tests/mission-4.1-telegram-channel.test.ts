@@ -8,6 +8,7 @@ import { env } from 'cloudflare:test'
 import { Hono } from 'hono'
 import { registerPublicWebhooks } from '../src/workers/mcpagent/public-webhooks'
 import { handleTelegramMedia } from '../src/workers/ingestion/handlers'
+import { processChatInbound } from '../src/workers/ingestion/chat-consumer'
 import { getCanonicalMemoryStore, installCanonicalMemoryTestStore } from '../src/services/canonical-postgres'
 import type { Env } from '../src/types/env'
 
@@ -130,17 +131,31 @@ describe('mission 4.1 — telegram webhook auth', () => {
   })
 })
 
-describe('mission 4.1 — telegram inbound text flow', () => {
-  it('queues canonical capture and sends a grounded reply', async () => {
+describe('mission 4.1 — telegram inbound text flow (queue-side since 14.3)', () => {
+  it('webhook enqueues capture + chat jobs durably, without replying inline', async () => {
     const sent: SentRequest[] = []; const queue: unknown[] = []
     stubFetch(sent)
     const res = await makeApp(makeTgEnv(sent, queue)).post('/telegram/webhook', update({ text: 'what about Atlas?' }))
     expect(res.status).toBe(200)
-    const msg = queue[0] as { type: string; tenantId: string; payload: Record<string, unknown> }
-    expect(msg.type).toBe('sms_inbound')
-    expect(msg.tenantId).toBe(TENANT_ID)
-    expect(msg.payload.channel).toBe('telegram')
-    expect(msg.payload.from).toBe(String(CHAT_ID))
+    const msgs = queue as Array<{ type: string; tenantId: string; payload: Record<string, unknown> }>
+    expect(msgs).toHaveLength(2)
+    const capture = msgs.find((m) => m.type === 'sms_inbound')!
+    expect(capture.tenantId).toBe(TENANT_ID)
+    expect(capture.payload.channel).toBe('telegram')
+    expect(capture.payload.from).toBe(String(CHAT_ID))
+    const chat = msgs.find((m) => m.type === 'chat_inbound')!
+    expect(chat.payload.chatId).toBe(CHAT_ID)
+    expect(chat.payload.text).toBe('what about Atlas?')
+    expect(sent.filter((r) => r.url.includes('sendMessage'))).toHaveLength(0)
+  })
+
+  it('the chat consumer sends the grounded reply for the queued job', async () => {
+    const sent: SentRequest[] = []; const queue: unknown[] = []
+    stubFetch(sent)
+    const testEnv = makeTgEnv(sent, queue)
+    await processChatInbound(TENANT_ID, {
+      channel: 'telegram', chatId: CHAT_ID, text: 'what about Atlas?', occurredAt: Date.now(),
+    }, testEnv, { waitUntil: () => {}, passThroughOnException: () => {} } as unknown as ExecutionContext)
     const reply = sent.find((r) => r.url.includes('sendMessage'))
     expect(reply).toBeTruthy()
     const body = JSON.parse(String(reply!.init?.body)) as Record<string, unknown>
@@ -158,6 +173,8 @@ describe('mission 4.1 — telegram photo flow', () => {
       caption: 'planning session',
     }))
     expect(res.status).toBe(200)
+    // 14.3: the photo pipeline detaches from the ack — wait for it to land.
+    await vi.waitFor(() => expect(queue.length).toBe(1), { timeout: 5000 })
     const msg = queue[0] as { type: string; payload: Record<string, unknown> }
     expect(msg.type).toBe('telegram_media')
     expect(String(msg.payload.description)).toContain('whiteboard')

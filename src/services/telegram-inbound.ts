@@ -1,16 +1,14 @@
-// Telegram inbound processing (mission Phase 4.1).
-// Same shape as sendblue-inbound.ts: text -> grounded reply + queued canonical
-// capture; photo -> R2 raw artifact + vision description + queued capture with
-// artifactRef. Tenant routing is chat.id -> tenant via telegram_chats D1 table
-// (mirror of tenant_phone_numbers). Delivery is direct chat_id, not KV lookup.
+// Telegram inbound processing (mission Phase 4.1; queue-side since 14.3).
+// Text -> TWO durable jobs enqueued before the webhook acks: sms_inbound
+// (canonical capture, unchanged) + chat_inbound (the reply pipeline runs in
+// the queue consumer — src/workers/ingestion/chat-consumer.ts). Photo -> the
+// heavy leg (file fetch, R2, vision) detaches via waitUntil so the ack stays
+// fast. Tenant routing is chat.id -> tenant via telegram_chats D1 table.
 
 import type { Env } from '../types/env'
-import type { IngestionQueueMessage } from '../types/ingestion'
+import type { ChatInboundPayload, IngestionQueueMessage } from '../types/ingestion'
 import { sendTelegramReply } from './delivery/telegram'
-import { buildGroundedReply, describeInboundPhoto } from './messaging-helpers'
-import { maybeDelegateExecutionTask } from './agents/delegation'
-import { maybeHandleAutomationChat } from './agents/automation-chat'
-import { fetchSessionBlock, recordSessionExchange } from './session/client'
+import { describeInboundPhoto } from './messaging-helpers'
 
 export interface TelegramPhotoSize { file_id: string; width?: number; height?: number; file_size?: number }
 export interface TelegramMessage {
@@ -21,7 +19,7 @@ export interface TelegramMessage {
   photo?: TelegramPhotoSize[]
   from?: { id?: number; is_bot?: boolean }
 }
-export interface TelegramUpdate { message?: TelegramMessage }
+export interface TelegramUpdate { update_id?: number; message?: TelegramMessage }
 
 let schemaEnsured = false
 export async function ensureTelegramSchema(env: Env): Promise<void> {
@@ -88,47 +86,52 @@ export async function processTelegramInbound(
   const occurredAt = typeof msg.date === 'number' ? msg.date * 1000 : Date.now()
 
   if (Array.isArray(msg.photo) && msg.photo.length > 0) {
-    const largest = msg.photo.reduce((a, b) => ((a.file_size ?? 0) > (b.file_size ?? 0) ? a : b))
-    const file = await fetchTelegramFile(largest.file_id, env)
-    if (!file) return { handled: false, kind: 'ignored' }
-    const storageKey = `telegram-media/${tenantId}/${occurredAt}-${crypto.randomUUID()}`
-    await env.R2_ARTIFACTS.put(storageKey, file.bytes, { httpMetadata: { contentType: file.mediaType } })
-    const description = await describeInboundPhoto(env, file.bytes, file.mediaType)
-
-    const message: IngestionQueueMessage = {
-      type: 'telegram_media', tenantId,
-      payload: {
-        chatId, description, caption: msg.caption ?? null, storageKey,
-        mediaType: file.mediaType, byteLength: file.bytes.byteLength, occurredAt,
-      },
-      enqueuedAt: Date.now(),
-    }
-    ctx.waitUntil(env.QUEUE_HIGH.send(message))
-    ctx.waitUntil(sendTelegramReply(chatId, `Captured that photo: ${description}`, env).then(() => undefined))
+    const photos = msg.photo
+    const caption = msg.caption ?? null
+    ctx.waitUntil((async () => {
+      const largest = photos.reduce((a, b) => ((a.file_size ?? 0) > (b.file_size ?? 0) ? a : b))
+      const file = await fetchTelegramFile(largest.file_id, env)
+      if (!file) return
+      const storageKey = `telegram-media/${tenantId}/${occurredAt}-${crypto.randomUUID()}`
+      await env.R2_ARTIFACTS.put(storageKey, file.bytes, { httpMetadata: { contentType: file.mediaType } })
+      const description = await describeInboundPhoto(env, file.bytes, file.mediaType)
+      const message: IngestionQueueMessage = {
+        type: 'telegram_media', tenantId,
+        payload: {
+          chatId, description, caption, storageKey,
+          mediaType: file.mediaType, byteLength: file.bytes.byteLength, occurredAt,
+        },
+        enqueuedAt: Date.now(),
+      }
+      await env.QUEUE_HIGH.send(message)
+      await sendTelegramReply(chatId, `Captured that photo: ${description}`, env)
+    })().catch((error: unknown) => {
+      console.error('TELEGRAM_PHOTO_PIPELINE_FAILED', {
+        error: error instanceof Error ? error.message : String(error),
+      })
+    }))
     return { handled: true, kind: 'media' }
   }
 
   const text = msg.text?.trim()
   if (!text || text.startsWith('/')) return { handled: false, kind: 'command' }
 
-  const message: IngestionQueueMessage = {
+  // 14.3: enqueue-only — capture job + reply job are BOTH durable before the
+  // webhook acks Telegram; the pipeline runs in the chat consumer.
+  const capture: IngestionQueueMessage = {
     type: 'sms_inbound', tenantId,
     payload: { from: String(chatId), text, occurredAt, channel: 'telegram' },
     enqueuedAt: Date.now(),
   }
-  ctx.waitUntil(env.QUEUE_HIGH.send(message))
-
-  // Phase 7: automation intent/commands first; Phase 6: multi-step asks spawn
-  // a scoped execution agent; everything else gets the grounded reply with
-  // the Phase 9 working-session window as conversation context.
-  const route = { channel: 'telegram' as const, replyTo: String(chatId) }
-  const sessionKey = `telegram:${chatId}`
-  const reply = await maybeHandleAutomationChat(env, tenantId, text, route)
-    ?? await maybeDelegateExecutionTask(env, tenantId, text, route)
-    ?? await buildGroundedReply(env, tenantId, text, 'Telegram',
-      await fetchSessionBlock(env, tenantId, sessionKey))
-  recordSessionExchange(env, tenantId, sessionKey, text, reply, ctx)
-  const sent = await sendTelegramReply(chatId, reply, env)
-  if (!sent) console.warn('TELEGRAM_REPLY_NOT_DELIVERED', { suffix: String(chatId).slice(-4) })
+  const chatPayload: ChatInboundPayload = {
+    channel: 'telegram', chatId, text, occurredAt,
+    ...(typeof update.update_id === 'number' ? { updateId: update.update_id } : {}),
+  }
+  const chat: IngestionQueueMessage = {
+    type: 'chat_inbound', tenantId,
+    payload: chatPayload as unknown as Record<string, unknown>,
+    enqueuedAt: Date.now(),
+  }
+  await Promise.all([env.QUEUE_HIGH.send(capture), env.QUEUE_HIGH.send(chat)])
   return { handled: true, kind: 'text' }
 }

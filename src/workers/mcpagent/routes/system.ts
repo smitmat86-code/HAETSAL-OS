@@ -12,10 +12,12 @@ import {
   resetPromptOverride, rollbackPromptOverride, savePromptOverride,
 } from '../../../services/prompts/overrides'
 import { listPromptVersions } from '../../../services/prompts/override-history'
+import { systemTelegram } from './system-telegram'
 
 type Variables = { tenantId: string; jwtSub: string; traceId: string }
 
 export const system = new Hono<{ Bindings: Env; Variables: Variables }>()
+system.route('/telegram', systemTelegram) // Phase 14.1 webhook ops
 
 const fail = (error: unknown): { message: string; status: 400 | 404 | 409 | 500 } => {
   const message = error instanceof Error ? error.message : String(error)

@@ -16,7 +16,8 @@
 - /api/system routes (overview, prompt save/versions/rollback/reset, task toggle) mounted via dashboard-data (/api/system/*); index.ts untouched (at the 150 cap).
 - Dashboard 9th panel "System": prompt viewer/editor with version history + line diff + restore, task toggles, capability-class preference selects (existing /api/settings/preferences), read-only registry (models/profiles/act tools/clock). textContent-only discipline maintained.
 **Law 3:** only the CF-Access user reaches the write routes; MCP surface has no prompt tool (contract-tested). **Law 2:** ciphertext rows, no plaintext in audit (contract-tested).
-**Verification:** tests/mission-14.0 (7 contracts) green. Gate: recorded below after checkout + verifier + deploy + smoke.
+**Verification:** tests/mission-14.0 (7 contracts) green.
+**Gate:** GREEN. checkout 489 passed / 79 files (two first-run failures = missing resolveSystemPrompt imports, caught by mission-4.x channel contracts, fixed); fresh-context verifier PASS-WITH-NOTES 0 blockers APPROVE (defaults string-identical to removed literals); deploy 38e8023c-b29c-4d96-bf9f-67b859941487 tagged phase-14-complete; live smoke 11/11.
 
 ---
 

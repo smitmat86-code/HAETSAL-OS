@@ -27,7 +27,8 @@ Date: 2026-07-05. Worker: `the-brain` (haetsalos.specialdarksystems.com).
 
 - Rollback tag: `deploy-phase-14-prev` (Phase 13 closeout HEAD, version
   `716cb21f` + chat-retry `7f1ea4a0`).
-- Phase 14 deploy version: PENDING (filled post-deploy).
+- Phase 14 deploy version: `38e8023c-b29c-4d96-bf9f-67b859941487`
+  (commit tagged `phase-14-complete`).
 - D1 migration 1027: table also runtime-ensured (`CREATE IF NOT EXISTS`,
   same pattern as canary/decay), so prod correctness does not depend on a
   separate `d1 migrations apply` step.
@@ -50,7 +51,9 @@ Date: 2026-07-05. Worker: `the-brain` (haetsalos.specialdarksystems.com).
   ingest-route resolve is a Telnyx-gated fail-open read (by design);
   weekly_synthesis toggle awaits a real handler; el() href branch flagged
   for future panel authors.
-- Live smoke `scripts/mission-phase14-live-smoke.ts`: PENDING.
+- Live smoke `scripts/mission-phase14-live-smoke.ts`: **11/11** —
+  overview catalog, save v1→v2, override live, history, rollback to v1,
+  reset to default, task toggle round-trip, read-only rejection.
 
 ## Rollback
 

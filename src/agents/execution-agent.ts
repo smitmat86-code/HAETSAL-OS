@@ -14,6 +14,7 @@ import type { Env } from '../types/env'
 import { deriveTmk } from '../middleware/auth'
 import { encryptWithKek } from '../cron/kek'
 import { runExecutionToolLoop } from './execution/tool-loop'
+import { resolveSystemPrompt } from '../services/prompts/overrides'
 import { persistExecutionTrace } from './execution/trace'
 import type { ExecutionProgress, ExecutionRunOutput, ExecutionTaskInput } from './execution/types'
 import {
@@ -60,10 +61,13 @@ export class ExecutionAgent extends Agent<Env> {
     const startedAt = Date.now()
     try {
       const tmk = await deriveTmk(input.jwtSub, this.env.CF_ACCESS_AUD)
+      // Phase 14: user-editable preamble (resolve never throws; defaults on fallback)
+      const preamble = await resolveSystemPrompt(this.env, input.tenantId, 'agent.execution_preamble')
       const result = await runExecutionToolLoop({
         env: this.env,
         tenantId: input.tenantId,
         tmk,
+        preamble: preamble.text,
         agentIdentity: `execution_agent/${input.profile}`,
         task: input.task,
         contextNote: input.contextNote,

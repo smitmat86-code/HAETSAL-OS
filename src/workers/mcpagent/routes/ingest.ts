@@ -3,6 +3,7 @@ import type { Env } from '../../../types/env'
 import type { IngestionQueueMessage } from '../../../types/ingestion'
 import { verifyTelnyxSignature } from '../../../services/telnyx'
 import { runGatewayChat } from '../../../services/workers-ai-chat'
+import { resolveSystemPrompt } from '../../../services/prompts/overrides'
 
 type Variables = { tenantId: string; jwtSub: string; traceId: string }
 const ingest = new Hono<{ Bindings: Env; Variables: Variables }>()
@@ -52,11 +53,12 @@ ingest.post('/sms', async (c) => {
   }
 
   try {
+    // Phase 14: shared, user-editable persona (same key the Telegram path uses).
+    const persona = await resolveSystemPrompt(c.env, tenant.tenant_id, 'persona.chat', {
+      channel: 'text message',
+    })
     const aiMessages = [
-      {
-        role: 'system' as const,
-        content: 'You are Haetsal (해살), a warm and capable personal AI assistant. You communicate via text message. Keep responses concise and conversational — this is a chat, not email. Be helpful, natural, and brief. If asked to do something you can\'t do yet, be honest about it.',
-      },
+      { role: 'system' as const, content: persona.text },
       { role: 'user' as const, content: text },
     ]
     const aiResponse = await runGatewayChat(c.env, aiMessages)

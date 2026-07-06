@@ -12,6 +12,13 @@ export interface WritePolicyResult {
   method: 'explicit_type' | 'heuristic' | 'classifier' | 'heuristic_pass'
 }
 
+// Exported for the System panel registry (read-only display — the two-word
+// output contract is load-bearing for the parser below).
+export const WRITE_POLICY_CLASSIFIER_PROMPT =
+  'You are a memory type classifier. Respond with ONLY "procedural" or "episodic". Procedural '
+  + 'memories describe behavioral patterns, habits, or personality traits. Episodic memories '
+  + 'describe specific events, facts, or observations.'
+
 // Sweeping language patterns that signal procedural memory
 // LESSON: "always", "never", "tends to", "avoids", "prefers when", "is the type of person"
 const PROCEDURAL_PATTERNS = [
@@ -46,10 +53,7 @@ export async function runWritePolicyValidator(
   // Stage 2: Workers AI classifier (only if heuristic flags)
   try {
     const text = await runGatewayChat(env, [
-      {
-        role: 'system',
-        content: 'You are a memory type classifier. Respond with ONLY "procedural" or "episodic". Procedural memories describe behavioral patterns, habits, or personality traits. Episodic memories describe specific events, facts, or observations.',
-      },
+      { role: 'system', content: WRITE_POLICY_CLASSIFIER_PROMPT },
       {
         role: 'user',
         content: `Classify this memory: "${content.slice(0, 500)}"`,

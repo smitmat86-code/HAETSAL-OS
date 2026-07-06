@@ -90,6 +90,20 @@
     <div id="traceout"></div>
     <pre id="tracedetail" style="display:none"></pre>
   </section>
+
+  <section id="system">
+    <h2>System — agents, prompts, configuration</h2>
+    <p class="muted">Every prompt save creates a new version; history is kept, and you can roll back or reset to the code default any time. Overrides are sealed at rest and only you can edit them — agents have no tool that reaches this surface.</p>
+    <h3>Prompts &amp; agents</h3>
+    <div id="sysprompts" class="muted">Loading…</div>
+    <h3>Scheduled jobs</h3>
+    <div id="systasks" class="cards"></div>
+    <h3>Action authorization</h3>
+    <p class="muted">Per-capability approval levels. Class floors clamp upward — you can make the brain ask more, never less.</p>
+    <div id="sysprefs"></div>
+    <h3>Registry (read-only)</h3>
+    <div id="sysreg"></div>
+  </section>
 </main>
 <script>
 'use strict';
@@ -97,7 +111,7 @@
 // innerHTML interpolation. Actions use data-* attributes + one delegated
 // listener; URLs are encodeURIComponent-composed.
 
-const PANELS=[["memory","Memory"],["agents","Live agents"],["timeline","Timeline"],["dream","Consolidation"],["automations","Automations"],["connections","Connections"],["usage","Usage"],["traces","Traces"]];
+const PANELS=[["memory","Memory"],["agents","Live agents"],["timeline","Timeline"],["dream","Consolidation"],["automations","Automations"],["connections","Connections"],["usage","Usage"],["traces","Traces"],["system","System"]];
 const $=id=>document.getElementById(id);
 
 function el(tag,attrs,children){
@@ -142,7 +156,13 @@ document.addEventListener('click',async e=>{
     else if(action==='delete-auto')await fetch(apiPath('automations',id),{method:'DELETE'});
     else if(action==='open-trace')return openTrace(id);
     else if(action==='search-memory')return searchMemory();
-  }catch(err){console.warn(err)}
+    else if(action==='edit-prompt')return openPromptEditor(id);
+    else if(action==='show-versions')return showVersions(id);
+    else if(action==='save-prompt'){const ta=promptEditors[id];if(ta)await jp(apiPath('system','prompts',id),{body:ta.value})}
+    else if(action==='reset-prompt')await fetch(apiPath('system','prompts',id),{method:'DELETE'});
+    else if(action==='rollback-prompt')await jp(apiPath('system','prompts',id,'rollback'),{version:Number(target.getAttribute('data-version'))});
+    else if(action==='toggle-task')await jp(apiPath('system','tasks',id),{enabled:target.getAttribute('data-enabled')==='true'});
+  }catch(err){console.warn(err);$('tick').textContent='· '+err.message}
   const active=document.querySelector('section.active');if(active)refresh(active.id);
 });
 $('membtn').setAttribute('data-action','search-memory');
@@ -306,7 +326,108 @@ async function openTrace(id){
   try{pre.textContent=JSON.stringify(await j(apiPath('traces',id)),null,2)}catch(e){pre.textContent=e.message}
 }
 
-const LOADERS={memory:loadMemory,agents:loadAgents,timeline:loadAgents,dream:loadDream,automations:loadAutomations,connections:loadConnections,usage:loadUsage,traces:loadTraces};
+// ── System panel (Phase 14) ────────────────────────────────────────────────
+let sysOverview=null;const promptEditors={};
+async function jp(path,body,method){
+  const r=await fetch(path,{method:method||'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body||{})});
+  if(!r.ok){let msg=path+': '+r.status;try{const d=await r.json();if(d&&d.error)msg=d.error}catch(_){/* keep */}throw new Error(msg)}
+  return r.json();
+}
+function promptCard(p){
+  const status=p.source==='override'
+    ?el('span',{class:'warn',text:'override v'+(p.active?p.active.version:'?')+(p.active?' · '+when(p.active.updatedAt):'')},[])
+    :el('span',{class:'muted',text:'code default'},[]);
+  const buttons=p.editable?el('div',{},[
+    el('button',{class:'act','data-action':'edit-prompt','data-id':p.key,text:'Edit'},[]),' ',
+    el('button',{class:'act','data-action':'show-versions','data-id':p.key,text:'History'},[]),' ',
+    p.source==='override'?el('button',{class:'act','data-action':'reset-prompt','data-id':p.key,text:'Reset to default'},[]):null,
+  ]):el('div',{class:'muted',text:p.dormant?'dormant — read-only':'read-only (load-bearing contract)'},[]);
+  return el('div',{class:'card'},[
+    el('b',{text:p.title},[]),' ',status,
+    el('div',{class:'muted',text:p.usedBy+(p.vars.length?' · placeholders: '+p.vars.map(v=>'{'+v+'}').join(' '):'')},[]),
+    el('pre',{text:p.text},[]),
+    buttons,
+    el('div',{'data-syshost':p.key},[]),
+  ]);
+}
+function sysHost(key){return document.querySelector('[data-syshost="'+key+'"]')}
+function openPromptEditor(key){
+  const p=(sysOverview.prompts||[]).find(x=>x.key===key);const host=sysHost(key);if(!p||!host)return;
+  host.textContent='';
+  const ta=document.createElement('textarea');ta.value=p.text;
+  ta.style.cssText='width:100%;min-height:9rem;background:var(--panel);color:var(--text);border:1px solid var(--line);border-radius:6px;padding:.5rem;font:inherit;font-size:.85rem';
+  promptEditors[key]=ta;
+  host.appendChild(ta);
+  host.appendChild(el('div',{},[
+    el('button',{class:'act','data-action':'save-prompt','data-id':key,text:'Save as new version'},[]),' ',
+    el('span',{class:'muted',text:'saving creates v'+(p.active?p.active.version+1:1)+'; the old version stays in history'},[]),
+  ]));
+}
+function lineDiff(oldText,newText){
+  const a=(oldText||'').split('\n'),b=(newText||'').split('\n');
+  const inA=new Set(a),inB=new Set(b),out=[];
+  for(const line of a)if(!inB.has(line))out.push(el('div',{class:'bad',text:'− '+line},[]));
+  for(const line of b)out.push(inA.has(line)?el('div',{class:'muted',text:'  '+line},[]):el('div',{class:'ok',text:'+ '+line},[]));
+  return out;
+}
+async function showVersions(key){
+  const host=sysHost(key);if(!host)return;host.textContent='loading history…';
+  try{
+    const versions=await j(apiPath('system','prompts',key,'versions'));
+    const current=(sysOverview.prompts||[]).find(x=>x.key===key);
+    host.textContent='';
+    if(!versions.length){host.appendChild(el('p',{class:'muted',text:'no saved versions — running on the code default'},[]));return}
+    for(const v of versions){
+      host.appendChild(el('div',{class:'card'},[
+        el('b',{text:'v'+v.version_no},[]),' ',
+        el('span',{class:v.status==='active'?'ok':'muted',text:v.status+' · '+when(v.created_at)},[]),' ',
+        v.status!=='active'?el('button',{class:'act','data-action':'rollback-prompt','data-id':key,'data-version':String(v.version_no),text:'Restore'},[]):null,
+        el('div',{class:'muted',text:'diff vs current:'},[]),
+        el('pre',{},lineDiff(current?current.text:'',v.body)),
+      ]));
+    }
+  }catch(e){host.textContent='';host.appendChild(el('span',{class:'bad',text:e.message},[]))}
+}
+async function loadSystem(){
+  sysOverview=await j(apiPath('system','overview'));
+  replaceChildren('sysprompts',(sysOverview.prompts||[]).map(promptCard));
+  replaceChildren('systasks',(sysOverview.tasks||[]).map(t=>el('div',{class:'card'},[
+    el('b',{text:t.title},[]),el('div',{class:'muted',text:t.schedule},[]),
+    el('span',{class:t.enabled?'ok':'bad',text:t.enabled?'on':'off'},[]),' ',
+    el('button',{class:'act','data-action':'toggle-task','data-id':t.name,'data-enabled':String(!t.enabled),text:t.enabled?'Turn off':'Turn on'},[]),
+  ])));
+  const CLASSES=['READ','WRITE_INTERNAL','WRITE_EXTERNAL_REVERSIBLE','WRITE_EXTERNAL_IRREVERSIBLE'];
+  const LEVELS=['GREEN','YELLOW','RED'];
+  replaceChildren('sysprefs',[el('table',{},[
+    el('thead',{},[el('tr',{},[el('th',{text:'Capability class'},[]),el('th',{text:'Approval level'},[])])]),
+    el('tbody',{},CLASSES.map(cls=>{
+      const sel=document.createElement('select');sel.setAttribute('data-action','set-pref');sel.setAttribute('data-id',cls);
+      for(const lv of LEVELS){const o=document.createElement('option');o.value=lv;o.textContent=lv;sel.appendChild(o)}
+      const current=sysOverview.preferences&&sysOverview.preferences.preferences
+        &&sysOverview.preferences.preferences.find&&sysOverview.preferences.preferences.find(x=>x.capability_class===cls);
+      if(current&&current.authorization_level)sel.value=current.authorization_level;
+      return el('tr',{},[el('td',{text:cls},[]),el('td',{},[sel])]);
+    })),
+  ])]);
+  const reg=[];
+  reg.push(el('h3',{text:'Models'},[]),el('table',{},[el('tbody',{},Object.entries(sysOverview.models||{}).map(([role,id])=>el('tr',{},[el('td',{text:role},[]),el('td',{},[el('code',{text:id},[])])])))]));
+  reg.push(el('h3',{text:'Sub-agent tool profiles'},[]),el('table',{},[el('tbody',{},Object.entries(sysOverview.profiles||{}).map(([name,tools])=>el('tr',{},[el('td',{text:name},[]),el('td',{class:'muted',text:(tools||[]).join(', ')},[])])))]));
+  reg.push(el('h3',{text:'Action tools'},[]),el('table',{},[
+    el('thead',{},[el('tr',{},[el('th',{text:'Tool'},[]),el('th',{text:'Class'},[]),el('th',{text:'Gate'},[])])]),
+    el('tbody',{},(sysOverview.actTools||[]).map(t=>el('tr',{},[el('td',{},[el('code',{text:t.tool},[])]),el('td',{class:'muted',text:t.capabilityClass},[]),el('td',{class:'muted',text:t.gate},[])]))),
+  ]));
+  reg.push(el('h3',{text:'Clock'},[]),el('table',{},[el('tbody',{},(sysOverview.crons||[]).map(cr=>el('tr',{},[el('td',{text:cr.schedule},[]),el('td',{class:'muted',text:cr.job},[])])))]));
+  replaceChildren('sysreg',reg);
+}
+document.addEventListener('change',async e=>{
+  const target=e.target.closest('select[data-action="set-pref"]');if(!target)return;
+  try{
+    await jp('/api/settings/preferences',{capability_class:target.getAttribute('data-id'),authorization_level:target.value});
+    $('tick').textContent='· preference saved';
+  }catch(err){$('tick').textContent='· '+err.message;refresh('system')}
+});
+
+const LOADERS={memory:loadMemory,agents:loadAgents,timeline:loadAgents,dream:loadDream,automations:loadAutomations,connections:loadConnections,usage:loadUsage,traces:loadTraces,system:loadSystem};
 async function refresh(id){
   $('tick').textContent='· refreshing…';
   try{await LOADERS[id]()}catch(e){console.warn(e)}

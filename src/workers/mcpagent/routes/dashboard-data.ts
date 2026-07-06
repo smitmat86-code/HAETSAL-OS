@@ -10,12 +10,16 @@ import { deriveTmk } from '../../../middleware/auth'
 import { listRecentCanonicalMemories, searchCanonicalMemory } from '../../../services/canonical-memory-query'
 import { getCanonicalBrokerTrace, listRecentCanonicalBrokerTraces } from '../../../services/canonical-broker-trace-read'
 import type { MemoryQueryMode } from '../../../types/canonical-memory-query'
+import { system } from './system'
 
 type Variables = { tenantId: string; jwtSub: string; traceId: string }
 
 const MODES = new Set<MemoryQueryMode>(['raw', 'lexical', 'semantic', 'graph', 'temporal', 'compiled', 'composed'])
 
 export const dashboardData = new Hono<{ Bindings: Env; Variables: Variables }>()
+
+// Phase 14: System panel API (this app is mounted at /api → /api/system/*)
+dashboardData.route('/system', system)
 
 dashboardData.get('/memory/search', async (c) => {
   const tenantId = c.get('tenantId')

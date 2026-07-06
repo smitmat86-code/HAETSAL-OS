@@ -6,6 +6,7 @@
 // callbacks carry only the fixed content-free vocabulary (phase + counters).
 
 import { MODEL_DEEP } from '../../config/models'
+import { EXECUTION_PREAMBLE_DEFAULT } from '../../services/prompts/registry'
 import { checkDoomLoop } from '../helpers'
 import type { DoomLoopState } from '../types'
 import type { Env } from '../../types/env'
@@ -20,6 +21,8 @@ export interface ToolLoopConfig {
   tmk: CryptoKey
   agentIdentity: string
   task: string
+  /** Phase 14: user-editable framing line; the Rules block below stays code-owned. */
+  preamble?: string
   contextNote?: string
   allowedTools: ExecutionToolName[]
   maxTurns: number
@@ -131,7 +134,7 @@ function lastToolResult(messages: Array<Record<string, unknown>>): string {
 }
 
 function systemPrompt(cfg: ToolLoopConfig): string {
-  return `You are a focused execution agent for HAETSAL, the user's personal brain. Complete the task using the available tools, then give a final plain-text answer.
+  return `${cfg.preamble ?? EXECUTION_PREAMBLE_DEFAULT}
 
 Rules:
 - Use tools when they help; answer directly once you have enough.

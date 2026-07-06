@@ -6,6 +6,7 @@
 import type { Env } from '../types/env'
 import { searchCanonicalMemory } from './canonical-memory-query'
 import { runGatewayChat, runGatewayVision } from './workers-ai-chat'
+import { resolveSystemPrompt } from './prompts/overrides'
 import { createCanonicalPostgresSql } from './postgres-sql'
 
 /**
@@ -64,11 +65,11 @@ export async function buildGroundedReply(
   const sessionContext = sessionBlock
     ? `\n\nConversation so far (continue it naturally):\n${sessionBlock}`
     : ''
+  // Phase 14: base persona is user-editable; retrieved memories + session
+  // context stay code-appended so an override can't drop the grounding.
+  const persona = await resolveSystemPrompt(env, tenantId, 'persona.grounded_reply', { channel })
   const reply = await runGatewayChat(env, [
-    {
-      role: 'system',
-      content: `You are Haetsal, a warm and capable personal AI assistant reached over ${channel}. Keep replies concise and conversational. Ground answers in the provided memories when relevant; if a needed source (like Gmail or calendar) is not connected yet, say so honestly.` + contextBlock + sessionContext,
-    },
+    { role: 'system', content: persona.text + contextBlock + sessionContext },
     { role: 'user', content: text },
   ])
   return reply ?? 'I had trouble thinking just now - try me again in a moment.'

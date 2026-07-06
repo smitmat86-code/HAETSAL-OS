@@ -16,6 +16,7 @@ import {
   fetchGift, fetchNews, fetchVerse,
 } from './brief-sections'
 import { fetchDreamSection } from '../services/dream/brief-section'
+import { isTaskEnabled } from '../services/system/tasks'
 
 // ── Assembly + Delivery ────────────────────────────────────────────────────
 
@@ -30,6 +31,7 @@ export async function handleMorningBrief(env: Env, ctx: ExecutionContext): Promi
 async function buildAndDeliver(
   tenantId: string, env: Env, ctx: ExecutionContext,
 ): Promise<void> {
+  if (!(await isTaskEnabled(env, tenantId, 'morning_brief'))) return // Phase 14 toggle
   const kek = await fetchAndValidateKek(tenantId, env)
   if (!kek) return
 

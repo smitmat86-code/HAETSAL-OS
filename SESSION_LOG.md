@@ -5,6 +5,21 @@
 
 ----
 
+## Mission Phase 14 - System panel + prompt/skill studio - 2026-07-05
+
+**Ask (Matt):** see agents, their system prompts, edit skills/config from the UI - chose the full editor option.
+**Built:**
+- Prompt registry (src/services/prompts/registry.ts): single source of truth for every system prompt - 3 editable (chat persona, grounded-reply persona, sub-agent preamble), 4 read-only (dream extract STRICT-JSON, write-policy classifier, 2 dormant personas). Kills the ingest.ts/inbound-message.ts persona duplication.
+- Sealed versioned overrides (migration 1027 system_prompt_overrides): bodies KEK1-encrypted (readable on webhook/cron paths), every save = new version, rollback/reset keep history, content-free audit rows. Resolution FAILS OPEN to code default (chat never dies on config).
+- Live wiring: inbound-message + SMS ingest + buildGroundedReply + execution-agent preamble (via ToolLoopConfig.preamble; rules block stays code-owned).
+- scheduled_tasks.enabled now ENFORCED (was seeded, never read): morning brief / dream cron / heartbeat check per tenant; weekly_synthesis labeled dormant (handler is a no-op stub). UPSERT toggle + audit.
+- /api/system routes (overview, prompt save/versions/rollback/reset, task toggle) mounted via dashboard-data (/api/system/*); index.ts untouched (at the 150 cap).
+- Dashboard 9th panel "System": prompt viewer/editor with version history + line diff + restore, task toggles, capability-class preference selects (existing /api/settings/preferences), read-only registry (models/profiles/act tools/clock). textContent-only discipline maintained.
+**Law 3:** only the CF-Access user reaches the write routes; MCP surface has no prompt tool (contract-tested). **Law 2:** ciphertext rows, no plaintext in audit (contract-tested).
+**Verification:** tests/mission-14.0 (7 contracts) green. Gate: recorded below after checkout + verifier + deploy + smoke.
+
+---
+
 ## Mission Phase 13 (closeout) - Full demo + clause-10 tightening - 2026-07-04
 
 **Full-demo sweep (prod, single session):** clauses 3 (Claude Code MCP round-trip, provenance-cited <30s), 5 (automation created -> fired -> dispatched -> cleaned up), 6 (spawn -> cancel in 881ms), 7 (dashboard 8/8 panels) LIVE; 4 (Codex = same verified MCP surface), 8 (photo->memory, live-gated Phase 4), 9 (dream report live + brief section wired) MECHANISM; 1-2 BLOCKED-S5 (Google OAuth unprovisioned - honest GmailNotConnectedError; Telegram equivalents live).

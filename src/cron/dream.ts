@@ -6,13 +6,18 @@
 
 import type { Env } from '../types/env'
 import { claimDreamRun } from '../services/dream/report'
+import { isTaskEnabled } from '../services/system/tasks'
 
 export async function handleDreamCron(env: Env, _ctx: ExecutionContext): Promise<void> {
   const tenants = await env.D1_US.prepare(
     `SELECT id FROM tenants WHERE bootstrap_status = 'completed'`,
   ).all<{ id: string }>()
   if (!tenants.results?.length) return
-  await Promise.allSettled(tenants.results.map(t => startDreamRun(t.id, 'cron', env)))
+  await Promise.allSettled(tenants.results.map(async (t) => {
+    // Phase 14 toggle (manual POST /api/dream/run bypasses this on purpose)
+    if (!(await isTaskEnabled(env, t.id, 'consolidation_cron'))) return
+    return startDreamRun(t.id, 'cron', env)
+  }))
 }
 
 export async function startDreamRun(

@@ -5,6 +5,7 @@
 
 import type { Env } from '../types/env'
 import { sendTelegramMessage } from '../services/delivery/telegram'
+import { isTaskEnabled } from '../services/system/tasks'
 
 export async function runPredictiveHeartbeat(
   env: Env,
@@ -27,6 +28,7 @@ export async function runPredictiveHeartbeat(
 async function checkTenantHeartbeat(
   tenantId: string, env: Env,
 ): Promise<void> {
+  if (!(await isTaskEnabled(env, tenantId, 'heartbeat'))) return // Phase 14 toggle
   const alerts: string[] = []
 
   // Check 1: Pending actions > 20h old, still awaiting_approval

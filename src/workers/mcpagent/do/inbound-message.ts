@@ -2,6 +2,7 @@ import type { Env } from '../../../types/env'
 import { sendSmsReply } from '../../../services/delivery/sms'
 import { sendTelegramMessage } from '../../../services/delivery/telegram'
 import { runGatewayChat } from '../../../services/workers-ai-chat'
+import { resolveSystemPrompt } from '../../../services/prompts/overrides'
 
 /** DO fetch branch for POST /inbound, extracted for the McpAgent line limit. */
 export async function handleInboundPost(
@@ -25,11 +26,13 @@ export async function processInboundMessage(
   replyTo: string,
 ): Promise<{ reply: string; success: boolean }> {
   try {
+    // Phase 14: persona is user-editable (System panel); falls back to the
+    // code default if no override / no KEK.
+    const persona = await resolveSystemPrompt(env, tenantId, 'persona.chat', {
+      channel: channel === 'sms' ? 'text message' : 'Telegram',
+    })
     const messages = [
-      {
-        role: 'system' as const,
-        content: `You are Haetsal (해살), a warm and capable personal AI assistant. You communicate via ${channel === 'sms' ? 'text message' : 'Telegram'}. Keep responses concise and conversational — this is a chat, not email. Be helpful, natural, and brief. If asked to do something you can't do yet, be honest about it.`,
-      },
+      { role: 'system' as const, content: persona.text },
       { role: 'user' as const, content: text },
     ]
     const response = await runGatewayChat(env, messages)

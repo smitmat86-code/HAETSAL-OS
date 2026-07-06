@@ -33,7 +33,8 @@ export function buildWindowBlock(items: DreamWindowItem[]): string {
   return lines.join('\n')
 }
 
-const PROMPT = `You are the nightly consolidation pass of a personal memory system. Review the recent memory window and existing relationship summaries, then answer in STRICT JSON:
+// Exported for the System panel registry (read-only display).
+export const DREAM_EXTRACT_PROMPT = `You are the nightly consolidation pass of a personal memory system. Review the recent memory window and existing relationship summaries, then answer in STRICT JSON:
 {"facts": ["stable new fact learned this window", ...],
  "contradictions": [{"statement": "...", "rationale": "...", "confidence": 0.0, "refs": ["id"]}],
  "supersessions": [{"statement": "newer info replaces older info X", "rationale": "...", "confidence": 0.0, "refs": []}],
@@ -51,7 +52,7 @@ export async function extractDreamFindings(
     MODEL_DEEP,
     {
       messages: [
-        { role: 'system', content: PROMPT },
+        { role: 'system', content: DREAM_EXTRACT_PROMPT },
         { role: 'user', content: `Recent memory window:\n${windowBlock || '(empty)'}\n\nKnown relationships:\n${edgesBlock || '(none)'}` },
       ],
       max_tokens: 1600,

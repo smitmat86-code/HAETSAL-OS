@@ -10,15 +10,31 @@
 
 // ── Active model roles ────────────────────────────────────────────────────────
 
-/** Cheap chat tier — grounded replies, routing, write-policy classification.
- *  gemma-4 also handles vision, so MODEL_VISION points at the same id. */
-export const MODEL_CHAT = '@cf/google/gemma-4-26b-a4b-it'
+/** Chat tier — grounded replies, routing, write-policy classification.
+ *  Research-driven swap from gemma-4-26b-a4b-it (2026-07-06): reasoning
+ *  models legitimately return empty responses when hidden <think> tokens
+ *  exhaust max_tokens (documented across o-series, DeepSeek R1, Claude
+ *  extended thinking, Gemini thinking — same class). Llama 3.3 70B Instruct
+ *  FP8 Fast is standard instruction-tuned (not reasoning), supports function
+ *  calling, 24K context, production-labeled on Workers AI. Same model as
+ *  MODEL_DEEP by intent — the "cheap chat tier vs deep tier" distinction was
+ *  a premature optimization; the research-faithful default is one reliable
+ *  instruct model until measured need justifies tiering. */
+export const MODEL_CHAT = '@cf/meta/llama-3.3-70b-instruct-fp8-fast'
 
-/** Vision tier — inbound photo description (data-URL image_url content part). */
+/** Vision tier — inbound photo description (data-URL image_url content part).
+ *  FOLLOW-UP: research recommended llama-3.2-11b-vision-instruct but that
+ *  model was retired 2026-05-30 (see RETIRED_MODELS). Gemma-4 remains here
+ *  because (a) photo ingest rides waitUntil so latency isn't user-facing and
+ *  (b) no measured empty-response failures on the vision path. Re-evaluate
+ *  when a production-labeled vision-specialized replacement lands. */
 export const MODEL_VISION = '@cf/google/gemma-4-26b-a4b-it'
 
-/** Deep reasoning / synthesis — agent turns, consolidation passes. Retained
- *  `-fast` variant (explicitly kept in the 2026-05-30 catalog refresh). */
+/** Deep reasoning / synthesis — agent turns, consolidation passes, nightly
+ *  dream cycle. Currently equals MODEL_CHAT; a reasoning-specialist swap
+ *  (e.g., DeepSeek R1 on Workers AI) is a follow-up specifically for the
+ *  dream cycle where the extra latency + <think> exhaustion risk are
+ *  acceptable (batch, not user-facing). */
 export const MODEL_DEEP = '@cf/meta/llama-3.3-70b-instruct-fp8-fast'
 
 /** Canonical embedding — 768-dim, matches the pgvector column width in Neon. */

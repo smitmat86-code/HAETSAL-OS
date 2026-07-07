@@ -3,7 +3,18 @@
 > Append-only. AI reads the last 3 entries at session start.
 > AI appends a new entry at session end.
 
-------
+-------
+
+## 14.4 Chat model swap + LLM classifier removal (research-driven) - 2026-07-06
+
+**Motivation:** 2026-07-06 incident postmortem + 5.6M-token deep-research pass (105 agents, 25 verified claims). Confirmed reasoning models legitimately return empty responses when hidden <think> tokens exhaust max_tokens (documented across OpenAI o-series, DeepSeek R1, Claude extended thinking, Gemini thinking - gemma-4-26b-a4b-it is the same class). Research also flagged the 3x amplification (intent + delegation + reply LLM classifiers) as an anti-pattern: semantic routing belongs at the front door of a general assistant, not inside a pipeline that already knows its intent.
+**Change (surgical):** (1) MODEL_CHAT: gemma-4-26b-a4b-it -> llama-3.3-70b-instruct-fp8-fast (production-labeled, standard instruct, function calling, 24K ctx; now equals MODEL_DEEP by intent - the cheap/deep tier distinction was premature optimization). (2) delegation.ts decideDelegation is now pure synchronous pattern-only (regex hit -> delegate; else inline). LLM classifier fallback deleted, runGatewayChat import removed.
+**Deliberately NOT changed** (research ladder principle - justify each rung by measured benefit): MODEL_VISION stays gemma-4 (research target llama-3.2-11b-vision-instruct is on RETIRED_MODELS; photo path rides waitUntil, no measured failures); MODEL_DEEP unchanged (dream cycle isn't user-facing, reasoning specialist is a follow-up); max_tokens unchanged; no cascade fallback (adding before measuring the new primary's empty rate = fixing a solved problem).
+**Verification:** tests/mission-6.2-delegation.test.ts rewritten (long-ambiguous -> INLINE; new spy regression test ensures AI.run is never invoked by the decider); suite 497 passed / 81 files; postflight green. Fresh-context verifier PASS, 0 blockers, APPROVE across all 8 ACs.
+**Expected effect:** one inbound message -> one model call (not three); non-reasoning primary -> GATEWAY_CHAT_EMPTY on the chat path should approach zero; wall time seconds, not minutes.
+**Follow-ups:** (a) if the new primary shows measured empties, add AI-Gateway-level fallback (idiomatic per research, not app-level cascade); (b) evaluate DeepSeek R1 or route-out for MODEL_DEEP dream cycle when we measure the synthesis quality gap; (c) revisit MODEL_VISION when a production-labeled vision-specialized Workers AI model lands.
+
+--
 
 ## 14.3 Queue-side chat processing - 2026-07-06
 

@@ -10,8 +10,7 @@ import { deriveTmk } from '../../../middleware/auth'
 import { listRecentCanonicalMemories, searchCanonicalMemory } from '../../../services/canonical-memory-query'
 import { getCanonicalBrokerTrace, listRecentCanonicalBrokerTraces } from '../../../services/canonical-broker-trace-read'
 import type { MemoryQueryMode } from '../../../types/canonical-memory-query'
-import { getCanonicalMemoryStore } from '../../../services/canonical-postgres'
-import { parseGoogleSourceReadAttribution } from '../../../services/google-source-read-contract'
+import { listGoogleSourceEvidence } from '../../../services/google-source-sync'
 import { system } from './system'
 
 type Variables = { tenantId: string; jwtSub: string; traceId: string }
@@ -56,31 +55,9 @@ dashboardData.get('/traces/:queryId', async (c) => {
 })
 
 dashboardData.get('/memory/source-evidence', async (c) => {
-  const tenantId = c.get('tenantId')
   const limitRaw = Number(c.req.query('limit') ?? '20')
-  const limit = Math.min(Math.max(Number.isFinite(limitRaw) ? Math.trunc(limitRaw) : 20, 1), 50)
-  const store = getCanonicalMemoryStore(c.env)
-  const rows = await store.listRecentDocuments(tenantId, null, Math.max(limit * 4, 20))
-  const sourceRows = rows
-    .filter((row) => row.source_system === 'gmail' || row.source_system === 'calendar')
-    .slice(0, limit)
-  const items = await Promise.all(sourceRows.map(async (row) => {
-    const document = await store.getDocument(tenantId, row.document_id).catch(() => null)
-    return {
-      captureId: row.capture_id,
-      documentId: row.document_id,
-      sourceSystem: row.source_system,
-      sourceRef: row.source_ref,
-      googleSource: parseGoogleSourceReadAttribution({
-        sourceSystem: row.source_system,
-        sourceRef: row.source_ref,
-      }),
-      title: row.title,
-      scope: row.scope,
-      capturedAt: row.captured_at,
-      chunkCount: document?.chunk_count ?? null,
-    }
-  }))
+  const limit = Number.isFinite(limitRaw) ? limitRaw : 20
+  const items = await listGoogleSourceEvidence(c.env, c.get('tenantId'), limit)
   return c.json({
     status: items.length > 0 ? 'ok' : 'empty',
     sourceSystems: [...new Set(items.map((item) => item.sourceSystem))].sort(),

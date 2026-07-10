@@ -59,9 +59,11 @@ export async function fetchThread(
 export async function listRecentThreadIds(
   accessToken: string,
   maxResults: number = 10,
+  newerThanDays: number = 7,
 ): Promise<string[]> {
+  const days = Math.min(Math.max(Math.trunc(newerThanDays), 1), 365)
   const res = await fetch(
-    `${GMAIL_API}/threads?maxResults=${maxResults}&q=${encodeURIComponent('newer_than:7d')}`,
+    `${GMAIL_API}/threads?maxResults=${maxResults}&q=${encodeURIComponent(`newer_than:${days}d`)}`,
     { headers: { Authorization: `Bearer ${accessToken}` } },
   )
   if (!res.ok) return []

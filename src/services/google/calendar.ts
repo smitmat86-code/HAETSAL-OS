@@ -33,6 +33,24 @@ export async function listRecentlyUpdatedEventIds(
   return data.items?.map((event) => event.id) ?? []
 }
 
+export async function listEventIdsInTimeRange(
+  accessToken: string,
+  timeMinMs: number,
+  timeMaxMs: number,
+  maxResults: number = 10,
+): Promise<string[]> {
+  const timeMin = new Date(timeMinMs).toISOString()
+  const timeMax = new Date(timeMaxMs).toISOString()
+  const res = await fetch(
+    `${CALENDAR_API}?singleEvents=true&orderBy=startTime&maxResults=${maxResults}` +
+      `&timeMin=${encodeURIComponent(timeMin)}&timeMax=${encodeURIComponent(timeMax)}`,
+    { headers: { Authorization: `Bearer ${accessToken}` } },
+  )
+  if (!res.ok) return []
+  const data = await res.json() as { items?: Array<{ id: string }> }
+  return data.items?.map((event) => event.id) ?? []
+}
+
 function getEventDurationMinutes(event: GoogleCalendarEvent): number {
   const start = event.start.dateTime ? new Date(event.start.dateTime).getTime() : 0
   const end = event.end.dateTime ? new Date(event.end.dateTime).getTime() : 0

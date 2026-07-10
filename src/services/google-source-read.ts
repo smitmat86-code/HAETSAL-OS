@@ -8,7 +8,7 @@ import {
   googleSourceUrl,
   parseGoogleSourceReadAttribution,
 } from './google-source-read-contract'
-import { fetchEvent, extractEventArtifact, listRecentlyUpdatedEventIds } from './google/calendar'
+import { fetchEvent, extractEventArtifact, listEventIdsInTimeRange, listRecentlyUpdatedEventIds } from './google/calendar'
 import { downloadDriveDocument, extractWikilinks, parseObsidianFrontmatter } from './google/drive'
 import { fetchAndExtractThread, listRecentThreadIds } from './google/gmail'
 
@@ -93,9 +93,9 @@ export async function captureDriveDocumentSourceRead(args: {
 }
 
 export async function captureRecentGmailThreadWindow(args: {
-  tenantId: string; accessToken: string; tmk: CryptoKey; env: Env; ctx: ExecutionContext; maxThreads?: number
+  tenantId: string; accessToken: string; tmk: CryptoKey; env: Env; ctx: ExecutionContext; maxThreads?: number; newerThanDays?: number
 }): Promise<number> {
-  const threadIds = await listRecentThreadIds(args.accessToken, args.maxThreads ?? 5)
+  const threadIds = await listRecentThreadIds(args.accessToken, args.maxThreads ?? 5, args.newerThanDays ?? 7)
   const retained = await Promise.all(threadIds.map((threadId) => captureGmailThreadSourceRead({ ...args, threadId })))
   return retained.filter(Boolean).length
 }
@@ -104,6 +104,14 @@ export async function captureRecentCalendarEventWindow(args: {
   tenantId: string; accessToken: string; tmk: CryptoKey; env: Env; ctx: ExecutionContext; updatedSinceMs?: number; maxEvents?: number
 }): Promise<number> {
   const eventIds = await listRecentlyUpdatedEventIds(args.accessToken, args.updatedSinceMs ?? (Date.now() - 6 * 60 * 60 * 1000), args.maxEvents ?? 5)
+  const retained = await Promise.all(eventIds.map((eventId) => captureCalendarEventSourceRead({ ...args, eventId })))
+  return retained.filter(Boolean).length
+}
+
+export async function captureCalendarEventTimeWindow(args: {
+  tenantId: string; accessToken: string; tmk: CryptoKey; env: Env; ctx: ExecutionContext; timeMinMs: number; timeMaxMs: number; maxEvents?: number
+}): Promise<number> {
+  const eventIds = await listEventIdsInTimeRange(args.accessToken, args.timeMinMs, args.timeMaxMs, args.maxEvents ?? 10)
   const retained = await Promise.all(eventIds.map((eventId) => captureCalendarEventSourceRead({ ...args, eventId })))
   return retained.filter(Boolean).length
 }

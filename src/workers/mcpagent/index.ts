@@ -23,6 +23,7 @@ import { getMcpAgentObjectName } from './do/identity'
 import { registerPublicWebhooks } from './public-webhooks'
 import { registerPhoneQuery, registerTelegramQuery } from './self-registration'
 import { renderMemoryInventory } from './debug-inventory'
+import { renderGoogleSourceSync } from './routes/debug-google-source-sync'
 import { handleBrainQueue, handleBrainScheduled } from './runtime'
 
 type Variables = { tenantId: string; jwtSub: string; traceId: string }
@@ -70,8 +71,8 @@ app.route('/api/dream', dream)
 app.route('/api/session', session)
 app.route('/api/compiled', compiled)
 app.route('/api', dashboardData)
-// Read-only diagnostic view over the caller's own canonical memory (no bodies).
 app.get('/debug/memory-inventory', renderMemoryInventory)
+app.get('/debug/google-source-sync', renderGoogleSourceSync)
 
 // Root status page - doubles as a session/KEK refresh: opening it after CF
 // Access login initializes the tenant session + provisions the 24h Cron KEK.
@@ -142,8 +143,4 @@ export { ExecutionAgent } from '../../agents/execution-agent'
 export { BootstrapWorkflow } from '../../workflows/bootstrap'
 export { DreamCycleWorkflow } from '../../workflows/dream-cycle' // Phase 8
 export { ActionApprovalWorkflow } from '../../workflows/action-approval'
-export default {
-  fetch: app.fetch,
-  queue: handleBrainQueue,
-  scheduled: handleBrainScheduled,
-}
+export default { fetch: app.fetch, queue: handleBrainQueue, scheduled: handleBrainScheduled }

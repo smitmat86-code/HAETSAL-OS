@@ -9,6 +9,43 @@ import type { IngestionArtifact } from '../../types/ingestion'
 
 const GMAIL_API = 'https://gmail.googleapis.com/gmail/v1/users/me'
 
+function encodeBase64Url(value: string): string {
+  const bytes = new TextEncoder().encode(value)
+  let binary = ''
+  for (const byte of bytes) binary += String.fromCharCode(byte)
+  return btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')
+}
+
+function safeHeader(value: string, name: string): string {
+  if (/[\r\n]/.test(value)) throw new Error(`Invalid ${name} header`)
+  return value.trim()
+}
+
+export async function sendGmailMessage(
+  input: { recipient: string; subject?: string; message: string; threadId?: string },
+  accessToken: string,
+): Promise<{ messageId: string; threadId: string }> {
+  const recipient = safeHeader(input.recipient, 'recipient')
+  const subject = safeHeader(input.subject?.trim() || 'Message from HAETSAL', 'subject')
+  const raw = encodeBase64Url([
+    `To: ${recipient}`,
+    `Subject: ${subject}`,
+    'MIME-Version: 1.0',
+    'Content-Type: text/plain; charset=UTF-8',
+    'Content-Transfer-Encoding: 8bit',
+    '',
+    input.message,
+  ].join('\r\n'))
+  const res = await fetch(`${GMAIL_API}/messages/send`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ raw, threadId: input.threadId }),
+  })
+  if (!res.ok) throw new Error(`Gmail API send error: ${res.status}`)
+  const sent = await res.json() as { id: string; threadId: string }
+  return { messageId: sent.id, threadId: sent.threadId }
+}
+
 export async function fetchThread(
   threadId: string, accessToken: string,
 ): Promise<GoogleThread | null> {

@@ -11,6 +11,8 @@ export const draftSchema = z.object({
   title: z.string().describe('Draft title'),
   content: z.string().describe('Draft content body'),
   draft_type: z.enum(['email', 'note', 'plan']).optional().describe('Draft type'),
+  recipient: z.string().optional().describe('Recipient for an email draft'),
+  thread_id: z.string().optional().describe('Gmail thread id when drafting a reply'),
 })
 
 export async function draftStub(

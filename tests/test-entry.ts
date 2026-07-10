@@ -14,6 +14,7 @@ import { approval } from '../src/workers/mcpagent/routes/approval'
 import { settings } from '../src/workers/mcpagent/routes/settings'
 import { audit } from '../src/workers/mcpagent/routes/audit'
 import { canary } from '../src/workers/mcpagent/routes/canary'
+import { auth } from '../src/workers/mcpagent/routes/auth'
 import type { Env } from '../src/types/env'
 
 type Variables = {
@@ -50,9 +51,11 @@ app.route('/api/actions', actions)
 app.route('/api/actions', approval)
 app.route('/api/settings', settings)
 app.route('/api/audit', audit)
+app.route('/auth', auth)
 
 // Stub routes for testing middleware chain
 app.all('/mcp', (c) => c.json({ status: 'mcp_ok', tenantId: c.get('tenantId') }))
 app.get('/ws', (c) => c.json({ status: 'ws_ok', tenantId: c.get('tenantId') }))
 
 export default app
+export { ActionApprovalWorkflow } from '../src/workflows/action-approval'

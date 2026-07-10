@@ -52,6 +52,8 @@ export default defineConfig(async () => {
             CF_ACCESS_TEAM: 'test-team',
             HMAC_SECRET: 'test-hmac-secret-not-production',
             TELNYX_PUBLIC_KEY: 'test-telnyx-public-key-hex',
+            GOOGLE_CLIENT_ID: 'test-google-client-id',
+            GOOGLE_CLIENT_SECRET: 'test-google-client-secret',
           },
         },
       }),

@@ -38,3 +38,8 @@ queue = "brain-priority-normal-test"
 [[queues.producers]]
 binding = "QUEUE_BULK"
 queue = "brain-priority-bulk-test"
+
+[[workflows]]
+name = "brain-action-approval-test"
+binding = "ACTION_APPROVAL_WORKFLOW"
+class_name = "ActionApprovalWorkflow"

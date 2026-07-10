@@ -38,13 +38,23 @@ export async function dispatchTool(
     }
     case 'brain_v1_act_draft': {
       if (!tmk) throw new Error('TMK required for draft capture')
-      const input = JSON.parse(msg.payload_stub) as { title: string; content: string; draft_type?: string }
+      const input = JSON.parse(msg.payload_stub) as {
+        title: string; content: string; draft_type?: string; recipient?: string; thread_id?: string
+      }
       const draft = await executeDraft({ ...input, action_id: msg.action_id }, msg.tenant_id, tmk, env, ctx)
       return { resultSummary: `drafted:${draft.draftType}:${draft.draftId.slice(0, 8)}` }
     }
     case 'brain_v1_act_send_message': {
-      const input = JSON.parse(msg.payload_stub) as { recipient: string; message: string; channel?: string }
-      const sent = await executeSendMessage(input, env)
+      const input = JSON.parse(msg.payload_stub) as {
+        recipient: string; message: string; channel?: string; subject?: string; thread_id?: string
+      }
+      const isEmail = input.channel === 'email' || (!input.channel && input.recipient.includes('@'))
+      if (isEmail && !tmk) throw new Error('TMK required for Gmail integration')
+      const sent = await executeSendMessage(
+        input,
+        env,
+        tmk ? { tenantId: msg.tenant_id, tmk } : undefined,
+      )
       return { resultSummary: `sent:${sent.channel}:${sent.detail}` }
     }
     case 'brain_v1_act_remind': {

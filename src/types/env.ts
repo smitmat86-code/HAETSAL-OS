@@ -18,6 +18,8 @@ export interface Env extends Cloudflare.Env {
   NEON_CONNECTION_STRING: string
   CANONICAL_POSTGRES_CONNECTION_STRING?: string
   AI_GATEWAY_TOKEN: string
+  GOOGLE_CLIENT_ID: string
+  GOOGLE_CLIENT_SECRET: string
 
   // Optional local/runtime configuration not emitted by wrangler types.
   CANONICAL_MEMORY_SHADOW_WRITES?: string

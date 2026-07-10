@@ -11,6 +11,8 @@ export const sendMessageSchema = z.object({
   recipient: z.string().describe('Phone (E.164), Telegram chat id, or email address'),
   message: z.string().describe('Message body text'),
   channel: z.enum(['sms', 'imessage', 'telegram', 'email']).optional().describe('Delivery channel'),
+  subject: z.string().optional().describe('Email subject when channel is email'),
+  thread_id: z.string().optional().describe('Gmail thread id when replying in an existing thread'),
 })
 
 export async function sendMessageStub(

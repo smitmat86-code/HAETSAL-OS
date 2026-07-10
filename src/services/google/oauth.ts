@@ -4,6 +4,9 @@
 
 import type { Env } from '../../types/env'
 import type { GoogleOAuthTokens } from '../../types/google'
+import { GOOGLE_SCOPE_ALIASES } from './oauth-config'
+
+export { buildGoogleAuthorizationUrl, GOOGLE_OAUTH_SCOPES } from './oauth-config'
 
 const GOOGLE_TOKEN_URL = 'https://oauth2.googleapis.com/token'
 
@@ -33,13 +36,19 @@ export async function exchangeCodeForTokens(
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
     body: new URLSearchParams({
       code,
-      client_id: (env as Record<string, string>).GOOGLE_CLIENT_ID ?? '',
-      client_secret: (env as Record<string, string>).GOOGLE_CLIENT_SECRET ?? '',
+      client_id: env.GOOGLE_CLIENT_ID,
+      client_secret: env.GOOGLE_CLIENT_SECRET,
       redirect_uri: redirectUri,
       grant_type: 'authorization_code',
     }),
   })
   const data = await res.json() as Record<string, unknown>
+  if (!res.ok || typeof data.access_token !== 'string') {
+    throw new Error(`Google OAuth token exchange failed (${res.status})`)
+  }
+  if (typeof data.refresh_token !== 'string') {
+    throw new Error('Google OAuth did not return a refresh token; reconnect with consent')
+  }
   return {
     access_token: data.access_token as string,
     refresh_token: data.refresh_token as string,
@@ -53,7 +62,7 @@ export async function storeEncryptedTokens(
 ): Promise<void> {
   const kvKey = `google_tokens:${tenantId}:${scope}`
   const encrypted = await encryptTokens(tokens, tmk)
-  await env.KV_SESSION.put(kvKey, encrypted, { expirationTtl: 86400 * 30 })
+  await env.KV_SESSION.put(kvKey, encrypted)
 
   const now = Date.now()
   await env.D1_US.prepare(
@@ -61,6 +70,14 @@ export async function storeEncryptedTokens(
      VALUES (?, ?, ?, ?, ?, ?)
      ON CONFLICT(tenant_id, scope) DO UPDATE SET kv_key = ?, updated_at = ?`,
   ).bind(crypto.randomUUID(), tenantId, scope, kvKey, now, now, kvKey, now).run()
+}
+
+export async function storeGoogleGrant(
+  tenantId: string, tokens: GoogleOAuthTokens, tmk: CryptoKey, env: Env,
+): Promise<void> {
+  await Promise.all(GOOGLE_SCOPE_ALIASES.map(
+    (scope) => storeEncryptedTokens(tenantId, scope, tokens, tmk, env),
+  ))
 }
 
 export async function getGoogleToken(
@@ -88,13 +105,16 @@ async function refreshGoogleToken(
     method: 'POST',
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
     body: new URLSearchParams({
-      client_id: (env as Record<string, string>).GOOGLE_CLIENT_ID ?? '',
-      client_secret: (env as Record<string, string>).GOOGLE_CLIENT_SECRET ?? '',
+      client_id: env.GOOGLE_CLIENT_ID,
+      client_secret: env.GOOGLE_CLIENT_SECRET,
       refresh_token: refreshToken,
       grant_type: 'refresh_token',
     }),
   })
   const data = await res.json() as Record<string, unknown>
+  if (!res.ok || typeof data.access_token !== 'string') {
+    throw new Error(`Google OAuth token refresh failed (${res.status})`)
+  }
   const newTokens: GoogleOAuthTokens = {
     access_token: data.access_token as string,
     refresh_token: refreshToken,

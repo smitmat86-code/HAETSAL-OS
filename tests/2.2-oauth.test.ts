@@ -3,7 +3,13 @@
 
 import { describe, it, expect, beforeAll } from 'vitest'
 import { env } from 'cloudflare:test'
-import { storeEncryptedTokens, revokeGoogleTokens } from '../src/services/google/oauth'
+import {
+  buildGoogleAuthorizationUrl,
+  GOOGLE_OAUTH_SCOPES,
+  storeEncryptedTokens,
+  storeGoogleGrant,
+  revokeGoogleTokens,
+} from '../src/services/google/oauth'
 import type { GoogleOAuthTokens } from '../src/types/google'
 
 async function deriveTestTmk(): Promise<CryptoKey> {
@@ -35,6 +41,16 @@ beforeAll(async () => {
 })
 
 describe('Google OAuth token management', () => {
+  it('builds an offline consent URL with CSRF state and the mission scopes', () => {
+    const url = new URL(buildGoogleAuthorizationUrl(
+      'client-id', 'https://haetsalos.specialdarksystems.com/auth/google/callback', 'state-123',
+    ))
+    expect(url.origin).toBe('https://accounts.google.com')
+    expect(url.searchParams.get('state')).toBe('state-123')
+    expect(url.searchParams.get('access_type')).toBe('offline')
+    expect(url.searchParams.get('scope')?.split(' ')).toEqual(GOOGLE_OAUTH_SCOPES)
+  })
+
   it('stores tokens encrypted in KV (not plaintext) — Law 2', async () => {
     const tmk = await deriveTestTmk()
     const tokens: GoogleOAuthTokens = {
@@ -73,6 +89,21 @@ describe('Google OAuth token management', () => {
     expect(row!.tenant_id).toBe(TEST_TENANT)
     expect(row!.scope).toBe('gmail.readonly')
     expect(row!.kv_key).toBe(`google_tokens:${TEST_TENANT}:gmail.readonly`)
+  })
+
+  it('stores one grant under every runtime scope alias', async () => {
+    const tmk = await deriveTestTmk()
+    const tokens: GoogleOAuthTokens = {
+      access_token: 'ya29.alias-test', refresh_token: '1//alias-refresh',
+      expires_at: Date.now() + 3600_000, scope: GOOGLE_OAUTH_SCOPES.join(' '),
+    }
+    await storeGoogleGrant(TEST_TENANT, tokens, tmk, env)
+    const rows = await env.D1_US.prepare(
+      'SELECT scope FROM google_oauth_tokens WHERE tenant_id = ? ORDER BY scope',
+    ).bind(TEST_TENANT).all<{ scope: string }>()
+    expect(rows.results.map((row: { scope: string }) => row.scope)).toEqual([
+      'calendar', 'calendar.readonly', 'gmail.compose', 'gmail.readonly', 'gmail.send',
+    ])
   })
 
   it('revoke clears KV + D1', async () => {

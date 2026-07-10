@@ -45,6 +45,13 @@ async function insertAction(
     state === 'completed_reversible' ? 'created_event:evt-1' : null,
   ).run()
 
+  if (state === 'awaiting_approval') {
+    await env.ACTION_APPROVAL_WORKFLOW.create({
+      id: actionId,
+      params: { actionId, tenantId },
+    })
+  }
+
   return actionId
 }
 

@@ -113,6 +113,14 @@ export async function processAction(
     }
   }
 
+  if (auth.effectiveLevel === 'YELLOW'
+    && msg.capability_class === 'WRITE_EXTERNAL_IRREVERSIBLE') {
+    await env.ACTION_APPROVAL_WORKFLOW.create({
+      id: msg.action_id,
+      params: { actionId: msg.action_id, tenantId: msg.tenant_id },
+    })
+  }
+
   switch (auth.effectiveLevel) {
     case 'GREEN':
       await routeGreen(msg, auth.sendDelaySeconds, env, now, tmk, ec)

@@ -1,13 +1,11 @@
 // src/services/action/integrations/drafts.ts
-// act_draft executor. note/plan drafts are retained as canonical captures
+// act_draft executor. Email/note/plan drafts are retained as canonical captures
 // (encrypted at rest, Law 2) with an operational pointer row in D1 that holds
-// NO content. Gmail (email) drafts require Google OAuth (mission S5) and throw
-// GmailNotConnectedError rather than a silent stub.
+// NO content. Email content stays internal until a separately approved send.
 
 import type { Env } from '../../../types/env'
 import type { IngestionArtifact } from '../../../types/ingestion'
 import { retainContent } from '../../ingestion/retain'
-import { GmailNotConnectedError } from './messaging'
 
 let schemaEnsured = false
 /** Lazy DDL — the CLOUDFLARE_API_TOKEN in this env can't run D1 migrations, so
@@ -29,21 +27,21 @@ async function ensureDraftsSchema(env: Env): Promise<void> {
 export interface DraftResult {
   draftId: string
   captureId: string | null
-  draftType: 'note' | 'plan'
+  draftType: 'email' | 'note' | 'plan'
 }
 
 export async function executeDraft(
-  input: { title: string; content: string; draft_type?: string; action_id?: string },
+  input: {
+    title: string; content: string; draft_type?: string; action_id?: string;
+    recipient?: string; thread_id?: string
+  },
   tenantId: string,
   tmk: CryptoKey,
   env: Env,
   ctx?: ExecutionContext,
 ): Promise<DraftResult> {
-  if (input.draft_type === 'email') {
-    // S5: Gmail draft needs Google OAuth. Fail honestly.
-    throw new GmailNotConnectedError()
-  }
-  const draftType: 'note' | 'plan' = input.draft_type === 'plan' ? 'plan' : 'note'
+  const draftType: 'email' | 'note' | 'plan' = input.draft_type === 'email'
+    ? 'email' : input.draft_type === 'plan' ? 'plan' : 'note'
 
   const artifact: IngestionArtifact = {
     tenantId,
@@ -53,7 +51,12 @@ export async function executeDraft(
     provenance: 'draft',
     memoryType: 'episodic',
     domain: 'general',
-    metadata: { draft_type: draftType, draft_title: input.title },
+    metadata: {
+      draft_type: draftType,
+      draft_title: input.title,
+      recipient: input.recipient,
+      gmail_thread_id: input.thread_id,
+    },
     governance: { authorKind: 'user', legacyMemoryType: 'episodic', provenanceNote: 'draft' },
   }
   const retained = await retainContent(artifact, tmk, env, ctx)

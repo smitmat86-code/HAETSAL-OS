@@ -14,6 +14,7 @@ import { searchStub } from '../src/tools/act/search'
 import { draftStub } from '../src/tools/act/draft'
 import { sendMessageStub } from '../src/tools/act/send-message'
 import { getCanonicalMemoryStore, installCanonicalMemoryTestStore } from '../src/services/canonical-postgres'
+import { storeEncryptedTokens } from '../src/services/google/oauth'
 import type { ActionQueueMessage } from '../src/types/action'
 import type { Env } from '../src/types/env'
 
@@ -119,15 +120,38 @@ describe('mission 5.0 — internal draft executor', () => {
   })
 })
 
-describe('mission 5.0 — S5 Gmail boundary (honest failure, no silent stub)', () => {
+describe('mission 5.0 — Gmail draft/send boundary', () => {
   it('send_message to an email throws GmailNotConnectedError', async () => {
     await expect(executeSendMessage({ recipient: 'a@b.com', message: 'hi', channel: 'email' }, makeEnv()))
       .rejects.toBeInstanceOf(GmailNotConnectedError)
   })
-  it('draft of type email throws GmailNotConnectedError', async () => {
+  it('stages an email draft internally before external approval', async () => {
     const tmk = await deriveTmk()
-    await expect(executeDraft({ title: 't', content: 'c', draft_type: 'email' }, TENANT, tmk, makeEnv()))
-      .rejects.toBeInstanceOf(GmailNotConnectedError)
+    const draft = await executeDraft({
+      title: 'Re: Atlas', content: 'I will follow up tomorrow.', draft_type: 'email',
+      recipient: 'a@example.com', thread_id: 'thread-1',
+    }, TENANT, tmk, makeEnv())
+    expect(draft.draftType).toBe('email')
+  })
+
+  it('sends a Gmail message with the encrypted tenant grant', async () => {
+    const tmk = await deriveTmk()
+    await storeEncryptedTokens(TENANT, 'gmail.send', {
+      access_token: 'gmail-access-token', refresh_token: 'gmail-refresh-token',
+      expires_at: Date.now() + 3_600_000, scope: 'gmail.send',
+    }, tmk, makeEnv())
+    let sentBody: { raw?: string } = {}
+    vi.stubGlobal('fetch', async (input: RequestInfo | URL, init?: RequestInit) => {
+      expect(input.toString()).toContain('/gmail/v1/users/me/messages/send')
+      expect((init?.headers as Record<string, string>).Authorization).toBe('Bearer gmail-access-token')
+      sentBody = JSON.parse(init?.body as string) as { raw?: string }
+      return new Response(JSON.stringify({ id: 'gmail-message-1', threadId: 'gmail-thread-1' }), { status: 200 })
+    })
+    const result = await executeSendMessage({
+      recipient: 'a@example.com', subject: 'Re: Atlas', message: 'Unicode works: café', channel: 'email',
+    }, makeEnv(), { tenantId: TENANT, tmk })
+    expect(result).toMatchObject({ channel: 'email', delivered: true })
+    expect(sentBody.raw).toMatch(/^[A-Za-z0-9_-]+$/)
   })
 })
 

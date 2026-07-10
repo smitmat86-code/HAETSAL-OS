@@ -20,6 +20,11 @@ AI_GATEWAY_ACCOUNT_ID=d3f0a1c579945862edc9c6f6e36e448a
 # Cloudflare AI Gateway token (gateway auth; provider key stays in AI Gateway BYOK)
 AI_GATEWAY_TOKEN=cf-aig-xxxxxxxxxxxx
 
+# Google OAuth web client for Gmail + Calendar. Production values belong in
+# Worker secrets; never commit the client secret.
+GOOGLE_CLIENT_ID=xxxxxxxxxxxx.apps.googleusercontent.com
+GOOGLE_CLIENT_SECRET=GOCSPX-xxxxxxxxxxxx
+
 # ─── Sendblue iMessage integration (mission Phase 4) ─────────────────────────
 # Sendblue does NOT sign webhooks. Authentication uses a bearer path segment:
 # webhook URL registered with Sendblue includes SENDBLUE_WEBHOOK_PATH_SECRET.

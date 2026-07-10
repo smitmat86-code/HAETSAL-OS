@@ -43,12 +43,24 @@ approval.post('/:id/approve', async (c) => {
       c.get('jwtSub'),
       c.env,
     )
-    // Human approval is the gate — now actually run it. TMK is re-derived from
-    // the same identity that encrypted the persisted payload, so it matches.
-    const tmk = await deriveTmk(c.get('jwtSub'), c.env.CF_ACCESS_AUD)
-    c.executionCtx.waitUntil(
-      executeApprovedAction(result.action_id, c.get('tenantId'), tmk, c.env, c.executionCtx),
-    )
+    // Human approval is the gate. Irreversible work enters the delayed workflow;
+    // reversible work can execute immediately with the re-derived tenant key.
+    if (result.capability_class === 'WRITE_EXTERNAL_IRREVERSIBLE') {
+      const instance = await c.env.ACTION_APPROVAL_WORKFLOW.get(result.action_id)
+      await instance.sendEvent({
+        type: 'approval-response',
+        payload: {
+          approved: true,
+          jwtSub: c.get('jwtSub'),
+          sendDelaySeconds: result.send_delay_seconds,
+        },
+      })
+    } else {
+      const tmk = await deriveTmk(c.get('jwtSub'), c.env.CF_ACCESS_AUD)
+      c.executionCtx.waitUntil(
+        executeApprovedAction(result.action_id, c.get('tenantId'), tmk, c.env, c.executionCtx),
+      )
+    }
     return c.json(result)
   } catch (error) {
     if (!(error instanceof Error)) throw error
@@ -63,13 +75,21 @@ approval.post('/:id/approve', async (c) => {
 approval.post('/:id/reject', async (c) => {
   const body = await c.req.json<{ reason?: string }>().catch(() => ({ reason: undefined }))
   try {
-    return c.json(await rejectPendingAction(
+    const result = await rejectPendingAction(
       c.req.param('id'),
       c.get('tenantId'),
       c.get('jwtSub'),
       body.reason?.trim() || null,
       c.env,
-    ))
+    )
+    if (result.capability_class === 'WRITE_EXTERNAL_IRREVERSIBLE') {
+      const instance = await c.env.ACTION_APPROVAL_WORKFLOW.get(result.action_id)
+      await instance.sendEvent({
+        type: 'approval-response',
+        payload: { approved: false, jwtSub: c.get('jwtSub'), sendDelaySeconds: 0 },
+      }).catch(() => undefined)
+    }
+    return c.json(result)
   } catch (error) {
     if (!(error instanceof Error)) throw error
     if (error.message === 'ACTION_NOT_FOUND') return c.json({ error: 'Action not found' }, 404)

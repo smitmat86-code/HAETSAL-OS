@@ -136,12 +136,12 @@ app.get('/ws', async (c) => {
     body: c.req.raw.body,
   }))
 })
-
 export { McpAgentDO }
 // Phase 6 facet class — resolved via ctx.exports; export name MUST stay `ExecutionAgent`.
 export { ExecutionAgent } from '../../agents/execution-agent'
 export { BootstrapWorkflow } from '../../workflows/bootstrap'
 export { DreamCycleWorkflow } from '../../workflows/dream-cycle' // Phase 8
+export { ActionApprovalWorkflow } from '../../workflows/action-approval'
 export default {
   fetch: app.fetch,
   queue: handleBrainQueue,

@@ -1,15 +1,15 @@
 // src/services/action/integrations/messaging.ts
 // act_send_message executor. Routes an outbound message to a real channel:
 //   imessage -> Sendblue, telegram -> Telegram Bot API, sms -> Telnyx.
-// Gmail (email) send is NOT wired: Google OAuth is not provisioned this run
-// (mission S5). Rather than a silent stub, the email path throws a clear
-// "not connected" error so the action records a real, honest failure and the
-// user learns Gmail needs setup (see docs/lessons/phase-5-google-oauth-*).
+// Email sends use the tenant's encrypted Google grant. Missing OAuth fails
+// honestly before any external mutation.
 
 import type { Env } from '../../../types/env'
 import { sendSmsReply } from '../../delivery/sms'
 import { sendSendblueMessage } from '../../delivery/sendblue'
 import { sendTelegramReply } from '../../delivery/telegram'
+import { getGoogleToken } from '../../google/oauth'
+import { sendGmailMessage } from '../../google/gmail'
 
 export type MessageChannel = 'sms' | 'imessage' | 'telegram' | 'email'
 
@@ -17,6 +17,11 @@ export interface MessagingResult {
   channel: MessageChannel
   delivered: boolean
   detail: string
+}
+
+export interface GoogleMessageAuth {
+  tenantId: string
+  tmk: CryptoKey
 }
 
 /** The one legitimate S5 boundary in this executor: Gmail needs Google OAuth. */
@@ -35,14 +40,23 @@ function inferChannel(recipient: string, channel?: string): MessageChannel {
 }
 
 export async function executeSendMessage(
-  input: { recipient: string; message: string; channel?: string },
+  input: { recipient: string; message: string; channel?: string; subject?: string; thread_id?: string },
   env: Env,
+  googleAuth?: GoogleMessageAuth,
 ): Promise<MessagingResult> {
   const channel = inferChannel(input.recipient, input.channel)
 
   if (channel === 'email') {
-    // S5: do not work around. Fail honestly.
-    throw new GmailNotConnectedError()
+    if (!googleAuth) throw new GmailNotConnectedError()
+    const token = await getGoogleToken(googleAuth.tenantId, 'gmail.send', googleAuth.tmk, env)
+    if (!token) throw new GmailNotConnectedError()
+    const sent = await sendGmailMessage({
+      recipient: input.recipient,
+      subject: input.subject,
+      message: input.message,
+      threadId: input.thread_id,
+    }, token)
+    return { channel, delivered: true, detail: `gmail:${sent.messageId}` }
   }
 
   if (channel === 'imessage') {

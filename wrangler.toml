@@ -159,6 +159,12 @@ name = "brain-dream-cycle"
 binding = "DREAM_WORKFLOW"
 class_name = "DreamCycleWorkflow"
 
+# Durable human approval + cancellation window for irreversible actions.
+[[workflows]]
+name = "brain-action-approval"
+binding = "ACTION_APPROVAL_WORKFLOW"
+class_name = "ActionApprovalWorkflow"
+
 # ── Static Assets (Phase 11 dashboard) ───────────────────────────────────────
 # Served asset-first for matching paths; everything else falls through to the
 # Worker. CF Access protects the whole hostname (G5), so assets are gated at
@@ -187,4 +193,3 @@ WORKER_DOMAIN = "haetsalos.specialdarksystems.com"
 TELNYX_FROM_NUMBER = "+13236785761"
 AI_GATEWAY_ID = "haetsal-brain-gateway"
 AI_GATEWAY_ACCOUNT_ID = "d3f0a1c579945862edc9c6f6e36e448a"
-

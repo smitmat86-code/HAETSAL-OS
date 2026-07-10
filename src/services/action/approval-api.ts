@@ -65,7 +65,13 @@ export async function approvePendingAction(actionId: string, tenantId: string, j
     execute_after: executeAfter,
   })
 
-  return { action_id: action.id, state: 'queued', execute_after: executeAfter }
+  return {
+    action_id: action.id,
+    state: 'queued' as const,
+    execute_after: executeAfter,
+    capability_class: action.capability_class,
+    send_delay_seconds: action.send_delay_seconds,
+  }
 }
 
 export async function rejectPendingAction(actionId: string, tenantId: string, jwtSub: string, reason: string | null, env: Env) {
@@ -102,7 +108,11 @@ export async function rejectPendingAction(actionId: string, tenantId: string, jw
     tenant_id: tenantId,
   })
 
-  return { action_id: action.id, state: 'rejected' }
+  return {
+    action_id: action.id,
+    state: 'rejected' as const,
+    capability_class: action.capability_class,
+  }
 }
 
 export function clampPositiveInt(rawValue: string | undefined, fallback: number, max: number): number {
@@ -121,10 +131,10 @@ function parseStates(stateParam: string): ActionState[] | 'all' | null {
 }
 
 async function loadPendingAction(actionId: string, tenantId: string, env: Env): Promise<
-  Pick<PendingActionRow, 'id' | 'state' | 'send_delay_seconds' | 'payload_hash'> | null
+  Pick<PendingActionRow, 'id' | 'state' | 'send_delay_seconds' | 'payload_hash' | 'capability_class'> | null
 > {
   return env.D1_US.prepare(
-    `SELECT id, state, send_delay_seconds, payload_hash
+    `SELECT id, state, send_delay_seconds, payload_hash, capability_class
      FROM pending_actions
      WHERE id = ? AND tenant_id = ?`,
   ).bind(actionId, tenantId).first()

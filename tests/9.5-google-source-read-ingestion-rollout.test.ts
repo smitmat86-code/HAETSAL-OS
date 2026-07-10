@@ -12,8 +12,11 @@ import {
   captureRecentCalendarEventWindow,
   captureRecentGmailThreadWindow,
 } from '../src/services/google-source-read'
-import { GOOGLE_SOURCE_READ_PROFILE } from '../src/services/google-source-read-contract'
+import { buildGoogleSourceRef, GOOGLE_SOURCE_READ_PROFILE } from '../src/services/google-source-read-contract'
 import { registerCanonicalMemoryTools } from '../src/tools/canonical-memory'
+import { retainContent } from '../src/services/ingestion/retain'
+import { listRecentCanonicalMemories } from '../src/services/canonical-memory-query'
+import { getCanonicalMemoryStore } from '../src/services/canonical-postgres'
 
 type ToolResponse = { content: Array<{ text: string }> }
 type ToolHandler = (input: unknown) => Promise<ToolResponse>
@@ -205,5 +208,41 @@ Link it to [[Selective Ingestion]] and [[Canonical Provenance]].`, { status: 200
     expect(sourceRead.operations.every((operation) => operation.actionClass === 'source-read')).toBe(true)
     expect(sourceRead.operations.every((operation) => !operation.id.includes('send') && !operation.id.includes('create') && !operation.id.includes('edit'))).toBe(true)
     expect(EXTERNAL_BRAIN_SURFACES.some((surface) => surface.id === 'brain-actions' && surface.status === 'deferred')).toBe(true)
+  })
+
+  it('keeps recent memory evidence available when an encrypted source body is missing', async () => {
+    const tmk = await deriveTestTmk()
+    const sourceId = `thread-missing-body-${crypto.randomUUID()}`
+    const retained = await retainContent({
+      tenantId: TENANT_ID,
+      source: 'gmail',
+      sourceRef: buildGoogleSourceRef({
+        surface: 'brain-sources-read',
+        kind: 'gmail',
+        sourceId,
+      }),
+      content: `Recent Google source evidence should survive a missing encrypted body ${sourceId}.`,
+      occurredAt: Date.now(),
+      domain: 'evidence',
+      provenance: 'source_ingested',
+      metadata: { title: 'Missing encrypted body evidence' },
+    }, tmk, env, { waitUntil: vi.fn() } as unknown as ExecutionContext)
+
+    expect(retained?.canonicalDocumentId).toBeTruthy()
+    const document = await getCanonicalMemoryStore(env).getDocument(TENANT_ID, retained!.canonicalDocumentId!)
+    expect(document?.body_r2_key).toBeTruthy()
+    await env.R2_ARTIFACTS.delete(document!.body_r2_key)
+
+    const recent = await listRecentCanonicalMemories(
+      { tenantId: TENANT_ID, limit: 20 },
+      env,
+      TENANT_ID,
+      { tmk },
+    )
+    const item = recent.items.find((entry) => entry.documentId === retained?.canonicalDocumentId)
+
+    expect(item?.googleSource?.kind).toBe('gmail')
+    expect(item?.googleSource?.sourceId).toBe(sourceId)
+    expect(item?.preview).toBe('Missing encrypted body evidence')
   })
 })

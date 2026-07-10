@@ -16,7 +16,9 @@ export async function listRecentCanonicalMemories(input: CanonicalRecentInput, e
   return {
     items: await Promise.all(rows.map(async row => toMemoryListItem(
       row,
-      options.tmk ? await readCanonicalDocumentBody(env, row.body_r2_key, options.tmk) : null,
+      options.tmk
+        ? await readCanonicalDocumentBody(env, row.body_r2_key, options.tmk).catch(() => null)
+        : null,
     ))),
   }
 }

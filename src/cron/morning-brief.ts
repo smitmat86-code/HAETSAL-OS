@@ -16,6 +16,7 @@ import {
   fetchGift, fetchNews, fetchVerse,
 } from './brief-sections'
 import { fetchDreamSection } from '../services/dream/brief-section'
+import { fetchOpsSection, OPS_FRESHNESS_FALLBACK } from './brief-ops-section'
 import { isTaskEnabled } from '../services/system/tasks'
 
 // ── Assembly + Delivery ────────────────────────────────────────────────────
@@ -35,11 +36,12 @@ async function buildAndDeliver(
   const kek = await fetchAndValidateKek(tenantId, env)
   if (!kek) return
 
-  const [cal, pend, hl, loop, gift, news, verse, dream] = await Promise.allSettled([
+  const [cal, pend, hl, loop, gift, news, verse, dream, ops] = await Promise.allSettled([
     fetchCalendar(tenantId, kek, env), fetchPending(tenantId, env),
     fetchHighlights(tenantId, kek, env), fetchOpenLoop(tenantId, env),
     fetchGift(tenantId, kek, env), fetchNews(env), fetchVerse(env),
     fetchDreamSection(tenantId, kek, env), // Phase 8 (demo clause 9)
+    fetchOpsSection(tenantId, env), // M4 — standing dead-man's switch section
   ])
 
   const r = <T>(s: PromiseSettledResult<T>, fb: T): T =>
@@ -53,6 +55,8 @@ async function buildAndDeliver(
   const hlStr = r(hl, '');        if (hlStr) parts.push('', '<b>From Your Brain</b>', hlStr)
   const loopStr = r(loop, '');    if (loopStr) parts.push('', '<b>Open Loop</b>', loopStr)
   const giftStr = r(gift, '');    if (giftStr) parts.push('', '<b>Something Interesting</b>', giftStr)
+  // M4: ALWAYS present — the absence/degradation of this line is the alarm.
+  parts.push('', '<b>Ops</b>', r(ops, OPS_FRESHNESS_FALLBACK))
   parts.push('', '<b>News</b>', r(news, '_News unavailable_'))
   const verseStr = r(verse, '');  if (verseStr) parts.push('', verseStr)
 

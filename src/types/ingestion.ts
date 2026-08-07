@@ -10,6 +10,7 @@ export type IngestionSource =
   | 'obsidian'
   | 'file'
   | 'mcp_retain'
+  | 'ops_alert'
   | 'mcp:memory_write'
   | 'cron:consolidation'
   | 'cron:dream'

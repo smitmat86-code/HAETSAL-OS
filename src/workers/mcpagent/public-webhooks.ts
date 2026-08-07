@@ -2,6 +2,7 @@ import type { Hono } from 'hono'
 import type { Env } from '../../types/env'
 import { processSendblueInbound, type SendblueInboundBody } from '../../services/sendblue-inbound'
 import { processTelegramInbound, type TelegramUpdate } from '../../services/telegram-inbound'
+import { registerOpsAlertWebhook } from './ops-alert-webhook'
 
 type Variables = {
   tenantId: string
@@ -21,6 +22,8 @@ function timingSafeEqualStrings(left: string, right: string): boolean {
 export function registerPublicWebhooks(
   app: Hono<{ Bindings: Env; Variables: Variables }>,
 ): void {
+  // M4 ops-alert ingress — Law 1 exception, per-source token (spec M4).
+  registerOpsAlertWebhook(app)
   // Sendblue iMessage inbound (mission Phase 4). Law 1 exception path with a
   // CF Access bypass app; Sendblue does NOT sign webhooks, so auth is the
   // bearer path segment compared in constant time, plus a to_number check.

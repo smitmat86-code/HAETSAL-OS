@@ -437,6 +437,24 @@
   choices, confusing agents during implementation. Use final intended paths from
   the build sequence from day one, or don't create them at all until needed.
 
+- **PowerShell Pipe Into `wrangler secret put` Corrupts The Value — Use `secret bulk`.**
+  Piping a string into `wrangler secret put` from PowerShell appends CRLF that
+  wrangler does not fully strip; a URL/token secret gains a trailing `\r` and
+  every consumer of it fails silently (the M4 canary POSTs "succeeded" but the
+  ingress token never matched). Write `{"NAME":"value"}` to a temp JSON file
+  and use `wrangler secret bulk file.json` instead — JSON values are exact.
+  Ref: M4 ops-alert ingress forced-fire debugging, 2026-08-06.
+
+- **CF Access Bypass Apps Need An Explicit `/*` Path Wildcard.**
+  An Access application whose domain is `host/path` covers ONLY that exact
+  path. `host/ops/alert` returned Access's empty-body 401 for
+  `/ops/alert/<token>` until the app domain was updated to
+  `host/ops/alert/*`. The existing Sendblue bypass (`/webhooks/sendblue/*`)
+  already encodes this; follow it for every parameterized webhook path. Also:
+  webhook senders that ignore response status (the health canary) make this
+  failure invisible — log the notify response status at the sender.
+  Ref: M4 ops-alert ingress rollout, 2026-08-06.
+
 ---
 
 ## Security

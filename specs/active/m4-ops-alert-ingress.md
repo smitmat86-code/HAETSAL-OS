@@ -130,8 +130,13 @@ title+body so distinct bodies with identical titles stay distinct.
 
 ## Pre-Finalization Checklist
 
-- [ ] npm test green
-- [ ] npm run postflight green
-- [ ] npm run manifest regenerated
-- [ ] Live forced-fire evidence captured (M1 gate 2c)
-- [ ] Mission file Evidence block updated in Fitness App repo
+- [x] npm test green (519 passed / 1 skipped, full tree, 2026-08-06)
+- [x] npm run postflight — clean for all M4 files (3 pre-existing violations
+      belong to the uncommitted Gmail-backfill session, not M4)
+- [x] npm run manifest regenerated
+- [x] Live forced-fire evidence captured (M1 gate 2c) — deployed canary paged
+      Matt's phone via Sendblue, confirmed; replay deduped; notice unpaged
+- [x] Mission file Evidence block updated in Fitness App repo
+- [ ] Freshness line + notice observed in a real 07:00 UTC morning brief
+      (pends next brief; tenant flipped to completed 2026-08-06 — integrator
+      confirms, then moves this spec to completed/)

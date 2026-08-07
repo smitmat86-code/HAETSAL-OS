@@ -1933,3 +1933,23 @@
 **Next:** Move 11.3 to completed when the branch is finalized, then broaden compiled-read adoption deliberately: improve subject-key resolution beyond the first slug-based path and add queue/Workflow-driven freshness regeneration so compiled packs stay ready before more agents and product surfaces adopt them.
 
 ---
+
+## Session M4 - 2026-08-06
+
+**Spec:** m4-ops-alert-ingress (cross-project mission M4, Fitness App ADR-0006)
+**Built:**
+- `migrations/1029_ops_alert_ingress.sql`, `src/types/ops-alert.ts`, `src/services/ops-alert/{registry,ingest,deliver}.ts`, `src/workers/mcpagent/ops-alert-webhook.ts` - generic `POST /ops/alert/:token` ingress: per-source SHA-256 token registry in D1, INSERT OR IGNORE dedupe with per-source re-page window, shallow page path (Sendblue -> Telnyx SMS fallback, no broker/LLM/DO before delivery), async episodic memory via retain queue (`ops_alert` IngestionSource)
+- `src/cron/brief-ops-section.ts` + morning-brief wiring - standing Ops section: dead-man freshness line from haetsal_health Neon via `HEALTH_SPINE_RO_URL` (SELECT-only role `haetsal_health_ro`, Phase 4 haetsal_ro forerunner) + last-24h alerts
+- `tests/m4-ops-alert-ingress.test.ts` - 7 contracts; `docs/runbooks/ops-alert-ingress.md`
+**Decisions:**
+- Token in path (canary-style senders cannot set headers); D1 stores hash only; adding a source is a D1 INSERT, never code
+- `ops_alerts` stores title only - the 1.1 plaintext guard forbids content-named columns in D1; full text reaches T1 via the memory write
+- Ongoing outages re-page once per dedupe window (anchored on paged_at), replays bump replay_count
+**Verification:**
+- `npm test` 519 passed / 1 skipped on the full tree; postflight clean for M4 files (3 pre-existing violations belong to the uncommitted Gmail-backfill session)
+- Live (deploy fa3065f4): forced-fire from deployed health canary paged Matt's phone via Sendblue (confirmed by Matt); replayed dedupe key returned `duplicate` with no re-page (replay_count=2, single paged_at); `notice` severity recorded with paged_at NULL; CF Access bypass app for `/ops/alert/*` created
+- `haetsal-health` registered as source #1 for tenant f512390d...; tenant flipped to bootstrap_status=completed (Matt-approved) so the 07:00 UTC brief renders the Ops section
+**Blockers:** Morning-brief live appearance of freshness line + notice pends the next 07:00 UTC brief (needs valid Cron KEK - open the root page after CF Access login before then). Spec stays in specs/active/ until that lands; integrator merges both mission branches.
+**Next:** Integrator validates `mission/m4-ops-ingress` (this repo + Fitness App), confirms brief render, moves spec to completed.
+
+---

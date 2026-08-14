@@ -12,6 +12,10 @@ import { getArtifactIntakeOperation } from '../src/services/artifact-intake/oper
 import { getCanonicalDocument, searchCanonicalMemory } from '../src/services/canonical-memory-query'
 import { getCanonicalMemoryStore } from '../src/services/canonical-postgres'
 import { registerArtifactIntakeTools } from '../src/tools/artifact-intake'
+import {
+  CHATGPT_ARTIFACT_CAPTURE_UI_HTML,
+  CHATGPT_ARTIFACT_CAPTURE_UI_URI,
+} from '../src/tools/artifact-intake-chatgpt-ui'
 
 const SUITE_ID = crypto.randomUUID()
 const TENANT = `session-4-chatgpt-${SUITE_ID}`
@@ -19,7 +23,7 @@ const SUBJECT = `session-4-human-${SUITE_ID}`
 const AUDIENCE = 'test-aud-brain-access'
 const LIMITS: ArtifactDownloadLimits = { maxBytes: 64, timeoutMs: 25, maxRedirects: 2 }
 
-type ToolResponse = { isError?: boolean; content: Array<{ text: string }> }
+type ToolResponse = { isError?: boolean; content: Array<{ text: string }>; structuredContent?: unknown }
 type ToolHandler = (input: unknown) => Promise<ToolResponse>
 
 function stream(...chunks: Uint8Array[]): ReadableStream<Uint8Array> {
@@ -74,6 +78,7 @@ function registry(args: {
 }) {
   const handlers = new Map<string, ToolHandler>()
   const configs = new Map<string, Record<string, unknown>>()
+  const resources = new Map<string, { config: Record<string, unknown>; read: () => Promise<unknown> }>()
   const server = {
     tool(name: string, _description: string, _shape: object, _annotations: object, handler: ToolHandler) {
       handlers.set(name, handler)
@@ -81,6 +86,9 @@ function registry(args: {
     registerTool(name: string, config: Record<string, unknown>, handler: ToolHandler) {
       configs.set(name, config)
       handlers.set(name, handler)
+    },
+    registerResource(name: string, _uri: string, config: Record<string, unknown>, read: () => Promise<unknown>) {
+      resources.set(name, { config, read })
     },
   } as unknown as McpServer
   registerArtifactIntakeTools(server, {
@@ -92,7 +100,7 @@ function registry(args: {
     },
     downloadHostedFile: args.downloader,
   })
-  return { handlers, configs }
+  return { handlers, configs, resources }
 }
 
 async function call(reg: ReturnType<typeof registry>, input: unknown) {
@@ -124,6 +132,49 @@ describe('12.7 Session 4 ChatGPT hosted attachment downloader', () => {
     expect(Object.keys(config.inputSchema.shape.file!.shape!).sort()).toEqual([
       'download_url', 'file_id', 'file_name', 'mime_type',
     ])
+  })
+
+  it('registers a decoupled MCP Apps picker bridge without exposing selected file metadata', async () => {
+    const reg = registry({ key: await deriveTmk(SUBJECT, AUDIENCE) })
+    const config = reg.configs.get('prepare_artifact_file_capture') as {
+      annotations: Record<string, boolean>
+      _meta: Record<string, unknown>
+    }
+    expect(config.annotations).toEqual({
+      readOnlyHint: true, destructiveHint: false, openWorldHint: false,
+    })
+    expect(config._meta).toMatchObject({
+      ui: { resourceUri: CHATGPT_ARTIFACT_CAPTURE_UI_URI },
+      'openai/outputTemplate': CHATGPT_ARTIFACT_CAPTURE_UI_URI,
+    })
+
+    const prepared = await reg.handlers.get('prepare_artifact_file_capture')!({
+      searchable_content: 'model-produced extraction',
+      title: 'Safe title',
+      model_runtime: 'ChatGPT',
+    })
+    expect(prepared.structuredContent).toEqual({
+      status: 'selection_required',
+      searchable_content: 'model-produced extraction',
+      title: 'Safe title',
+      scope: 'general',
+      model_runtime: 'ChatGPT',
+    })
+    expect(JSON.parse(prepared.content[0]!.text)).toEqual({ status: 'selection_required' })
+
+    const resource = await reg.resources.get('haetsal-artifact-capture')!.read() as {
+      contents: Array<Record<string, unknown>>
+    }
+    expect(resource.contents[0]).toMatchObject({
+      uri: CHATGPT_ARTIFACT_CAPTURE_UI_URI,
+      mimeType: 'text/html;profile=mcp-app',
+      _meta: { ui: { prefersBorder: true, csp: { connectDomains: [], resourceDomains: [] } } },
+    })
+    expect(CHATGPT_ARTIFACT_CAPTURE_UI_HTML).toContain('openai.selectFiles()')
+    expect(CHATGPT_ARTIFACT_CAPTURE_UI_HTML).toContain("request('tools/call'")
+    expect(CHATGPT_ARTIFACT_CAPTURE_UI_HTML).toContain("allowed.has(value) ? value : 'capture_failed'")
+    expect(CHATGPT_ARTIFACT_CAPTURE_UI_HTML).not.toContain('fileName:')
+    expect(CHATGPT_ARTIFACT_CAPTURE_UI_HTML).not.toContain('imageIds: [selected.fileId]')
   })
 
   it('revalidates each redirect and pins the connection-time public address', async () => {
@@ -305,6 +356,12 @@ describe('12.7 Session 4 ChatGPT hosted attachment integration', () => {
     const authorized = registry({ key, downloader: goodDownload })
     expect((await call(authorized, { searchable_content: 'no attachment' })).body)
       .toEqual({ status: 'failed', error_code: 'raw_bytes_unavailable' })
+    expect((await call(authorized, {
+      file: '/mnt/data/not-a-descriptor', searchable_content: 'path-shaped attachment',
+    })).body).toEqual({ status: 'failed', error_code: 'raw_bytes_unavailable' })
+    expect((await call(authorized, {
+      file: 'file_not_a_descriptor', searchable_content: 'id-shaped attachment',
+    })).body).toEqual({ status: 'failed', error_code: 'raw_bytes_unavailable' })
     const malformed = await call(authorized, {
       file: { download_url: 'https://files.example.com/value' }, searchable_content: 'malformed',
     })

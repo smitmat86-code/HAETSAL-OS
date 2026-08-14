@@ -58,6 +58,9 @@ function registry(tmk: CryptoKey | null, identity = {
       metadata.set(name, config._meta ?? {})
       handlers.set(name, handler)
     },
+    registerResource() {
+      // Resource behavior is covered by the Session 4 ChatGPT-hosted suite.
+    },
   } as unknown as McpServer
   registerArtifactIntakeTools(server, {
     getEnv: () => env,
@@ -93,11 +96,12 @@ beforeAll(async () => {
 })
 
 describe('12.6 Session 3 MCP and local binary transport', () => {
-  it('registers the four annotated tools without caller-controlled tenant input', () => {
+  it('registers the annotated tools without caller-controlled tenant input', () => {
     const reg = registry(null)
     expect([...reg.handlers.keys()]).toEqual([
       'reserve_artifact_upload',
       'capture_artifact_file',
+      'prepare_artifact_file_capture',
       'finalize_artifact_capture',
       'artifact_intake_status',
     ])

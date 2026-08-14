@@ -29,7 +29,14 @@ export function registerChatGptArtifactTool(server: McpServer, ctx: ArtifactInta
     },
     async (input) => {
       try {
-        if (!input || typeof input !== 'object' || !('file' in input)) {
+        if (
+          !input
+          || typeof input !== 'object'
+          || !('file' in input)
+          || typeof input.file !== 'object'
+          || input.file === null
+          || Array.isArray(input.file)
+        ) {
           throw new ArtifactIntakeContractError(ARTIFACT_INTAKE_ERROR.RAW_BYTES_UNAVAILABLE)
         }
         const typed = captureArtifactFileToolSchema.parse(input)

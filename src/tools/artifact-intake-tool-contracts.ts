@@ -9,6 +9,7 @@ export const ARTIFACT_INTAKE_TOOL_NAMES = [
   'finalize_artifact_capture',
   'artifact_intake_status',
   'capture_artifact_file',
+  'prepare_artifact_file_capture',
 ] as const
 
 const uploadId = z.string().uuid()
@@ -56,6 +57,8 @@ export const captureArtifactFileToolSchema = z.object({
   scope: z.string().trim().min(1).max(120).default('general'),
   model_runtime: z.string().trim().min(1).max(160).optional(),
 }).strict()
+
+export const prepareArtifactFileCaptureToolSchema = captureArtifactFileToolSchema.omit({ file: true })
 
 export const artifactWriteAnnotations = Object.freeze({
   readOnlyHint: false,

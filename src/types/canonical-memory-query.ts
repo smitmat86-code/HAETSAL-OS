@@ -73,11 +73,25 @@ export interface CanonicalSearchResult {
 }
 export interface CanonicalRecentResult { items: CanonicalMemoryListItem[] }
 export interface CanonicalDocumentArtifact { artifactId: string; filename: string | null; mediaType: string | null; byteLength: number | null; storageKind?: string | null; storageKey?: string | null }
+export interface CanonicalDocumentArtifactManifestEntry {
+  artifactId: string
+  role: 'source' | 'derivative'
+  parentArtifactId: string | null
+  primary: boolean
+  storageKind: string
+  filename: string | null
+  mediaType: string | null
+  byteLength: number | null
+  plaintextSha256: string | null
+  ciphertextSha256: string | null
+  encryptionFamily: string
+}
 export interface CanonicalDocumentResult {
   captureId: string; documentId: string; title: string | null; scope: string; sourceSystem: string; sourceRef: string | null
   brainMemory?: BrainMemoryRolloutAttribution | null; googleSource?: GoogleSourceReadAttribution | null
   body: string; chunkCount: number; capturedAt: number; createdAt: number
   artifact: CanonicalDocumentArtifact | null
+  artifacts: CanonicalDocumentArtifactManifestEntry[]
 }
 
 /** Retired in mission Phase 3 — both engine projection statuses are null after cleanup. */

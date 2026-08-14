@@ -1,4 +1,5 @@
 import type { Env } from '../types/env'
+import type { CanonicalArtifactManifestRow } from './canonical-postgres-schema'
 
 export interface CanonicalMemoryReadOptions {
   tmk?: CryptoKey | null
@@ -25,6 +26,7 @@ export interface CanonicalDocumentRow extends CanonicalListRow {
   byte_length: number | null
   storage_kind: string | null
   r2_key: string | null
+  artifact_manifest: CanonicalArtifactManifestRow[]
 }
 
 export function clampCanonicalLimit(

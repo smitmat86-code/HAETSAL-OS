@@ -126,6 +126,44 @@ function dedupeGraphMappings(
   })
 }
 
+function assertValidCanonicalCaptureWrite(input: CanonicalCaptureWrite): void {
+  const ids = new Set(input.artifacts.map(artifact => artifact.id))
+  if (ids.size !== input.artifacts.length) throw new Error('Duplicate canonical artifact id')
+  if (input.capture.tenant_id !== input.document.tenant_id || input.capture.id !== input.document.capture_id) {
+    throw new Error('Canonical document tenant/capture mismatch')
+  }
+  if (input.capture.artifact_id !== input.document.artifact_id) {
+    throw new Error('Canonical primary artifact pointers disagree')
+  }
+  if (input.artifacts.length > 0 && !input.capture.artifact_id) {
+    throw new Error('Canonical artifact manifest requires a primary pointer')
+  }
+  if (input.capture.artifact_id && !ids.has(input.capture.artifact_id)) {
+    throw new Error('Canonical primary artifact is absent from manifest')
+  }
+  if (input.artifacts.filter(artifact => artifact.role === 'source').length > 1) {
+    throw new Error('Canonical artifact manifest has multiple sources')
+  }
+  const ordinalById = new Map(input.artifacts.map(artifact => [artifact.id, artifact.ordinal]))
+  if (new Set(input.artifacts.map(artifact => artifact.ordinal)).size !== input.artifacts.length) {
+    throw new Error('Canonical artifact manifest has duplicate ordinals')
+  }
+  for (const artifact of input.artifacts) {
+    if (artifact.tenant_id !== input.capture.tenant_id || artifact.capture_id !== input.capture.id) {
+      throw new Error('Canonical artifact tenant/capture mismatch')
+    }
+    if (artifact.parent_artifact_id && !ids.has(artifact.parent_artifact_id)) {
+      throw new Error('Canonical artifact parent is absent from manifest')
+    }
+    if (artifact.parent_artifact_id && (ordinalById.get(artifact.parent_artifact_id) ?? artifact.ordinal) >= artifact.ordinal) {
+      throw new Error('Canonical artifact parent must precede its derivative')
+    }
+    if (artifact.role === 'source' && artifact.parent_artifact_id) {
+      throw new Error('Canonical source artifact cannot have a parent')
+    }
+  }
+}
+
 const NUMERIC_DB_FIELDS = new Set([
   'captured_at',
   'created_at',
@@ -173,8 +211,9 @@ export class InMemoryCanonicalMemoryStore implements CanonicalMemoryStore {
   private readonly chunkEmbeddings = new Map<string, number[]>()
 
   async writeCapture(input: CanonicalCaptureWrite): Promise<void> {
+    assertValidCanonicalCaptureWrite(input)
     this.captures.set(input.capture.id, { ...input.capture })
-    if (input.artifact) this.artifactRows.set(input.artifact.id, { ...input.artifact })
+    input.artifacts.forEach((artifact) => { this.artifactRows.set(artifact.id, { ...artifact }) })
     this.documents.set(input.document.id, { ...input.document })
     input.chunks.forEach((chunk) => { this.chunks.set(chunk.id, { ...chunk }) })
     this.operations.set(input.operation.id, { ...input.operation })
@@ -330,6 +369,23 @@ export class InMemoryCanonicalMemoryStore implements CanonicalMemoryStore {
     const capture = this.captures.get(document.capture_id)
     if (!capture) return null
     const artifact = document.artifact_id ? this.artifactRows.get(document.artifact_id) : null
+    const artifactManifest = [...this.artifactRows.values()]
+      .filter(row => row.tenant_id === tenantId && row.capture_id === capture.id)
+      .sort((left, right) => left.ordinal - right.ordinal || left.id.localeCompare(right.id))
+      .map(row => ({
+        artifact_id: row.id,
+        role: row.role,
+        parent_artifact_id: row.parent_artifact_id,
+        storage_kind: row.storage_kind,
+        media_type: row.media_type,
+        filename: row.filename,
+        byte_length: row.byte_length,
+        sha256: row.sha256,
+        cipher_sha256: row.cipher_sha256,
+        encryption_family: row.encryption_family,
+        ordinal: row.ordinal,
+        primary: row.id === capture.artifact_id,
+      }))
     return {
       capture_id: capture.id,
       document_id: document.id,
@@ -347,6 +403,7 @@ export class InMemoryCanonicalMemoryStore implements CanonicalMemoryStore {
       byte_length: artifact?.byte_length ?? null,
       storage_kind: artifact?.storage_kind ?? null,
       r2_key: artifact?.r2_key ?? null,
+      artifact_manifest: artifactManifest,
     }
   }
 
@@ -589,6 +646,7 @@ export class PostgresCanonicalMemoryStore implements CanonicalMemoryStore {
 
   async writeCapture(input: CanonicalCaptureWrite): Promise<void> {
     await this.ensureSchema()
+    assertValidCanonicalCaptureWrite(input)
     const queries = [
       this.sql.prepare`INSERT INTO haetsal_canonical.canonical_captures
         (id, tenant_id, source_system, source_ref, scope, title, body_r2_key, body_sha256, artifact_id, captured_at, created_at,
@@ -602,11 +660,13 @@ export class PostgresCanonicalMemoryStore implements CanonicalMemoryStore {
                 ${input.capture.confidence}, ${input.capture.retention}, ${input.capture.provenance_note},
                 ${input.capture.memory_type}, ${input.capture.dedup_hash}, ${input.capture.salience_tier},
                 ${input.capture.governance_downgraded_json})`,
-      ...(input.artifact ? [this.sql.prepare`INSERT INTO haetsal_canonical.canonical_artifacts
-        (id, tenant_id, capture_id, storage_kind, r2_key, media_type, filename, byte_length, sha256, created_at)
-        VALUES (${input.artifact.id}, ${input.artifact.tenant_id}, ${input.artifact.capture_id}, ${input.artifact.storage_kind},
-                ${input.artifact.r2_key}, ${input.artifact.media_type}, ${input.artifact.filename}, ${input.artifact.byte_length},
-                ${input.artifact.sha256}, ${input.artifact.created_at})`] : []),
+      ...input.artifacts.map(artifact => this.sql.prepare`INSERT INTO haetsal_canonical.canonical_artifacts
+        (id, tenant_id, capture_id, storage_kind, r2_key, media_type, filename, byte_length, sha256,
+         cipher_sha256, encryption_family, role, parent_artifact_id, ordinal, created_at)
+        VALUES (${artifact.id}, ${artifact.tenant_id}, ${artifact.capture_id}, ${artifact.storage_kind},
+                ${artifact.r2_key}, ${artifact.media_type}, ${artifact.filename}, ${artifact.byte_length},
+                ${artifact.sha256}, ${artifact.cipher_sha256}, ${artifact.encryption_family}, ${artifact.role},
+                ${artifact.parent_artifact_id}, ${artifact.ordinal}, ${artifact.created_at})`),
       this.sql.prepare`INSERT INTO haetsal_canonical.canonical_documents
         (id, tenant_id, capture_id, artifact_id, title, body_r2_key, body_sha256, chunk_count, created_at)
         VALUES (${input.document.id}, ${input.document.tenant_id}, ${input.document.capture_id}, ${input.document.artifact_id},
@@ -759,7 +819,7 @@ export class PostgresCanonicalMemoryStore implements CanonicalMemoryStore {
   }
 
   async getDocument(tenantId: string, documentId: string): Promise<CanonicalDocumentLookupRow | null> {
-    return this.first<CanonicalDocumentLookupRow>(this.sql`
+    const row = await this.first<Omit<CanonicalDocumentLookupRow, 'artifact_manifest'>>(this.sql`
       SELECT c.id AS capture_id, d.id AS document_id, d.title, c.scope, c.source_system, c.source_ref, c.captured_at,
              d.body_r2_key, d.chunk_count, d.created_at AS document_created_at,
              a.id AS artifact_id, a.filename, a.media_type, a.byte_length, a.storage_kind, a.r2_key
@@ -769,6 +829,17 @@ export class PostgresCanonicalMemoryStore implements CanonicalMemoryStore {
       WHERE d.tenant_id = ${tenantId} AND d.id = ${documentId}
       LIMIT 1
     `)
+    if (!row) return null
+    const manifest = await this.rows<CanonicalDocumentLookupRow['artifact_manifest'][number]>(this.sql`
+      SELECT a.id AS artifact_id, a.role, a.parent_artifact_id, a.storage_kind, a.media_type, a.filename,
+             a.byte_length, a.sha256, a.cipher_sha256, a.encryption_family, a.ordinal,
+             (a.id = c.artifact_id) AS primary
+      FROM haetsal_canonical.canonical_artifacts a
+      INNER JOIN haetsal_canonical.canonical_captures c ON c.id = a.capture_id AND c.tenant_id = a.tenant_id
+      WHERE a.tenant_id = ${tenantId} AND a.capture_id = ${row.capture_id}
+      ORDER BY a.ordinal ASC, a.id ASC
+    `)
+    return { ...row, artifact_manifest: manifest.map(item => ({ ...item, primary: Boolean(item.primary) })) }
   }
 
   async getOperationById(tenantId: string, operationId: string): Promise<CanonicalOperationLookupRow | null> {

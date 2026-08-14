@@ -61,6 +61,11 @@ export interface CanonicalArtifactRecord {
   filename: string | null
   byte_length: number | null
   sha256: string | null
+  cipher_sha256: string | null
+  encryption_family: 'tmk' | 'kek' | 'legacy_unsealed'
+  role: 'source' | 'derivative'
+  parent_artifact_id: string | null
+  ordinal: number
   created_at: number
 }
 
@@ -138,7 +143,7 @@ export interface CanonicalGraphIdentityMappingRecord {
 
 export interface CanonicalCaptureWrite {
   capture: CanonicalCaptureRecord
-  artifact: CanonicalArtifactRecord | null
+  artifacts: CanonicalArtifactRecord[]
   document: CanonicalDocumentRecord
   chunks: CanonicalChunkRecord[]
   operation: CanonicalMemoryOperationRecord
@@ -167,6 +172,22 @@ export interface CanonicalDocumentLookupRow extends CanonicalListRow {
   byte_length: number | null
   storage_kind: string | null
   r2_key: string | null
+  artifact_manifest: CanonicalArtifactManifestRow[]
+}
+
+export interface CanonicalArtifactManifestRow {
+  artifact_id: string
+  role: 'source' | 'derivative'
+  parent_artifact_id: string | null
+  storage_kind: string
+  media_type: string | null
+  filename: string | null
+  byte_length: number | null
+  sha256: string | null
+  cipher_sha256: string | null
+  encryption_family: string
+  ordinal: number
+  primary: boolean
 }
 
 export interface CanonicalOperationLookupRow {

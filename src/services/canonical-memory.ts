@@ -7,6 +7,7 @@ import { buildCanonicalCaptureAcceptedAuditBatch } from './canonical-memory-audi
 import { persistCanonicalPayloads, sha256Hex } from './canonical-memory-artifacts'
 import { resolveCaptureGovernance } from './canonical-governance'
 import { getCanonicalMemoryStore } from './canonical-postgres'
+import type { CanonicalCaptureWrite } from './canonical-postgres-schema'
 import {
   assertCanonicalIdentity,
   normalizeCanonicalBody,
@@ -14,7 +15,7 @@ import {
   requireEncryptedBody,
   resolveCanonicalProjectionKinds,
 } from './canonical-memory-schema'
-import { toNormalizedArtifact, type CanonicalShadowCaptureArgs } from './canonical-memory-types'
+import { toNormalizedArtifacts, type CanonicalShadowCaptureArgs } from './canonical-memory-types'
 
 function canonicalShadowWritesEnabled(env: Env): boolean {
   return env.CANONICAL_MEMORY_SHADOW_WRITES === 'true'
@@ -47,10 +48,12 @@ export async function captureCanonicalMemory(
     usePolicy: input.governance?.usePolicy ?? null,
     legacyMemoryType: input.governance?.legacyMemoryType ?? null,
   })
+  const artifacts = toNormalizedArtifacts(input)
+  const primaryArtifact = artifacts.find(artifact => artifact.primary) ?? null
   const capture = {
-    captureId: crypto.randomUUID(),
-    documentId: crypto.randomUUID(),
-    operationId: crypto.randomUUID(),
+    captureId: input.captureId?.trim() || crypto.randomUUID(),
+    documentId: input.documentId?.trim() || crypto.randomUUID(),
+    operationId: input.operationId?.trim() || crypto.randomUUID(),
     projectionKinds: resolveCanonicalProjectionKinds(input.projectionKinds),
     tenantId,
     sourceSystem: input.sourceSystem,
@@ -59,19 +62,17 @@ export async function captureCanonicalMemory(
     title: input.title?.trim() || null,
     body,
     bodyEncrypted: requireEncryptedBody({ bodyEncrypted: input.bodyEncrypted ?? '' }),
-    artifact: toNormalizedArtifact(input.artifactRef),
+    artifacts,
+    primaryArtifact,
     capturedAt: governance.envelope.capturedAt,
   }
   const chunks = planCanonicalChunks(body)
   const payloads = await persistCanonicalPayloads(capture, env)
   const createdAt = Date.now()
   const projectionJobs = capture.projectionKinds.map(kind => ({ id: crypto.randomUUID(), kind }))
-  const artifactStorageKind = capture.artifact
-    ? (capture.artifact.ref.contentEncrypted?.trim() ? 'r2' : 'reference')
-    : null
   const store = getCanonicalMemoryStore(env)
 
-  const write = {
+  const write: CanonicalCaptureWrite = {
     capture: {
       id: capture.captureId,
       tenant_id: tenantId,
@@ -81,7 +82,7 @@ export async function captureCanonicalMemory(
       title: capture.title,
       body_r2_key: payloads.documentR2Key,
       body_sha256: payloads.documentSha256,
-      artifact_id: capture.artifact?.id ?? null,
+      artifact_id: capture.primaryArtifact?.id ?? null,
       captured_at: capture.capturedAt,
       created_at: createdAt,
       memory_class: governance.memoryClass,
@@ -98,25 +99,33 @@ export async function captureCanonicalMemory(
       salience_tier: input.governance?.salienceTier ?? null,
       governance_downgraded_json: governance.downgraded ? JSON.stringify(governance.downgraded) : null,
     },
-    artifact: capture.artifact
-      ? {
-        id: capture.artifact.id,
+    artifacts: capture.artifacts.map((artifact, ordinal) => {
+      const persisted = payloads.artifacts[artifact.id]!
+      const storageKind = artifact.ref.storageKind
+        ?? (artifact.ref.contentEncrypted?.trim() ? 'r2' : 'reference')
+      return {
+        id: artifact.id,
         tenant_id: tenantId,
         capture_id: capture.captureId,
-        storage_kind: artifactStorageKind ?? 'reference',
-        r2_key: payloads.artifactR2Key,
-        media_type: capture.artifact.ref.mediaType ?? null,
-        filename: capture.artifact.ref.filename ?? null,
-        byte_length: capture.artifact.ref.byteLength ?? null,
-        sha256: payloads.artifactSha256,
+        storage_kind: storageKind,
+        r2_key: persisted.r2Key,
+        media_type: artifact.ref.mediaType ?? null,
+        filename: artifact.ref.filename ?? null,
+        byte_length: artifact.ref.byteLength ?? null,
+        sha256: persisted.sha256,
+        cipher_sha256: artifact.ref.cipherSha256 ?? null,
+        encryption_family: artifact.ref.encryptionFamily ?? 'legacy_unsealed',
+        role: artifact.role,
+        parent_artifact_id: artifact.parentArtifactId,
+        ordinal,
         created_at: createdAt,
       }
-      : null,
+    }),
     document: {
       id: capture.documentId,
       tenant_id: tenantId,
       capture_id: capture.captureId,
-      artifact_id: capture.artifact?.id ?? null,
+      artifact_id: capture.primaryArtifact?.id ?? null,
       title: capture.title,
       body_r2_key: payloads.documentR2Key,
       body_sha256: payloads.documentSha256,
@@ -185,7 +194,8 @@ export async function captureCanonicalMemory(
   return {
     captureId: capture.captureId,
     documentId: capture.documentId,
-    artifactId: capture.artifact?.id ?? null,
+    artifactId: capture.primaryArtifact?.id ?? null,
+    artifactIds: capture.artifacts.map(artifact => artifact.id),
     chunkIds: chunks.map(chunk => chunk.id),
     operationId: capture.operationId,
     projectionJobIds: projectionJobs.map(job => job.id),

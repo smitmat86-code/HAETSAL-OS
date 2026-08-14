@@ -18,21 +18,25 @@ import {
 } from './automation-runtime'
 import { listAutomationsView } from './automation-view'
 import type { AgentRunView } from '../../../agents/execution/types'
-
-interface McpAgentProps extends Record<string, unknown> { tenantId?: string; jwtSub?: string }
+interface McpAgentProps extends Record<string, unknown> {
+  tenantId?: string; jwtSub?: string; clientName?: string | null; agentIdentity?: string | null
+}
 export class McpAgentDO extends BaseMcpAgent<Env, unknown, McpAgentProps> {
   private tmk: CryptoKey | null = null
   private _tenantId: string | null = null
   private wsConnections: Set<WebSocket> = new Set()
   private interviewState: InterviewState | null = null
   server = new McpServer({ name: 'haetsal', version: '6.2.0' })
-
   async init() {
     this.ensureSessionTable()
     await this.hydrateSessionState()
     registerAllDoTools({
       env: this.env, server: this.server,
       getTenantId: () => this._tenantId!, getTmk: () => this.tmk,
+      getClientIdentity: () => ({
+        clientName: typeof this.props?.clientName === 'string' ? this.props.clientName : null,
+        agentIdentity: typeof this.props?.agentIdentity === 'string' ? this.props.agentIdentity : null,
+      }),
       waitUntil: (promise) => this.ctx.waitUntil(promise),
       getInterviewState: () => this.interviewState,
       setInterviewState: (s) => { this.interviewState = s; this.persistSessionState({ interviewState: s }) },

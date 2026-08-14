@@ -6,6 +6,7 @@ export interface Env extends Cloudflare.Env {
   CF_ACCESS_AUD: string
   CF_ACCESS_TEAM: string
   CF_ACCESS_DELEGATED_PRINCIPALS?: string
+  CF_ACCESS_CLIENT_IDENTITIES?: string
   HMAC_SECRET: string
   TELNYX_PUBLIC_KEY: string
   TELEGRAM_BOT_TOKEN: string

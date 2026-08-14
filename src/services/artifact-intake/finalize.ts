@@ -37,15 +37,24 @@ interface FinalizationRow {
 }
 
 async function manifestFingerprint(input: FinalizeArtifactCaptureInput): Promise<string> {
-  return sha256Text(JSON.stringify(input.artifacts.map(artifact => ({
-    uploadId: artifact.uploadId,
-    role: artifact.role,
-    parentUploadId: artifact.parentUploadId ?? null,
-    primary: artifact.primary,
-    detectedMimeType: artifact.detectedMimeType.toLowerCase(),
-    byteLength: artifact.byteLength,
-    plaintextSha256: artifact.plaintextSha256.toLowerCase(),
-  }))))
+  return sha256Text(JSON.stringify({
+    contentSha256: await sha256Text(input.content),
+    scope: input.scope,
+    title: input.title ?? null,
+    sourceRef: input.sourceRef ?? null,
+    clientName: input.clientName,
+    agentIdentity: input.agentIdentity ?? input.clientName,
+    modelRuntime: input.modelRuntime ?? null,
+    artifacts: input.artifacts.map(artifact => ({
+      uploadId: artifact.uploadId,
+      role: artifact.role,
+      parentUploadId: artifact.parentUploadId ?? null,
+      primary: artifact.primary,
+      detectedMimeType: artifact.detectedMimeType.toLowerCase(),
+      byteLength: artifact.byteLength,
+      plaintextSha256: artifact.plaintextSha256.toLowerCase(),
+    })),
+  }))
 }
 
 async function reserveFinalization(
@@ -164,6 +173,7 @@ function buildManifest(
 function receiptFor(
   finalization: FinalizationRow,
   manifest: ArtifactManifestReceipt[],
+  input: FinalizeArtifactCaptureInput,
 ): FinalizeArtifactCaptureReceipt {
   return {
     status: 'finalized',
@@ -172,6 +182,8 @@ function receiptFor(
     operationId: finalization.canonical_operation_id,
     primaryArtifactId: manifest.find(artifact => artifact.primary)!.artifactId,
     artifacts: manifest,
+    clientName: input.clientName,
+    agentIdentity: input.agentIdentity ?? input.clientName,
   }
 }
 
@@ -213,7 +225,7 @@ export async function finalizeArtifactCapture(
     const existingDocument = await store.getDocument(input.tenantId, finalization.canonical_document_id)
     if (!existingDocument) throw new ArtifactIntakeContractError(ARTIFACT_INTAKE_ERROR.INVALID_STATE)
     await markFinalizationComplete(finalization, uploadIds, env)
-    return receiptFor(finalization, manifest)
+    return receiptFor(finalization, manifest, input)
   }
 
   await markArtifactOperationsForFinalize({
@@ -256,7 +268,7 @@ export async function finalizeArtifactCapture(
       artifactRefs: refs,
       governance: {
         authorKind: 'external_client',
-        agentIdentity: input.clientName,
+        agentIdentity: input.agentIdentity ?? input.clientName,
         modelRuntime: input.modelRuntime ?? null,
         provenanceNote: input.provenance ?? null,
         memoryClass: 'episode',
@@ -273,5 +285,5 @@ export async function finalizeArtifactCapture(
   }
 
   await markFinalizationComplete(finalization, uploadIds, env)
-  return receiptFor(finalization, manifest)
+  return receiptFor(finalization, manifest, input)
 }

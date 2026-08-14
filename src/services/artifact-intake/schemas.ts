@@ -97,6 +97,15 @@ export const finalizeArtifactCaptureSchema = z.object({
       })
     }
   }
+  for (const derivativeId of derivatives) {
+    if (!value.declared_derivative_upload_ids.includes(derivativeId)) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['declared_derivative_upload_ids'],
+        message: ARTIFACT_INTAKE_ERROR.MISSING_DECLARED_DERIVATIVE,
+      })
+    }
+  }
 })
 
 export const CHATGPT_ARTIFACT_FILE_TOOL_CONTRACT = Object.freeze({

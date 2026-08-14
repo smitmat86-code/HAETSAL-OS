@@ -18,6 +18,7 @@ import { dream } from './routes/dream' // Phase 8
 import { session } from './routes/session' // Phase 9
 import { compiled } from './routes/compiled' // Phase 10
 import { dashboardData } from './routes/dashboard-data' // Phase 11 feeds
+import { artifactContent } from './routes/artifact-content'
 import type { Env } from '../../types/env'
 import { getMcpAgentObjectName } from './do/identity'
 import { registerPublicWebhooks } from './public-webhooks'
@@ -26,8 +27,7 @@ import { renderMemoryInventory } from './debug-inventory'
 import { renderGoogleSourceSync } from './routes/debug-google-source-sync'
 import { handleBrainQueue, handleBrainScheduled } from './runtime'
 
-type Variables = { tenantId: string; jwtSub: string; traceId: string }
-
+type Variables = { tenantId: string; jwtSub: string; traceId: string; clientName?: string | null; agentIdentity?: string | null }
 const app = new Hono<{ Bindings: Env; Variables: Variables }>()
 const mcpHandler = McpAgentDO.serve('/mcp', { binding: 'MCPAGENT' })
 
@@ -70,6 +70,7 @@ app.route('/api/automations', automations)
 app.route('/api/dream', dream)
 app.route('/api/session', session)
 app.route('/api/compiled', compiled)
+app.route('/api/artifacts', artifactContent)
 app.route('/api', dashboardData)
 app.get('/debug/memory-inventory', renderMemoryInventory)
 app.get('/debug/google-source-sync', renderGoogleSourceSync)
@@ -113,7 +114,7 @@ app.all('/mcp', async (c) => {
     return await mcpHandler.fetch(c.req.raw, c.env, {
       waitUntil: c.executionCtx.waitUntil.bind(c.executionCtx),
       passThroughOnException: c.executionCtx.passThroughOnException.bind(c.executionCtx),
-      props: { tenantId, jwtSub },
+      props: { tenantId, jwtSub, clientName: c.get('clientName'), agentIdentity: c.get('agentIdentity') },
     } as ExecutionContext<Record<string, unknown>>)
   } catch (error) {
     const detail = error instanceof Error ? error.message : String(error)

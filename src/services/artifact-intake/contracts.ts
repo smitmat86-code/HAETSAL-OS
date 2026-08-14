@@ -14,6 +14,7 @@ export const ARTIFACT_INTAKE_ERROR = Object.freeze({
   STORAGE_WRITE_FAILED: 'storage_write_failed',
   CANONICAL_WRITE_FAILED: 'canonical_write_failed',
   INVALID_STATE: 'invalid_state',
+  CLIENT_IDENTITY_UNAVAILABLE: 'client_identity_unavailable',
   NOT_FOUND: 'not_found',
   INVALID_MANIFEST: 'invalid_manifest',
 } as const)

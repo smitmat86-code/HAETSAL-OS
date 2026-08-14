@@ -1953,3 +1953,39 @@
 **Next:** Integrator validates `mission/m4-ops-ingress` (this repo + Fitness App), confirms brief render, moves spec to completed.
 
 ---
+
+## Session 3 - 2026-08-14
+
+**Plan:** Governed artifact intake — MCP and local coding-agent flow
+**Built:**
+- Registered `reserve_artifact_upload`, `finalize_artifact_capture`, and `artifact_intake_status` with server-derived tenant, delegated-client, and agent provenance.
+- Added the authenticated, tenant-scoped binary upload route with preflight authorization, streaming limits, MIME sniffing, TMK sealing, idempotent retry handling, and content-free failures.
+- Added the Node/PowerShell local upload helper plus install, repair, configuration, and live tool-discovery proof checks for Codex and Claude Code.
+- Enforced exact source/derivative manifests so an intentionally created derivative cannot be silently omitted.
+- Updated the Codex and Claude Code governed-file instructions only after both clients discovered all three live tools.
+
+**Decisions:**
+- Delegated client IDs map only to provenance labels; they never grant or change tenant access.
+- The transport rejects missing TMK or unresolved client identity before accepting content, and verifies tenant-scoped operation state before consuming a body.
+- Local paths and raw bytes stay local to the helper; D1 and error/log surfaces remain metadata-only.
+- Session 3 excludes hosted ChatGPT attachments, provider convergence, remote URL download, compiled-wiki work, and multi-user redesign.
+
+**Verification:**
+- `npx vitest run tests/12.6-artifact-intake-local-transport.test.ts` — 7 passed.
+- Focused artifact/auth/canonical regression lane — 66 passed.
+- `npm test` — 552 passed, 1 skipped across 90 files.
+- `npx wrangler deploy --dry-run` — passed; clean-commit production Worker version `214a968f-b997-4e69-b0a6-826be8f591b2` deployed.
+- `npx wrangler d1 migrations apply D1_US --remote` — migration `1030_artifact_intake_operations.sql` applied; final check reported no migrations pending.
+- `scripts/install-haetsal-artifact-upload.ps1 -Fix -Proof -Client both` — Codex and Claude each discovered all three artifact tools after final deploy.
+
+**Live Proof:**
+- Fresh Codex and Claude Code processes each completed image vision extraction, document text extraction, managed encrypted R2 upload, canonical finalize, search, and status receipt using distinct delegated credentials.
+- Both receipts resolved to tenant binding `c21ca228e1db365f4d6d4d5c`; provenance remained distinct as `Codex` / `codex-local` and `Claude Code` / `claude-code-local`.
+- Four captures produced six finalized artifacts; all six R2 objects verified as TMK envelopes with matching ciphertext hashes and bytes distinct from plaintext.
+- Canonical manifests round-tripped with correct source/derivative parent relationships, and all four unique extraction markers were searchable.
+- Live cross-tenant status/upload probes returned content-free not-found responses; retry reused upload/artifact/ciphertext identity; tests proved missing-key fail-closed, oversize rejection, and derivative-omission failure.
+
+**Limitations:** Repository-wide `npm audit --omit=dev --audit-level=high` still reports 13 pre-existing dependency advisories; Session 3 changed no package dependencies and does not use the affected middleware paths.
+**Next:** Session 4 only: implement and prove the ChatGPT hosted-attachment surface against this governed intake contract.
+
+---

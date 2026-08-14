@@ -6,7 +6,7 @@ import { env } from 'cloudflare:test'
 import { describe, it, expect } from 'vitest'
 import { SELF } from 'cloudflare:test'
 import { deriveTenantId, deriveTmk } from '../src/middleware/auth'
-import { deriveAccessPrincipalId } from '../src/middleware/cf-access'
+import { deriveAccessPrincipalId, resolveAccessPrincipal } from '../src/middleware/cf-access'
 import { getOrCreateTenant, provisionOrRenewKek } from '../src/services/tenant'
 import { getMcpAgentObjectName } from '../src/workers/mcpagent/do/identity'
 import { installCfAccessMock } from './support/cf-access'
@@ -40,6 +40,56 @@ describe('1.2 Auth - Tenant ID Derivation', () => {
       type: 'app',
       common_name: 'haetsal-brain-shell-smoke',
     })).toBe('service:haetsal-brain-shell-smoke')
+  })
+
+  it('delegates an explicitly allowlisted service token to the human tenant principal', () => {
+    expect(resolveAccessPrincipal({
+      sub: '',
+      type: 'app',
+      common_name: 'codex-client.access',
+    }, JSON.stringify({
+      'codex-client.access': 'human-access-subject',
+    }))).toEqual({
+      actorPrincipalId: 'service:codex-client.access',
+      tenantPrincipalId: 'human-access-subject',
+      delegated: true,
+    })
+  })
+
+  it('keeps unknown service tokens isolated from the human tenant', () => {
+    expect(resolveAccessPrincipal({
+      sub: '',
+      type: 'app',
+      common_name: 'untrusted-client.access',
+    }, JSON.stringify({
+      'codex-client.access': 'human-access-subject',
+    }))).toEqual({
+      actorPrincipalId: 'service:untrusted-client.access',
+      tenantPrincipalId: 'service:untrusted-client.access',
+      delegated: false,
+    })
+  })
+
+  it('never remaps an identity-authenticated user through the service-token allowlist', () => {
+    expect(resolveAccessPrincipal({
+      sub: 'human-access-subject',
+      type: 'app',
+      common_name: 'codex-client.access',
+    }, JSON.stringify({
+      'codex-client.access': 'different-subject',
+    }))).toEqual({
+      actorPrincipalId: 'human-access-subject',
+      tenantPrincipalId: 'human-access-subject',
+      delegated: false,
+    })
+  })
+
+  it('fails closed when the delegation allowlist is malformed', () => {
+    expect(() => resolveAccessPrincipal({
+      sub: '',
+      type: 'app',
+      common_name: 'codex-client.access',
+    }, '{not-json')).toThrow('Invalid CF Access service delegation configuration')
   })
 })
 
@@ -167,6 +217,38 @@ describe('1.2 Auth - Service Principal Routing', () => {
       )
     } finally {
       auth.restore()
+    }
+  })
+
+  it('routes an allowlisted service token to the existing human tenant', async () => {
+    const delegatedClientId = 'codex-client.access'
+    const delegatedSubject = 'human-access-subject'
+    const previousAllowlist = env.CF_ACCESS_DELEGATED_PRINCIPALS
+    env.CF_ACCESS_DELEGATED_PRINCIPALS = JSON.stringify({
+      [delegatedClientId]: delegatedSubject,
+    })
+    const auth = await installCfAccessMock({
+      sub: '',
+      type: 'app',
+      common_name: delegatedClientId,
+    })
+
+    try {
+      const response = await SELF.fetch('http://localhost/mcp', {
+        method: 'POST',
+        headers: {
+          'CF-Access-Jwt-Assertion': auth.jwt,
+          'Content-Type': 'application/json',
+        },
+        body: '{}',
+      })
+
+      expect(response.status).toBe(200)
+      const body = await response.json() as { status: string; tenantId: string }
+      expect(body.tenantId).toBe(await deriveTenantId(delegatedSubject, TEST_AUD))
+    } finally {
+      auth.restore()
+      env.CF_ACCESS_DELEGATED_PRINCIPALS = previousAllowlist
     }
   })
 })

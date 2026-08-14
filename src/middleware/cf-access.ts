@@ -6,6 +6,49 @@ export interface CfAccessJwtPayload {
   common_name?: string
 }
 
+export interface ResolvedAccessPrincipal {
+  actorPrincipalId: string
+  tenantPrincipalId: string
+  delegated: boolean
+}
+
+export interface DelegatedClientIdentity { clientName: string; agentIdentity: string }
+
+/** Resolve non-secret provenance labels for an authenticated service client. */
+export function resolveDelegatedClientIdentity(
+  payload: Pick<CfAccessJwtPayload, 'sub' | 'type' | 'common_name'>,
+  clientIdentitiesJson?: string,
+): DelegatedClientIdentity | null {
+  const commonName = payload.common_name?.trim() ?? ''
+  const isServiceToken = payload.type === 'app' && !payload.sub?.trim() && Boolean(commonName)
+  if (!isServiceToken) return null
+  if (!clientIdentitiesJson?.trim()) return null
+
+  let configured: unknown
+  try {
+    configured = JSON.parse(clientIdentitiesJson)
+  } catch {
+    throw new Error('Invalid CF Access client identity configuration')
+  }
+  if (!configured || typeof configured !== 'object' || Array.isArray(configured)) {
+    throw new Error('Invalid CF Access client identity configuration')
+  }
+  const value = (configured as Record<string, unknown>)[commonName]
+  if (value === undefined) return null
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    throw new Error('Invalid CF Access client identity configuration')
+  }
+  const clientName = (value as Record<string, unknown>).client_name
+  const agentIdentity = (value as Record<string, unknown>).agent_identity
+  if (
+    typeof clientName !== 'string' || !clientName.trim() || clientName.length > 120 ||
+    typeof agentIdentity !== 'string' || !agentIdentity.trim() || agentIdentity.length > 160
+  ) {
+    throw new Error('Invalid CF Access client identity configuration')
+  }
+  return { clientName: clientName.trim(), agentIdentity: agentIdentity.trim() }
+}
+
 export function deriveAccessPrincipalId(payload: Pick<CfAccessJwtPayload, 'sub' | 'type' | 'common_name'>): string {
   const sub = payload.sub?.trim() ?? ''
   if (sub) return sub
@@ -16,6 +59,54 @@ export function deriveAccessPrincipalId(payload: Pick<CfAccessJwtPayload, 'sub' 
   }
 
   throw new Error('CF Access JWT missing supported principal identity')
+}
+
+/**
+ * Resolve the authenticated actor separately from the principal that owns the
+ * tenant. Identity-authenticated users always resolve to themselves. A
+ * Cloudflare Access service token may resolve to a human tenant only when its
+ * exact client id (`common_name`) appears in the secret JSON allowlist.
+ *
+ * Unknown service tokens retain the existing isolated machine-tenant behavior.
+ */
+export function resolveAccessPrincipal(
+  payload: Pick<CfAccessJwtPayload, 'sub' | 'type' | 'common_name'>,
+  delegatedPrincipalsJson?: string,
+): ResolvedAccessPrincipal {
+  const actorPrincipalId = deriveAccessPrincipalId(payload)
+  const commonName = payload.common_name?.trim() ?? ''
+  const isServiceToken = payload.type === 'app' && !payload.sub?.trim() && Boolean(commonName)
+
+  if (!isServiceToken || !delegatedPrincipalsJson?.trim()) {
+    return { actorPrincipalId, tenantPrincipalId: actorPrincipalId, delegated: false }
+  }
+
+  let allowlist: unknown
+  try {
+    allowlist = JSON.parse(delegatedPrincipalsJson)
+  } catch {
+    throw new Error('Invalid CF Access service delegation configuration')
+  }
+
+  if (!allowlist || typeof allowlist !== 'object' || Array.isArray(allowlist)) {
+    throw new Error('Invalid CF Access service delegation configuration')
+  }
+
+  const entries = allowlist as Record<string, unknown>
+  if (!Object.prototype.hasOwnProperty.call(entries, commonName)) {
+    return { actorPrincipalId, tenantPrincipalId: actorPrincipalId, delegated: false }
+  }
+
+  const delegatedPrincipal = entries[commonName]
+  if (typeof delegatedPrincipal !== 'string' || !delegatedPrincipal.trim()) {
+    throw new Error('Invalid CF Access service delegation configuration')
+  }
+
+  return {
+    actorPrincipalId,
+    tenantPrincipalId: delegatedPrincipal.trim(),
+    delegated: true,
+  }
 }
 
 export async function validateCfAccessJwt(

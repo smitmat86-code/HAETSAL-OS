@@ -23,6 +23,7 @@ export interface FinalizeArtifactCaptureInput {
   scope: string
   provenance?: string | null
   clientName: string
+  agentIdentity?: string | null
   modelRuntime?: string | null
   sourceRef?: string | null
   idempotencyKey: string
@@ -66,4 +67,6 @@ export interface FinalizeArtifactCaptureReceipt {
   operationId: string
   primaryArtifactId: string
   artifacts: ArtifactManifestReceipt[]
+  clientName: string
+  agentIdentity: string
 }

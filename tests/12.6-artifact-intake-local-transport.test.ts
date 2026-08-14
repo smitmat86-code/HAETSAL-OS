@@ -109,7 +109,11 @@ describe('12.6 Session 3 MCP and local binary transport', () => {
       readOnlyHint: false, destructiveHint: false, openWorldHint: false,
     })
     expect(reg.annotations.get('artifact_intake_status')?.readOnlyHint).toBe(true)
-    expect(reg.metadata.get('capture_artifact_file')).toEqual({ 'openai/fileParams': ['file'] })
+    expect(reg.metadata.get('capture_artifact_file')).toEqual({
+      'openai/fileParams': ['file'],
+      ui: { visibility: ['model', 'app'] },
+      'openai/widgetAccessible': true,
+    })
   })
 
   it('fails closed before reservation when the TMK or delegated client identity is unavailable', async () => {

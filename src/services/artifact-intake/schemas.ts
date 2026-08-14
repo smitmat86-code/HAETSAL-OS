@@ -141,5 +141,7 @@ export const CHATGPT_ARTIFACT_FILE_TOOL_CONTRACT = Object.freeze({
   },
   _meta: {
     'openai/fileParams': ['file'],
+    ui: { visibility: ['model', 'app'] },
+    'openai/widgetAccessible': true,
   },
 } as const)

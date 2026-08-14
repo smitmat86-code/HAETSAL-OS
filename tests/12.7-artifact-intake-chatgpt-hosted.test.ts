@@ -125,7 +125,11 @@ describe('12.7 Session 4 ChatGPT hosted attachment downloader', () => {
       annotations: Record<string, boolean>
       _meta: Record<string, unknown>
     }
-    expect(config._meta).toEqual({ 'openai/fileParams': ['file'] })
+    expect(config._meta).toEqual({
+      'openai/fileParams': ['file'],
+      ui: { visibility: ['model', 'app'] },
+      'openai/widgetAccessible': true,
+    })
     expect(config.annotations).toEqual({
       readOnlyHint: false, destructiveHint: false, openWorldHint: false,
     })

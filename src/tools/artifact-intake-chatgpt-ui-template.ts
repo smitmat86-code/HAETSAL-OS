@@ -47,9 +47,18 @@ button{width:fit-content;border:0;border-radius:8px;padding:9px 13px;font:inheri
     if (message.method === 'ui/notifications/tool-result') toolOutput = message.params && message.params.structuredContent;
   }, { passive: true });
 
+  window.addEventListener('openai:set_globals', event => {
+    const globals = event.detail && event.detail.globals;
+    if (!globals) return;
+    if (globals.toolInput !== undefined) toolInput = globals.toolInput;
+    if (globals.toolOutput !== undefined) toolOutput = globals.toolOutput;
+  }, { passive: true });
+
   function preparedInput() {
-    const value = toolInput || toolOutput;
-    if (!value || typeof value.searchable_content !== 'string' || value.searchable_content.trim() === '') throw new Error('extraction_unavailable');
+    const openai = window.openai;
+    const candidates = [toolInput, toolOutput, openai && openai.toolInput, openai && openai.toolOutput];
+    const value = candidates.find(candidate => candidate && typeof candidate.searchable_content === 'string' && candidate.searchable_content.trim() !== '');
+    if (!value) throw new Error('extraction_unavailable');
     const input = { searchable_content: value.searchable_content };
     if (typeof value.title === 'string') input.title = value.title;
     if (typeof value.scope === 'string') input.scope = value.scope;

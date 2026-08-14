@@ -55,6 +55,7 @@ export interface RetainResult {
 export type IngestionQueueMessageType =
   | 'canonical_projection_dispatch'
   | 'retain_artifact'
+  | 'ops_alert_memory'
   | 'chat_inbound'
   | 'sms_inbound'
   | 'sendblue_media'

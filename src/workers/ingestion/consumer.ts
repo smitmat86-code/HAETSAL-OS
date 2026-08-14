@@ -1,15 +1,15 @@
 // src/workers/ingestion/consumer.ts
 // Queue consumer for ingestion queues (QUEUE_HIGH, QUEUE_NORMAL, QUEUE_BULK)
-// Dispatches by message type → handler → retainContent()
+// Dispatches by message type to handler to retainContent()
 // LESSON: Promise.allSettled for fan-out, INSERT OR IGNORE for at-least-once
-// LESSON: Cold DO (getTmk null) → re-enqueue with delay, not dropped
+// LESSON: Cold DO (getTmk null) re-enqueues with delay, not dropped
 
 import type { Env } from '../../types/env'
 import type { IngestionQueueMessage } from '../../types/ingestion'
 import { getMcpAgentObjectId } from '../mcpagent/do/identity'
-import { fetchAndValidateKek } from '../../cron/kek'
 import { processCanonicalProjectionDispatch } from './canonical-projection-consumer'
 import { processQueuedRetainArtifact } from './retain-consumer'
+import { processOpsAlertMemory } from './ops-alert-memory-consumer'
 import { processChatInbound } from './chat-consumer'
 import {
   handleSendblueMedia,
@@ -24,8 +24,8 @@ import {
 } from './handlers'
 
 /**
- * Handle a batch of ingestion queue messages
- * Dispatches by message type to appropriate handler
+ * Handle a batch of ingestion queue messages.
+ * Dispatches by message type to the appropriate handler.
  */
 export async function handleIngestionBatch(
   batch: MessageBatch<IngestionQueueMessage>,
@@ -60,15 +60,27 @@ async function processIngestionMessage(
     return
   }
 
-  // 14.3: chat reply job — no TMK; bounded retry (max_retries→DLQ) so a
-  // transient gateway storm delays the reply instead of eating it.
+  // 14.3: chat reply job has no TMK dependency; bounded retry sends transient
+  // gateway storms to DLQ rather than eating the reply.
   if (type === 'chat_inbound') {
-    try { await processChatInbound(tenantId, payload, env, ctx); msg.ack() }
-    catch (error) {
-      console.warn('CHAT_INBOUND_RETRY', { tenantId, messageId: msg.id,
-        error: error instanceof Error ? error.message : String(error) })
+    try {
+      await processChatInbound(tenantId, payload, env, ctx)
+      msg.ack()
+    } catch (error) {
+      console.warn('CHAT_INBOUND_RETRY', {
+        tenantId,
+        messageId: msg.id,
+        error: error instanceof Error ? error.message : String(error),
+      })
       msg.retry({ delaySeconds: 15 })
     }
+    return
+  }
+
+  // M4: ops-alert memories encrypt with the Cron KEK consumer-side (no TMK
+  // exists on the unauthenticated webhook path); handler acks/retries itself.
+  if (type === 'ops_alert_memory') {
+    await processOpsAlertMemory(msg as never, env, ctx)
     return
   }
 
@@ -80,10 +92,10 @@ async function processIngestionMessage(
     return
   }
 
-  // Get TMK from DO first. If cold (evicted between initTenant and consumer),
-  // fall back to the KEK-from-KV path used by crons: same raw bytes, cached
-  // for 24h after any authenticated session initTenant. This lets captures
-  // land without depending on DO warmth, which the queue can't force.
+  // Queue handlers below require the tenant memory key (TMK): Google OAuth
+  // tokens and retained canonical bodies are encrypted with it. The Cron KEK is
+  // a separate random key and is not interchangeable, so cold/uninitialized DO
+  // state must retry instead of silently decrypting/encrypting with the wrong key.
   const doId = getMcpAgentObjectId(env.MCPAGENT, tenantId)
   const stub = env.MCPAGENT.get(doId)
 
@@ -93,18 +105,8 @@ async function processIngestionMessage(
   } catch {
     tmk = null
   }
-  if (!tmk) {
-    // A KEK-lookup error (e.g. transient D1 failure) must degrade to a retry,
-    // never crash the message — same contract as a cold DO.
-    try {
-      tmk = await fetchAndValidateKek(tenantId, env)
-    } catch {
-      tmk = null
-    }
-  }
 
   if (!tmk) {
-    // Neither DO memory nor KV KEK — retry with 30s delay
     console.warn('INGESTION_RETRY_WAITING_FOR_TMK', { tenantId, type, messageId: msg.id })
     msg.retry({ delaySeconds: 30 })
     return

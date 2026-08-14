@@ -1,32 +1,17 @@
 // src/services/ops-alert/registry.ts
 // Per-source token verification for the ops-alert ingress (spec M4).
 // D1 stores only SHA-256(token); the token itself lives with the source.
+// Auth decision = the UNIQUE index lookup on the token hash — hashing the
+// presented token first is what blunts timing probes; there is no separate
+// constant-time compare because the row is fetched BY the hash.
 
 import type { Env } from '../../types/env'
 import type { OpsAlertSource } from '../../types/ops-alert'
+import { sha256Hex } from '../canonical-memory-artifacts'
 
-export async function sha256Hex(value: string): Promise<string> {
-  const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(value))
-  return Array.from(new Uint8Array(digest))
-    .map((b) => b.toString(16).padStart(2, '0'))
-    .join('')
-}
+export { sha256Hex }
 
-/** Constant-time compare of equal-length hex strings (Sendblue webhook pattern). */
-function timingSafeEqualStrings(left: string, right: string): boolean {
-  const leftBytes = new TextEncoder().encode(left)
-  const rightBytes = new TextEncoder().encode(right)
-  if (leftBytes.byteLength !== rightBytes.byteLength) return false
-  return (crypto.subtle as unknown as { timingSafeEqual(a: ArrayBuffer, b: ArrayBuffer): boolean })
-    .timingSafeEqual(leftBytes.buffer as ArrayBuffer, rightBytes.buffer as ArrayBuffer)
-}
-
-/**
- * Resolve the source a presented token belongs to, or null.
- * Hash the token, look up the row by hash, then constant-time re-compare —
- * the UNIQUE index does the heavy lifting; the compare guards hash-shape edge
- * cases and keeps the decision timing-uniform.
- */
+/** Resolve the source a presented token belongs to, or null. */
 export async function resolveOpsAlertSource(
   token: string,
   env: Env,
@@ -39,6 +24,14 @@ export async function resolveOpsAlertSource(
      FROM ops_alert_sources WHERE token_sha256 = ?`,
   ).bind(tokenHash).first<OpsAlertSource>()
   if (!row || row.enabled !== 1) return null
-  if (!timingSafeEqualStrings(tokenHash, row.token_sha256)) return null
+  // The registry column is unconstrained TEXT filled by hand-written INSERTs
+  // (runbook). An out-of-range value must fail TOWARD paging, never silently
+  // downgrade to notice — a typo'd row that never pages is invisible.
+  if (row.default_severity !== 'page' && row.default_severity !== 'notice') {
+    console.warn('OPS_ALERT_SOURCE_BAD_SEVERITY', {
+      source: row.id, value: row.default_severity,
+    })
+    return { ...row, default_severity: 'page' }
+  }
   return row
 }

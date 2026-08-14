@@ -40,7 +40,10 @@ export function registerOpsAlertWebhook(
 
     try {
       const result = await processOpsAlert(source, payload, c.env, ctx)
-      return c.json({ status: result.outcome, alert_id: result.alertId }, 200)
+      // page_failed is retryable (503): the claim was released, both delivery
+      // channels failed, and a 200 would tell the sender nobody needs paging.
+      const status = result.outcome === 'page_failed' ? 503 : 200
+      return c.json({ status: result.outcome, alert_id: result.alertId }, status)
     } catch (error) {
       console.error('OPS_ALERT_INGRESS_FAILED', {
         source: source.id,

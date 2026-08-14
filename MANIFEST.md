@@ -12,7 +12,7 @@ Last updated: 2026-04-18 | Session: 7.1 (Hindsight Projection Adapter)
 
 <!-- AUTO-GENERATED MODULE REGISTRY - DO NOT EDIT -->
 
-*Auto-generated: 2026-08-07*
+*Auto-generated: 2026-08-14*
 
 ### src/
 
@@ -31,7 +31,7 @@ Last updated: 2026-04-18 | Session: 7.1 (Hindsight Projection Adapter)
 | src\agents\helpers.ts | 49 | MODEL_CONTEXT_LIMIT, FLUSH_THRESHOLD, shouldFlush | ✅ |
 | src\agents\types.ts | 66 | EpistemicMemoryType, AgentType, AgentContext... | ✅ |
 | src\config\models.ts | 68 | MODEL_CHAT, MODEL_VISION, MODEL_DEEP... | ✅ |
-| src\cron\brief-ops-section.ts | 67 | OPS_FRESHNESS_FALLBACK | ✅ |
+| src\cron\brief-ops-section.ts | 73 | OPS_FRESHNESS_FALLBACK | ✅ |
 | src\cron\brief-sections.ts | 92 | — | ✅ |
 | src\cron\canary.ts | 17 | — | ✅ |
 | src\cron\consolidation.ts | 69 | — | ✅ |
@@ -183,8 +183,9 @@ Last updated: 2026-04-18 | Session: 7.1 (Hindsight Projection Adapter)
 | src\services\ingestion\write-policy.ts | 69 | WritePolicyResult, WRITE_POLICY_CLASSIFIER_PROMPT | ✅ |
 | src\services\messaging-helpers.ts | 96 | — | ✅ |
 | src\services\ops-alert\deliver.ts | 45 | OpsPageDelivery | ✅ |
-| src\services\ops-alert\ingest.ts | 125 | — | ✅ |
-| src\services\ops-alert\registry.ts | 45 | — | ✅ |
+| src\services\ops-alert\ingest.ts | 103 | — | ✅ |
+| src\services\ops-alert\memory.ts | 45 | OpsAlertMemoryPayload, queueAlertMemory | ✅ |
+| src\services\ops-alert\registry.ts | 38 | — | ✅ |
 | src\services\postgres-sql.ts | 95 | PostgresStatement, PostgresSql, createPostgresStatement... | ✅ |
 | src\services\prompts\override-history.ts | 44 | PromptVersionRow | ✅ |
 | src\services\prompts\overrides.ts | 118 | ResolvedPrompt | ✅ |
@@ -234,7 +235,7 @@ Last updated: 2026-04-18 | Session: 7.1 (Hindsight Projection Adapter)
 | src\types\external-client-memory.ts | 73 | ExternalClientCaptureMode, BrainMemorySurfaceProfile, ExternalClientCaptureInput... | ✅ |
 | src\types\google-source-read.ts | 29 | GoogleSourceKind, GoogleSourceRef, GoogleSourceReadAttribution... | ✅ |
 | src\types\google.ts | 53 | GoogleOAuthTokens, GoogleThread, GoogleMessage... | ✅ |
-| src\types\ingestion.ts | 93 | IngestionSource, IngestionArtifact, SalienceResult... | ✅ |
+| src\types\ingestion.ts | 94 | IngestionSource, IngestionArtifact, SalienceResult... | ✅ |
 | src\types\ops-alert.ts | 41 | OpsAlertSeverity, OpsAlertSource, OpsAlertPayload... | ✅ |
 | src\types\tenant.ts | 30 | TenantContext, TenantRow | ✅ |
 | src\types\tools.ts | 59 | RetainInput, RetainOutput, RecallInput... | ✅ |
@@ -242,9 +243,10 @@ Last updated: 2026-04-18 | Session: 7.1 (Hindsight Projection Adapter)
 | src\workers\ingestion\bootstrap-handlers.ts | 126 | — | ✅ |
 | src\workers\ingestion\canonical-projection-consumer.ts | 28 | — | ✅ |
 | src\workers\ingestion\chat-consumer.ts | 68 | — | ✅ |
-| src\workers\ingestion\consumer.ts | 141 | — | ✅ |
+| src\workers\ingestion\consumer.ts | 149 | — | ✅ |
 | src\workers\ingestion\handlers.ts | 112 | — | ✅ |
 | src\workers\ingestion\media-handlers.ts | 74 | — | ✅ |
+| src\workers\ingestion\ops-alert-memory-consumer.ts | 45 | — | ✅ |
 | src\workers\ingestion\retain-consumer.ts | 21 | — | ✅ |
 | src\workers\mcpagent\dashboard-agents-html.ts | 49 | AGENT_DASHBOARD_HTML | ✅ |
 | src\workers\mcpagent\debug-inventory.ts | 82 | — | ✅ |
@@ -265,7 +267,7 @@ Last updated: 2026-04-18 | Session: 7.1 (Hindsight Projection Adapter)
 | src\workers\mcpagent\do\session-store.ts | 57 | PersistedSessionRow, ensureSessionTable, readPersistedSession... | ✅ |
 | src\workers\mcpagent\do\tenant-context.ts | 58 | ResolvedTenantContext, acceptSessionWebSocket, broadcastToSessions | ✅ |
 | src\workers\mcpagent\index.ts | 149 | — | ✅ |
-| src\workers\mcpagent\ops-alert-webhook.ts | 54 | registerOpsAlertWebhook | ✅ |
+| src\workers\mcpagent\ops-alert-webhook.ts | 57 | registerOpsAlertWebhook | ✅ |
 | src\workers\mcpagent\public-webhooks.ts | 88 | registerPublicWebhooks | ✅ |
 | src\workers\mcpagent\routes\actions.ts | 79 | actions | ✅ |
 | src\workers\mcpagent\routes\agent-runs.ts | 84 | agentRuns, agentDashboard | ✅ |

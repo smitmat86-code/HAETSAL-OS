@@ -128,6 +128,38 @@ Deviations from spec: `ops_alerts.body` dropped entirely (guard above) —
 delivery/brief use the live payload and title; dedupe key still derives from
 title+body so distinct bodies with identical titles stay distinct.
 
+## Integration Review (2026-08-06, pre-merge gate)
+
+8-angle review + adversarial verification produced 8 CONFIRMED findings; all
+7 correctness findings fixed in the integration commit:
+
+1. Memory writes died in the queue consumer (no TMK on the webhook path) →
+   new `ops_alert_memory` job encrypted consumer-side with the Cron KEK
+   (`src/services/ops-alert/memory.ts`, `src/workers/ingestion/ops-alert-memory-consumer.ts`).
+2. Unescaped alert titles could 400 the whole Telegram brief → HTML-escaped
+   at render.
+3. Numeric drift in derived text defeated the dedupe window (live-fire showed
+   it) → digits normalized out of derived keys.
+4. Deliver-before-record allowed retry/concurrent double-pages → atomic
+   claim-before-deliver CAS (agent-finish pattern), claim released on failure.
+5. `page_failed` returned 200 → now 503 (retryable, claim released).
+6. Unvalidated `default_severity` could silently disable paging → registry
+   normalizes unknown values to 'page' with a loud warn.
+7. Stale severity/title on replays + permanent memory dedup → upsert refreshes
+   severity/title; memory content date-stamped per day.
+8. Tautological timing-safe compare + duplicated helpers → removed; reuses
+   `canonical-memory-artifacts.sha256Hex`.
+
+Deferred design findings for future phases (documented, not blocking):
+freshness line is tenant-agnostic and hardcoded to source #1 (generalize via
+registry columns when source #2 needs a dead-man line); the brief's KEK/toggle
+early-returns mean a fully dead brief pipeline shows nothing (the dead-man
+guarantee holds only while the brief delivers — HAETSAL's own heartbeat/canary
+crons remain the backstop, per ADR-0006); freshness line has no staleness
+marker threshold; page delivery requires a phone row (Telegram-only tenants
+log OPS_ALERT_NO_PHONE); `ingestion_events` documented 30-day purge is
+unimplemented repo-wide.
+
 ## Pre-Finalization Checklist
 
 - [x] npm test green (519 passed / 1 skipped, full tree, 2026-08-06)

@@ -149,12 +149,12 @@ describe('m4 — page path (canary {text} shape)', () => {
     expect(row?.paged_at).toBeTruthy()
     expect(row?.page_channel).toBe('sendblue')
 
-    const memory = queue.find((m) => (m as { type: string }).type === 'retain_artifact') as
-      { tenantId: string; payload: { artifact: { provenance: string; source: string } } } | undefined
+    const memory = queue.find((m) => (m as { type: string }).type === 'ops_alert_memory') as
+      { tenantId: string; payload: { sourceId: string; content: string } } | undefined
     expect(memory).toBeTruthy()
     expect(memory!.tenantId).toBe(TENANT_ID)
-    expect(memory!.payload.artifact.source).toBe('ops_alert')
-    expect(memory!.payload.artifact.provenance).toBe(`ops_alert:${SOURCE_ID}`)
+    expect(memory!.payload.sourceId).toBe(SOURCE_ID)
+    expect(memory!.payload.content).toContain('DLQ non-empty')
   })
 
   it('replay with the same dedupe key inside the window does not double-page', async () => {
@@ -202,6 +202,52 @@ describe('m4 — page path (canary {text} shape)', () => {
     expect(sent.filter((r) => r.url.includes('api.sendblue.co')).length).toBe(2)
   })
 
+  it('numeric drift in derived text is the same condition — no page per firing', async () => {
+    const sent: SentRequest[] = []
+    stubFetch(sent)
+    const { ctx, drain } = makeCtx()
+    const source = await loadSource()
+    const testEnv = makeTestEnv(sent, [])
+
+    const first = await processOpsAlert(source, {
+      text: `stale: last ingest 3.4h ago (> 36h) ${SUITE_ID}-d`,
+    }, testEnv, ctx)
+    expect(first.outcome).toBe('paged')
+    const drifted = await processOpsAlert(source, {
+      text: `stale: last ingest 27.9h ago (> 36h) ${SUITE_ID}-d`,
+    }, testEnv, ctx)
+    await drain()
+    expect(drifted.outcome).toBe('duplicate')
+    expect(drifted.alertId).toBe(first.alertId)
+    expect(sent.filter((r) => r.url.includes('api.sendblue.co')).length).toBe(1)
+  })
+
+  it('returns page_failed with 503 and releases the claim when all channels fail', async () => {
+    const sent: SentRequest[] = []
+    stubFetch(sent, { sendblueStatus: 422, telnyxStatus: 401 })
+    const app = makeApp(makeTestEnv(sent, []))
+    const response = await app.post(`/ops/alert/${TOKEN}`, {
+      severity: 'page', title: `all channels down ${SUITE_ID}`,
+    })
+    expect(response.status).toBe(503)
+    const body = await response.json() as { status: string; alert_id: string }
+    expect(body.status).toBe('page_failed')
+    const row = await env.D1_US.prepare(
+      `SELECT paged_at FROM ops_alerts WHERE id = ?`,
+    ).bind(body.alert_id).first<{ paged_at: number | null }>()
+    expect(row?.paged_at).toBeNull() // claim released — a sender retry can page
+
+    vi.unstubAllGlobals()
+    const retrySent: SentRequest[] = []
+    stubFetch(retrySent)
+    const retryApp = makeApp(makeTestEnv(retrySent, []))
+    const retry = await retryApp.post(`/ops/alert/${TOKEN}`, {
+      severity: 'page', title: `all channels down ${SUITE_ID}`,
+    })
+    expect(retry.status).toBe(200)
+    expect(((await retry.json()) as { status: string }).status).toBe('paged')
+  })
+
   it('falls back to Telnyx SMS when Sendblue rejects', async () => {
     const sent: SentRequest[] = []
     stubFetch(sent, { sendblueStatus: 422 })
@@ -236,7 +282,7 @@ describe('m4 — notice path + morning brief', () => {
 
     expect(result.outcome).toBe('noticed')
     expect(sent).toHaveLength(0) // no delivery calls at all
-    expect(queue.some((m) => (m as { type: string }).type === 'retain_artifact')).toBe(true)
+    expect(queue.some((m) => (m as { type: string }).type === 'ops_alert_memory')).toBe(true)
 
     const section = await fetchOpsSection(TENANT_ID, env as unknown as Env)
     expect(section).toContain('health spine: freshness unavailable') // no RO secret in tests
@@ -247,5 +293,17 @@ describe('m4 — notice path + morning brief', () => {
     ).bind(result.alertId).first<{ paged_at: number | null; brief_surfaced_at: number | null }>()
     expect(row?.paged_at).toBeNull()
     expect(row?.brief_surfaced_at).toBeTruthy()
+  })
+
+  it('escapes HTML metacharacters in alert titles before the brief renders them', async () => {
+    const { ctx, drain } = makeCtx()
+    const source = await loadSource()
+    await processOpsAlert(source, {
+      severity: 'notice', title: `disk <sda1> full & climbing ${SUITE_ID}`,
+    }, makeTestEnv([], []), ctx)
+    await drain()
+    const section = await fetchOpsSection(TENANT_ID, env as unknown as Env)
+    expect(section).toContain('disk &lt;sda1&gt; full &amp; climbing')
+    expect(section).not.toContain('<sda1>')
   })
 })

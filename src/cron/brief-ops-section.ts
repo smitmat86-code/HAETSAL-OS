@@ -8,6 +8,12 @@ import { createPostgresSql } from '../services/postgres-sql'
 
 export const OPS_FRESHNESS_FALLBACK = '  health spine: freshness unavailable'
 
+/** Alert titles are external input rendered into a parse_mode:'HTML' Telegram
+ *  message — one raw '<' would 400 the WHOLE brief (review M4 finding #2). */
+function escapeHtml(value: string): string {
+  return value.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+}
+
 /**
  * Dead-man's freshness line for source #1 (haetsal-health). Reads the
  * haetsal_health Neon DB through a SELECT-only role (HEALTH_SPINE_RO_URL —
@@ -47,7 +53,7 @@ export async function fetchOpsAlertLines(tenantId: string, env: Env): Promise<st
   const lines = rows.results.map((a) => {
     const marker = a.severity === 'page' ? (a.paged_at ? '🚨' : '⚠️ (page failed)') : '•'
     const replays = a.replay_count > 0 ? ` ×${a.replay_count + 1}` : ''
-    return `  ${marker} [${a.source_id}] ${a.title}${replays}`
+    return `  ${marker} [${escapeHtml(a.source_id)}] ${escapeHtml(a.title)}${replays}`
   })
   const surfacedAt = Date.now()
   await env.D1_US.batch(rows.results.map((a) => env.D1_US.prepare(

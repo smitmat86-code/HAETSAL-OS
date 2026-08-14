@@ -1,15 +1,15 @@
 // src/services/ops-alert/ingest.ts
 // Ops-alert normalization, dedupe, and orchestration (spec M4 / ADR-0006).
-// Critical path for severity 'page' is deliberately shallow: one D1 dedupe
-// roundtrip, then delivery. Memory write + brief surfacing happen async.
+// Critical path for severity 'page': one atomic D1 upsert, one atomic claim,
+// then delivery. Memory write + brief surfacing happen async.
 
 import type { Env } from '../../types/env'
 import type {
   NormalizedOpsAlert, OpsAlertPayload, OpsAlertResult, OpsAlertSeverity, OpsAlertSource,
 } from '../../types/ops-alert'
-import { enqueueRetainArtifact } from '../ingestion/enqueue'
 import { sha256Hex } from './registry'
 import { deliverOpsPage } from './deliver'
+import { queueAlertMemory } from './memory'
 
 const MAX_TITLE = 140
 const MAX_BODY = 500
@@ -25,15 +25,12 @@ export async function normalizeOpsAlert(
   const text = payload.text?.trim() ?? ''
   const title = (payload.title?.trim() || text || 'ops alert').slice(0, MAX_TITLE)
   const body = (payload.body?.trim() || text).slice(0, MAX_BODY)
+  // Derived keys normalize numbers away ("stale 3.4h ago" / "3.5h ago" are the
+  // SAME condition) — otherwise any embedded measurement defeats the window
+  // and a repeating sender pages every firing (live-fire finding, review M4).
   const dedupeKey = payload.dedupe_key?.trim().slice(0, 128)
-    || (await sha256Hex(`${title}\n${body}`)).slice(0, 40)
+    || (await sha256Hex(`${title}\n${body}`.replace(/\d+(?:\.\d+)?/g, '#'))).slice(0, 40)
   return { severity, title, body, dedupeKey }
-}
-
-/** True when this firing should page: first sighting, or last page is older
- *  than the source's dedupe window (an ongoing outage re-pages per window). */
-function pageIsDue(pagedAt: number | null, windowMs: number, now: number): boolean {
-  return pagedAt === null || now - pagedAt > windowMs
 }
 
 export async function processOpsAlert(
@@ -45,32 +42,26 @@ export async function processOpsAlert(
   const alert = await normalizeOpsAlert(payload, source)
   const now = Date.now()
 
-  // LESSON: INSERT OR IGNORE for at-least-once safety; meta.changes tells us
-  // whether this (source, dedupe_key) is a first sighting or a replay.
-  // Note: title only — alert bodies never land in D1 (1.1 plaintext guard);
-  // the full text reaches T1 through the async episodic memory write.
-  const insert = await env.D1_US.prepare(
-    `INSERT OR IGNORE INTO ops_alerts
+  // One atomic upsert: first sighting inserts, replays refresh last_seen_at
+  // AND severity/title (an escalated replay must not render its stale
+  // first-sighting text in the brief) and bump replay_count.
+  const row = await env.D1_US.prepare(
+    `INSERT INTO ops_alerts
      (id, tenant_id, source_id, dedupe_key, severity, title,
       first_seen_at, last_seen_at, replay_count)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0)`,
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0)
+     ON CONFLICT(source_id, dedupe_key) DO UPDATE SET
+       last_seen_at = excluded.last_seen_at,
+       severity = excluded.severity,
+       title = excluded.title,
+       replay_count = replay_count + 1
+     RETURNING id, paged_at, replay_count`,
   ).bind(
     crypto.randomUUID(), source.tenant_id, source.id, alert.dedupeKey,
     alert.severity, alert.title, now, now,
-  ).run()
-  const isNew = (insert.meta?.changes ?? 0) > 0
-
-  const row = await env.D1_US.prepare(
-    `SELECT id, paged_at FROM ops_alerts WHERE source_id = ? AND dedupe_key = ?`,
-  ).bind(source.id, alert.dedupeKey).first<{ id: string; paged_at: number | null }>()
-  if (!row) throw new Error('ops_alerts readback failed')
-
-  if (!isNew) {
-    await env.D1_US.prepare(
-      `UPDATE ops_alerts SET last_seen_at = ?, replay_count = replay_count + 1 WHERE id = ?`,
-    ).bind(now, row.id).run()
-  }
-
+  ).first<{ id: string; paged_at: number | null; replay_count: number }>()
+  if (!row) throw new Error('ops_alerts upsert returned no row')
+  const isNew = row.replay_count === 0
   const base = { alertId: row.id, source: source.id, severity: alert.severity }
 
   if (alert.severity !== 'page') {
@@ -78,47 +69,34 @@ export async function processOpsAlert(
     return { outcome: isNew ? 'noticed' : 'duplicate', ...base }
   }
 
+  // Atomic claim BEFORE delivery (agent-finish claimDelivery pattern): exactly
+  // one concurrent request wins the window; a sender retry after a transient
+  // failure cannot double-page because the claim is the dedupe write.
   const windowMs = source.dedupe_window_s * 1000
-  if (!pageIsDue(row.paged_at, windowMs, now)) {
-    return { outcome: 'duplicate', ...base }
-  }
+  const claim = await env.D1_US.prepare(
+    `UPDATE ops_alerts SET paged_at = ?
+     WHERE id = ? AND (paged_at IS NULL OR paged_at <= ?)
+     RETURNING id`,
+  ).bind(now, row.id, now - windowMs).first<{ id: string }>()
+  if (!claim) return { outcome: 'duplicate', ...base }
 
   const message = alert.body && alert.body !== alert.title
     ? `🚨 [${source.id}] ${alert.title}\n${alert.body}`
     : `🚨 [${source.id}] ${alert.title}`
   const delivery = await deliverOpsPage(source.tenant_id, message, env)
 
-  // Awaited (not waitUntil): paged_at is dedupe state — losing it double-pages.
-  if (delivery.delivered) {
+  if (!delivery.delivered) {
+    // Release the claim so a retry (the webhook returns 503) can page.
     await env.D1_US.prepare(
-      `UPDATE ops_alerts SET paged_at = ?, page_channel = ? WHERE id = ?`,
-    ).bind(now, delivery.channel, row.id).run()
+      `UPDATE ops_alerts SET paged_at = NULL WHERE id = ? AND paged_at = ?`,
+    ).bind(row.id, now).run().catch(() => {})
+    if (isNew) queueAlertMemory(source, alert, env, ctx)
+    return { outcome: 'page_failed', ...base }
   }
-  if (isNew) queueAlertMemory(source, alert, env, ctx)
-  return { outcome: delivery.delivered ? 'paged' : 'page_failed', ...base }
-}
 
-/** Async episodic memory with provenance (ADR-0006: alerts become memories). */
-function queueAlertMemory(
-  source: OpsAlertSource,
-  alert: NormalizedOpsAlert,
-  env: Env,
-  ctx: Pick<ExecutionContext, 'waitUntil'>,
-): void {
-  ctx.waitUntil(enqueueRetainArtifact({
-    tenantId: source.tenant_id,
-    source: 'ops_alert',
-    content: `Ops alert (${alert.severity}) from ${source.id}: ${alert.title}`
-      + (alert.body && alert.body !== alert.title ? ` — ${alert.body}` : ''),
-    occurredAt: Date.now(),
-    memoryType: 'episodic',
-    domain: 'general',
-    provenance: `ops_alert:${source.id}`,
-    metadata: { ops_alert: true, severity: alert.severity, source_id: source.id },
-  }, env).catch((error) => {
-    console.error('OPS_ALERT_MEMORY_ENQUEUE_FAILED', {
-      source: source.id,
-      error: error instanceof Error ? error.message : String(error),
-    })
-  }))
+  ctx.waitUntil(env.D1_US.prepare(
+    `UPDATE ops_alerts SET page_channel = ? WHERE id = ?`,
+  ).bind(delivery.channel, row.id).run().catch(() => {}))
+  if (isNew) queueAlertMemory(source, alert, env, ctx)
+  return { outcome: 'paged', ...base }
 }

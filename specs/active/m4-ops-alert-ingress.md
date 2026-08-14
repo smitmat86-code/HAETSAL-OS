@@ -97,7 +97,7 @@ source = generate token, `wrangler d1 execute` one INSERT. Runbook:
 
 ## As-Built Record
 
-Built on `mission/m4-ops-ingress` (2026-08-06):
+Built on `mission/m4-ops-ingress` (2026-08-13):
 
 - `migrations/1029_ops_alert_ingress.sql` — `ops_alert_sources` (registry,
   token SHA-256 only) + `ops_alerts` (dedupe/audit rows; title only — NO body
@@ -128,7 +128,7 @@ Deviations from spec: `ops_alerts.body` dropped entirely (guard above) —
 delivery/brief use the live payload and title; dedupe key still derives from
 title+body so distinct bodies with identical titles stay distinct.
 
-## Integration Review (2026-08-06, pre-merge gate)
+## Integration Review (2026-08-13, pre-merge gate)
 
 8-angle review + adversarial verification produced 8 CONFIRMED findings; all
 7 correctness findings fixed in the integration commit:
@@ -162,7 +162,7 @@ unimplemented repo-wide.
 
 ## Pre-Finalization Checklist
 
-- [x] npm test green (519 passed / 1 skipped, full tree, 2026-08-06)
+- [x] npm test green (519 passed / 1 skipped, full tree, 2026-08-13)
 - [x] npm run postflight — clean for all M4 files (3 pre-existing violations
       belong to the uncommitted Gmail-backfill session, not M4)
 - [x] npm run manifest regenerated
@@ -170,5 +170,5 @@ unimplemented repo-wide.
       Matt's phone via Sendblue, confirmed; replay deduped; notice unpaged
 - [x] Mission file Evidence block updated in Fitness App repo
 - [ ] Freshness line + notice observed in a real 07:00 UTC morning brief
-      (pends next brief; tenant flipped to completed 2026-08-06 — integrator
+      (pends next brief; tenant flipped to completed 2026-08-13 — integrator
       confirms, then moves this spec to completed/)

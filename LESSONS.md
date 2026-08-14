@@ -443,7 +443,7 @@
   every consumer of it fails silently (the M4 canary POSTs "succeeded" but the
   ingress token never matched). Write `{"NAME":"value"}` to a temp JSON file
   and use `wrangler secret bulk file.json` instead — JSON values are exact.
-  Ref: M4 ops-alert ingress forced-fire debugging, 2026-08-06.
+  Ref: M4 ops-alert ingress forced-fire debugging, 2026-08-13.
 
 - **CF Access Bypass Apps Need An Explicit `/*` Path Wildcard.**
   An Access application whose domain is `host/path` covers ONLY that exact
@@ -453,7 +453,7 @@
   already encodes this; follow it for every parameterized webhook path. Also:
   webhook senders that ignore response status (the health canary) make this
   failure invisible — log the notify response status at the sender.
-  Ref: M4 ops-alert ingress rollout, 2026-08-06.
+  Ref: M4 ops-alert ingress rollout, 2026-08-13.
 
 ---
 

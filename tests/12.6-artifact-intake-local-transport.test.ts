@@ -37,6 +37,7 @@ function registry(tmk: CryptoKey | null, identity = {
 }) {
   const handlers = new Map<string, ToolHandler>()
   const annotations = new Map<string, Record<string, boolean>>()
+  const metadata = new Map<string, Record<string, unknown>>()
   const server = {
     tool(
       name: string,
@@ -48,6 +49,15 @@ function registry(tmk: CryptoKey | null, identity = {
       annotations.set(name, hints)
       handlers.set(name, handler)
     },
+    registerTool(
+      name: string,
+      config: { annotations?: Record<string, boolean>; _meta?: Record<string, unknown> },
+      handler: ToolHandler,
+    ) {
+      annotations.set(name, config.annotations ?? {})
+      metadata.set(name, config._meta ?? {})
+      handlers.set(name, handler)
+    },
   } as unknown as McpServer
   registerArtifactIntakeTools(server, {
     getEnv: () => env,
@@ -55,7 +65,7 @@ function registry(tmk: CryptoKey | null, identity = {
     getTmk: () => tmk,
     getClientIdentity: () => identity,
   })
-  return { handlers, annotations }
+  return { handlers, annotations, metadata }
 }
 
 async function callTool(reg: ReturnType<typeof registry>, name: string, input: unknown) {
@@ -83,10 +93,11 @@ beforeAll(async () => {
 })
 
 describe('12.6 Session 3 MCP and local binary transport', () => {
-  it('registers the three annotated tools without caller-controlled tenant input', () => {
+  it('registers the four annotated tools without caller-controlled tenant input', () => {
     const reg = registry(null)
     expect([...reg.handlers.keys()]).toEqual([
       'reserve_artifact_upload',
+      'capture_artifact_file',
       'finalize_artifact_capture',
       'artifact_intake_status',
     ])
@@ -94,6 +105,7 @@ describe('12.6 Session 3 MCP and local binary transport', () => {
       readOnlyHint: false, destructiveHint: false, openWorldHint: false,
     })
     expect(reg.annotations.get('artifact_intake_status')?.readOnlyHint).toBe(true)
+    expect(reg.metadata.get('capture_artifact_file')).toEqual({ 'openai/fileParams': ['file'] })
   })
 
   it('fails closed before reservation when the TMK or delegated client identity is unavailable', async () => {

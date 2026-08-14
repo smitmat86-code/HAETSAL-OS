@@ -19,7 +19,7 @@ import {
 import { listAutomationsView } from './automation-view'
 import type { AgentRunView } from '../../../agents/execution/types'
 interface McpAgentProps extends Record<string, unknown> {
-  tenantId?: string; jwtSub?: string; clientName?: string | null; agentIdentity?: string | null
+  tenantId?: string; jwtSub?: string; clientName?: string | null; agentIdentity?: string | null; actorKind?: 'human' | 'service'
 }
 export class McpAgentDO extends BaseMcpAgent<Env, unknown, McpAgentProps> {
   private tmk: CryptoKey | null = null
@@ -34,8 +34,8 @@ export class McpAgentDO extends BaseMcpAgent<Env, unknown, McpAgentProps> {
       env: this.env, server: this.server,
       getTenantId: () => this._tenantId!, getTmk: () => this.tmk,
       getClientIdentity: () => ({
-        clientName: typeof this.props?.clientName === 'string' ? this.props.clientName : null,
-        agentIdentity: typeof this.props?.agentIdentity === 'string' ? this.props.agentIdentity : null,
+        clientName: typeof this.props?.clientName === 'string' ? this.props.clientName : this.props?.actorKind === 'human' ? 'ChatGPT' : null,
+        agentIdentity: typeof this.props?.agentIdentity === 'string' ? this.props.agentIdentity : this.props?.actorKind === 'human' ? 'chatgpt-developer-mode' : null,
       }),
       waitUntil: (promise) => this.ctx.waitUntil(promise),
       getInterviewState: () => this.interviewState,

@@ -62,6 +62,8 @@ const FILE_SIZE_ACCEPTED = new Set<string>([
     'src/services/canonical-governance-memory.ts', // Governance store in-memory test twin mirrors the Postgres implementation
     'src/services/canonical-semantic-recall.ts', // Slightly over limit; semantic recall mapping kept intact during cutover
     'src/services/compiled-synthesis-repository.ts', // Compiled synthesis store mirrors canonical store structure across in-memory and Neon implementations
+    'src/services/artifact-intake/finalize.ts', // Accepted Sessions 1-3 baseline: one idempotent canonical finalization transaction
+    'src/services/artifact-intake/operations.ts', // Accepted Sessions 1-3 baseline: one upload lifecycle and recovery state machine
 ]);
 
 interface Violation {

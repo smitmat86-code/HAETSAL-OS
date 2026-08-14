@@ -27,7 +27,7 @@ import { renderMemoryInventory } from './debug-inventory'
 import { renderGoogleSourceSync } from './routes/debug-google-source-sync'
 import { handleBrainQueue, handleBrainScheduled } from './runtime'
 
-type Variables = { tenantId: string; jwtSub: string; traceId: string; clientName?: string | null; agentIdentity?: string | null }
+type Variables = { tenantId: string; jwtSub: string; traceId: string; clientName?: string | null; agentIdentity?: string | null; actorKind?: 'human' | 'service' }
 const app = new Hono<{ Bindings: Env; Variables: Variables }>()
 const mcpHandler = McpAgentDO.serve('/mcp', { binding: 'MCPAGENT' })
 
@@ -114,7 +114,7 @@ app.all('/mcp', async (c) => {
     return await mcpHandler.fetch(c.req.raw, c.env, {
       waitUntil: c.executionCtx.waitUntil.bind(c.executionCtx),
       passThroughOnException: c.executionCtx.passThroughOnException.bind(c.executionCtx),
-      props: { tenantId, jwtSub, clientName: c.get('clientName'), agentIdentity: c.get('agentIdentity') },
+      props: { tenantId, jwtSub, clientName: c.get('clientName'), agentIdentity: c.get('agentIdentity'), actorKind: c.get('actorKind') },
     } as ExecutionContext<Record<string, unknown>>)
   } catch (error) {
     const detail = error instanceof Error ? error.message : String(error)

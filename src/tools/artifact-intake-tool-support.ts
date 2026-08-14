@@ -12,7 +12,11 @@ export function artifactToolText(value: unknown, isError = false) {
 }
 
 export function artifactToolErrorCode(error: unknown): ArtifactIntakeErrorCode {
-  if (error instanceof z.ZodError) return ARTIFACT_INTAKE_ERROR.INVALID_MANIFEST
+  if (error instanceof z.ZodError) {
+    const known = new Set<string>(Object.values(ARTIFACT_INTAKE_ERROR))
+    const issueCode = error.issues.map(issue => issue.message).find(message => known.has(message))
+    return (issueCode as ArtifactIntakeErrorCode | undefined) ?? ARTIFACT_INTAKE_ERROR.INVALID_MANIFEST
+  }
   return error instanceof ArtifactIntakeContractError
     ? error.code
     : ARTIFACT_INTAKE_ERROR.INVALID_STATE

@@ -7,6 +7,8 @@ export const ARTIFACT_INTAKE_ERROR = Object.freeze({
   MIME_MISMATCH: 'mime_mismatch',
   BULK_IMPORT_REQUIRED: 'bulk_import_required',
   SSRF_URL_BLOCKED: 'ssrf_url_blocked',
+  DOWNLOAD_TIMEOUT: 'download_timeout',
+  DOWNLOAD_UNAVAILABLE: 'download_unavailable',
   ENCRYPTION_KEY_UNAVAILABLE: 'encryption_key_unavailable',
   ENCRYPTION_FAMILY_MISMATCH: 'encryption_family_mismatch',
   CIPHERTEXT_INVALID: 'ciphertext_invalid',

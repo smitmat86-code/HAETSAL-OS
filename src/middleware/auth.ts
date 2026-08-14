@@ -11,6 +11,7 @@ type AuthVariables = {
   jwtSub: string
   clientName: string | null
   agentIdentity: string | null
+  actorKind: 'human' | 'service'
 }
 
 // HKDF-SHA256: JWT sub → tenant_id
@@ -81,6 +82,7 @@ export function authMiddleware() {
       const payload = await validateCfAccessJwt(jwt, jwksUrl, audiences)
       const principal = resolveAccessPrincipal(payload, c.env.CF_ACCESS_DELEGATED_PRINCIPALS)
       const clientIdentity = resolveDelegatedClientIdentity(payload, c.env.CF_ACCESS_CLIENT_IDENTITIES)
+      const serviceActor = payload.type === 'app' && !payload.sub?.trim() && Boolean(payload.common_name?.trim())
       const tenantId = await deriveTenantId(principal.tenantPrincipalId, audiences[0])
       c.set('tenantId', tenantId)
       // Downstream tenant/TMK derivation must use the delegated owner subject,
@@ -88,6 +90,7 @@ export function authMiddleware() {
       c.set('jwtSub', principal.tenantPrincipalId)
       c.set('clientName', clientIdentity?.clientName ?? null)
       c.set('agentIdentity', clientIdentity?.agentIdentity ?? null)
+      c.set('actorKind', serviceActor ? 'service' : 'human')
     } catch {
       // LESSON: waitUntil for audit — don't block rejection on audit write
       c.executionCtx.waitUntil(writeFailedAuthAudit(c.env))

@@ -179,6 +179,7 @@ describe('12.7 Session 4 ChatGPT hosted attachment downloader', () => {
     expect(CHATGPT_ARTIFACT_CAPTURE_UI_HTML).toContain("window.addEventListener('openai:set_globals'")
     expect(CHATGPT_ARTIFACT_CAPTURE_UI_HTML).toContain('candidates.find(candidate =>')
     expect(CHATGPT_ARTIFACT_CAPTURE_UI_HTML).toContain("allowed.has(value) ? value : 'capture_failed'")
+    expect(CHATGPT_ARTIFACT_CAPTURE_UI_HTML).toContain("'download_timeout','download_unavailable'")
     expect(CHATGPT_ARTIFACT_CAPTURE_UI_HTML).not.toContain('fileName:')
     expect(CHATGPT_ARTIFACT_CAPTURE_UI_HTML).not.toContain('imageIds: [selected.fileId]')
   })

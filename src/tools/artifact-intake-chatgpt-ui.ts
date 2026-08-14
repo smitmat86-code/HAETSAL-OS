@@ -8,7 +8,7 @@ import { CHATGPT_ARTIFACT_CAPTURE_UI_HTML } from './artifact-intake-chatgpt-ui-t
 
 export { CHATGPT_ARTIFACT_CAPTURE_UI_HTML } from './artifact-intake-chatgpt-ui-template'
 
-export const CHATGPT_ARTIFACT_CAPTURE_UI_URI = 'ui://haetsal/artifact-capture-v2.html'
+export const CHATGPT_ARTIFACT_CAPTURE_UI_URI = 'ui://haetsal/artifact-capture-v3.html'
 
 export function registerChatGptArtifactCaptureUi(server: McpServer): void {
   server.registerResource(

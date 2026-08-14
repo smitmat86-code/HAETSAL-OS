@@ -87,7 +87,14 @@ button{width:fit-content;border:0;border-radius:8px;padding:9px 13px;font:inheri
 
   function safeErrorCode(error) {
     const value = error && typeof error.message === 'string' ? error.message : '';
-    const allowed = new Set(['bulk_import_required','capture_failed','chatgpt_file_picker_unavailable','download_timeout','extraction_unavailable','host_unavailable','mime_mismatch','raw_bytes_unavailable','receipt_unavailable','select_exactly_one_file','ssrf_url_blocked']);
+    const allowed = new Set([
+      'bulk_import_required','canonical_write_failed','capture_failed','chatgpt_file_picker_unavailable',
+      'ciphertext_invalid','client_identity_unavailable','download_timeout','download_unavailable',
+      'encryption_family_mismatch','encryption_key_unavailable','extraction_unavailable','hash_mismatch',
+      'host_unavailable','invalid_manifest','invalid_state','mime_mismatch','missing_declared_derivative',
+      'not_found','raw_bytes_unavailable','receipt_unavailable','select_exactly_one_file',
+      'ssrf_url_blocked','storage_write_failed','tenant_mismatch',
+    ]);
     return allowed.has(value) ? value : 'capture_failed';
   }
 

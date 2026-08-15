@@ -91,11 +91,25 @@ button{width:fit-content;border:0;border-radius:8px;padding:9px 13px;font:inheri
       'bulk_import_required','canonical_write_failed','capture_failed','chatgpt_file_picker_unavailable',
       'ciphertext_invalid','client_identity_unavailable','download_timeout','download_unavailable',
       'encryption_family_mismatch','encryption_key_unavailable','extraction_unavailable','hash_mismatch',
-      'host_unavailable','invalid_manifest','invalid_state','mime_mismatch','missing_declared_derivative',
+      'host_tool_call_failed','host_unavailable','invalid_manifest','invalid_state','mime_mismatch','missing_declared_derivative',
       'not_found','raw_bytes_unavailable','receipt_unavailable','select_exactly_one_file',
       'ssrf_url_blocked','storage_write_failed','tenant_mismatch',
     ]);
     return allowed.has(value) ? value : 'capture_failed';
+  }
+
+  async function callCapture(args) {
+    try {
+      return await request('tools/call', { name: 'capture_artifact_file', arguments: args });
+    } catch {
+      const callTool = window.openai && window.openai.callTool;
+      if (typeof callTool !== 'function') throw new Error('host_tool_call_failed');
+      try {
+        return await callTool('capture_artifact_file', args);
+      } catch {
+        throw new Error('host_tool_call_failed');
+      }
+    }
   }
 
   button.addEventListener('click', async () => {
@@ -114,7 +128,7 @@ button{width:fit-content;border:0;border-radius:8px;padding:9px 13px;font:inheri
       args.file = { download_url: temporary.downloadUrl, file_id: selected.fileId };
       if (typeof selected.mimeType === 'string' && selected.mimeType.trim() !== '') args.file.mime_type = selected.mimeType;
       status.textContent = 'Sealing and finalizing…';
-      const result = await request('tools/call', { name: 'capture_artifact_file', arguments: args });
+      const result = await callCapture(args);
       const value = parseReceipt(result); showReceipt(value); status.textContent = 'Capture finalized.';
       if (openai.setWidgetState) openai.setWidgetState({
         modelContent: JSON.stringify({

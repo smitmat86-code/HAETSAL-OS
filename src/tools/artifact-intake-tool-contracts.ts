@@ -9,6 +9,7 @@ export const ARTIFACT_INTAKE_TOOL_NAMES = [
   'finalize_artifact_capture',
   'artifact_intake_status',
   'capture_artifact_file',
+  'capture_artifact_file_from_widget',
   'prepare_artifact_file_capture',
 ] as const
 

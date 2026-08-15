@@ -177,7 +177,7 @@ describe('12.7 Session 4 ChatGPT hosted attachment downloader', () => {
     })
     expect(CHATGPT_ARTIFACT_CAPTURE_UI_HTML).toContain('openai.selectFiles()')
     expect(CHATGPT_ARTIFACT_CAPTURE_UI_HTML).toContain("request('tools/call'")
-    expect(CHATGPT_ARTIFACT_CAPTURE_UI_HTML).toContain("openai.callTool('capture_artifact_file', args)")
+    expect(CHATGPT_ARTIFACT_CAPTURE_UI_HTML).toContain("openai.callTool('capture_artifact_file_from_widget', args)")
     expect(CHATGPT_ARTIFACT_CAPTURE_UI_HTML).toContain("throw new Error('host_tool_call_failed')")
     expect(CHATGPT_ARTIFACT_CAPTURE_UI_HTML).toContain("window.addEventListener('openai:set_globals'")
     expect(CHATGPT_ARTIFACT_CAPTURE_UI_HTML).toContain('candidates.find(candidate =>')
@@ -185,6 +185,14 @@ describe('12.7 Session 4 ChatGPT hosted attachment downloader', () => {
     expect(CHATGPT_ARTIFACT_CAPTURE_UI_HTML).toContain("'download_timeout','download_unavailable'")
     expect(CHATGPT_ARTIFACT_CAPTURE_UI_HTML).not.toContain('fileName:')
     expect(CHATGPT_ARTIFACT_CAPTURE_UI_HTML).not.toContain('imageIds: [selected.fileId]')
+
+    const privateConfig = reg.configs.get('capture_artifact_file_from_widget') as {
+      _meta: Record<string, unknown>
+    }
+    expect(privateConfig._meta).toEqual({
+      ui: { visibility: ['app'] },
+      'openai/visibility': 'private',
+    })
   })
 
   it('revalidates each redirect and pins the connection-time public address', async () => {

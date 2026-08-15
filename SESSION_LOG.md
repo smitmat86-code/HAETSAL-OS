@@ -2170,3 +2170,29 @@
 **Stop boundary:** No Telegram or Sendblue live gate was run. No legacy inventory/remediation command was run, no approval was inferred, and no legacy object was migrated, overwritten, or deleted. The primary `codex/artifact-intake-session-1` branch was not advanced.
 
 ---
+
+### Session 5 final lease-fence and legacy-role correction — 2026-08-15
+
+**Status:** Both independent re-review blockers are corrected, committed, deployed, and exact-tree green. Fresh Telegram/Sendblue live proof and all remediation remain outside this pass.
+
+**Commit and deployment evidence:**
+- Starting review HEAD: `ab478a57a58acfa8811b051ba4f0a1718cbdcc93`; reviewed implementation: `a00725aac0bf9cb32e73da4082a589abb0acb2ab`.
+- Final correction implementation: `6e9d4abf2444a3fef67997303a87ddfeef1f8be3`.
+- Production deployment `e7cfbea5-99da-4c64-b3a8-e36bcb39c5bb`; Worker version `9d15ba4a-b664-48da-9943-06ef39c28f1f`, created `2026-08-15T23:53:47.254663Z`, serving 100%. No migration was added or applied.
+
+**Corrected invariants:**
+- Generic artifact finalization now supports a reservation-boundary fence without changing existing callers. The reservation becomes visible first; channel media then renews the exact processing lease immediately before artifact-operation mutation or canonical write. A stale worker cannot begin canonical side effects after losing the lease.
+- The deterministic regression pauses the finalization INSERT, expires worker A, lets worker B claim the job and enter failure delivery, then releases A. A is fenced with no canonical capture/document; acquisition, vision, managed upload/operation, reservation, and provider response each remain single-instance, so canonical success and a failure reply cannot coexist.
+- Every reaper path that would clean a pending-delivery job now runs canonical recovery before deleting the KEK handoff or TMK recovery envelope. A failed/pending job with canonical proof repairs to finalized and retains both envelopes for the single success delivery.
+- Neon inventory evidence carries the explicit artifact role. D1 carries source provenance only when capture and document primary pointers select the same artifact; otherwise the role is unknown. Only one exact legacy role=`source` artifact plus one unique managed role=`source` primary can be already migrated. Derivative, missing, unknown, conflicting, multiple, or mixed roles are `exclude_ambiguous`, migration-ineligible, and deletion-ineligible.
+
+**Validation:**
+- Focused channel-media and legacy suites: 37 passed across 2 files.
+- Supplemental generic-finalization + focused suites: 41 passed across 3 files.
+- Exact committed-tree suite: 606 passed, 1 skipped across 95 files (607 total).
+- `npm.cmd run postflight`: passed. `npx.cmd wrangler deploy --dry-run`: passed; upload 3,674.26 KiB, gzip 701.92 KiB.
+- Complete diff against `ab478a5` reviewed; cached diff check passed. The first production deploy attempt inherited the known-invalid API token and was rejected before upload; deployment then succeeded through the existing local Wrangler OAuth profile.
+
+**Stop boundary:** No Telegram or Sendblue live gate ran. No live legacy inventory, remediation, or approval workflow ran. No legacy object was read for remediation, migrated, overwritten, or deleted. `codex/artifact-intake-session-1` was not merged or advanced.
+
+---

@@ -12,7 +12,7 @@ Last updated: 2026-04-18 | Session: 7.1 (Hindsight Projection Adapter)
 
 <!-- AUTO-GENERATED MODULE REGISTRY - DO NOT EDIT -->
 
-*Auto-generated: 2026-08-14*
+*Auto-generated: 2026-08-15*
 
 ### src/
 
@@ -46,8 +46,8 @@ Last updated: 2026-04-18 | Session: 7.1 (Hindsight Projection Adapter)
 | src\cron\passes\pass4-gaps.ts | 13 | — | ✅ |
 | src\cron\weekly-synthesis.ts | 20 | WEEKLY_SYNTHESIS_REFLECT_QUERY, WEEKLY_SYNTHESIS_REFLECT_TAGS_MATCH, WEEKLY_SYNTHESIS_REFLECT_BUDGET | ✅ |
 | src\middleware\audit.ts | 45 | auditMiddleware | ✅ |
-| src\middleware\auth.ts | 106 | authMiddleware | ✅ |
-| src\middleware\cf-access.ts | 112 | CfAccessJwtPayload, ResolvedAccessPrincipal, deriveAccessPrincipalId... | ✅ |
+| src\middleware\auth.ts | 114 | authMiddleware | ✅ |
+| src\middleware\cf-access.ts | 149 | CfAccessJwtPayload, ResolvedAccessPrincipal, DelegatedClientIdentity... | ✅ |
 | src\middleware\dlp.ts | 17 | dlpMiddleware | ✅ |
 | src\services\action\approval-api.ts | 142 | clampPositiveInt | ✅ |
 | src\services\action\approved-execution.ts | 63 | — | ✅ |
@@ -68,17 +68,32 @@ Last updated: 2026-04-18 | Session: 7.1 (Hindsight Projection Adapter)
 | src\services\agents\automation-chat.ts | 77 | AutomationChatRoute | ✅ |
 | src\services\agents\delegation.ts | 71 | DelegationDecision, decideDelegation, DelegationRoute | ✅ |
 | src\services\agents\router.ts | 50 | — | ✅ |
+| src\services\artifact-intake\config.ts | 33 | ARTIFACT_MAX_BYTES, TELEGRAM_ARTIFACT_MAX_BYTES, ARTIFACT_DOWNLOAD_TIMEOUT_MS... | ✅ |
+| src\services\artifact-intake\contracts.ts | 134 | ARTIFACT_INTAKE_ERROR, ArtifactIntakeErrorCode, ArtifactIntakeContractError... | ✅ |
+| src\services\artifact-intake\crypto.ts | 108 | SealedArtifactBytes, detectArtifactEnvelopeFamily | ✅ |
+| src\services\artifact-intake\download-body.ts | 57 | — | ✅ |
+| src\services\artifact-intake\download-network.ts | 80 | DEFAULT_ARTIFACT_DOWNLOAD_NETWORK | ✅ |
+| src\services\artifact-intake\download-policy.ts | 117 | normalizeArtifactIpAddress, isBlockedArtifactAddress, assertArtifactResolvedAddressAllowed... | ✅ |
+| src\services\artifact-intake\download-types.ts | 42 | HostedArtifactFileDescriptor, ArtifactDownloadResponse, ArtifactDownloadNetwork... | ✅ |
+| src\services\artifact-intake\download.ts | 150 | — | ✅ |
+| src\services\artifact-intake\finalize.ts | 292 | — | ⚠️ OVER LIMIT |
+| src\services\artifact-intake\legacy-inventory.ts | 80 | LegacyChannel, LegacyObjectInventoryInput, LegacyCanonicalReference... | ✅ |
+| src\services\artifact-intake\legacy-remediation.ts | 60 | LegacyRemediationPlan, requireLegacyRemediationApproval | ✅ |
+| src\services\artifact-intake\mime.ts | 41 | detectArtifactMimeType | ✅ |
+| src\services\artifact-intake\operations.ts | 296 | ArtifactIntakeOperationRow | ⚠️ OVER LIMIT |
+| src\services\artifact-intake\reaper.ts | 57 | ArtifactReaperResult | ✅ |
+| src\services\artifact-intake\schemas.ts | 148 | reserveArtifactUploadSchema, openAIFileDescriptorSchema, telegramArtifactFileDescriptorSchema... | ✅ |
+| src\services\artifact-intake\storage.ts | 54 | — | ✅ |
 | src\services\automations\nl-parse.ts | 88 | ParsedAutomation, parseAutomationIntent, AutomationCommand... | ✅ |
 | src\services\automations\recurrence.ts | 84 | RecurrenceKind, RecurrenceSpec, DEFAULT_TZ... | ✅ |
-| src\services\bootstrap\gmail-backfill-audit.ts | 253 | GmailBackfillItemStatus, GmailBackfillStatusItem, GmailBackfillStatusReport | ⚠️ OVER LIMIT |
-| src\services\bootstrap\historical-import.ts | 293 | GmailBackfillOptions, GmailBackfillReport, historicalSalienceMultiplier... | ⚠️ OVER LIMIT |
+| src\services\bootstrap\historical-import.ts | 140 | historicalSalienceMultiplier | ✅ |
 | src\services\bootstrap\interview.ts | 76 | createInitialState, currentQuestion, currentDomain... | ✅ |
 | src\services\canary\sweep.ts | 104 | CanaryResult | ✅ |
 | src\services\canonical-broker-shadow.ts | 122 | summaryOf, statusOf, traceOf... | ✅ |
 | src\services\canonical-broker-trace-read.ts | 63 | — | ✅ |
 | src\services\canonical-broker-trace-view.ts | 139 | CanonicalBrokerTraceRow, BROKER_TRACE_SELECT, viewFromRow... | ✅ |
 | src\services\canonical-broker-trace.ts | 63 | — | ✅ |
-| src\services\canonical-capture-pipeline.ts | 118 | — | ✅ |
+| src\services\canonical-capture-pipeline.ts | 122 | — | ✅ |
 | src\services\canonical-compiled-refresh-trigger.ts | 54 | — | ✅ |
 | src\services\canonical-composed-graph-context.ts | 106 | — | ✅ |
 | src\services\canonical-governance-ddl.ts | 194 | CANONICAL_GOVERNANCE_DDL | ⚠️ OVER LIMIT |
@@ -89,25 +104,36 @@ Last updated: 2026-04-18 | Session: 7.1 (Hindsight Projection Adapter)
 | src\services\canonical-graph-body-facts.ts | 101 | BodyRelationCandidate, buildCanonicalGraphEntityKey, buildCanonicalGraphEdgeKey... | ✅ |
 | src\services\canonical-graph-query-helpers.ts | 47 | parseCanonicalGraphEdgeKey, humanizeCanonicalGraphKey, labelCanonicalGraphEntity... | ✅ |
 | src\services\canonical-graph-query.ts | 149 | — | ✅ |
-| src\services\canonical-memory-artifacts.ts | 66 | PersistedCanonicalPayloads | ✅ |
+| src\services\canonical-memory-artifacts.ts | 67 | PersistedCanonicalPayloads, canonicalR2Key | ✅ |
 | src\services\canonical-memory-audit.ts | 71 | buildCanonicalCaptureAcceptedAuditBatch, buildCanonicalProjectionQueuedAuditBatch, buildCanonicalCaptureFailedAuditBatch | ✅ |
 | src\services\canonical-memory-broker.ts | 112 | — | ✅ |
 | src\services\canonical-memory-dispatch.ts | 123 | toMemoryListItem | ✅ |
-| src\services\canonical-memory-query.ts | 62 | — | ✅ |
-| src\services\canonical-memory-read-model.ts | 70 | CanonicalMemoryReadOptions, CanonicalListRow, CanonicalDocumentRow... | ✅ |
+| src\services\canonical-memory-query.ts | 75 | — | ✅ |
+| src\services\canonical-memory-read-model.ts | 72 | CanonicalMemoryReadOptions, CanonicalListRow, CanonicalDocumentRow... | ✅ |
 | src\services\canonical-memory-router.ts | 146 | normalizeMemoryQueryMode, decideCanonicalMemoryRoute | ✅ |
 | src\services\canonical-memory-schema.ts | 88 | CANONICAL_PROJECTION_KINDS, resolveCanonicalProjectionKinds, normalizeCanonicalBody... | ✅ |
 | src\services\canonical-memory-stats.ts | 39 | — | ✅ |
 | src\services\canonical-memory-status.ts | 74 | — | ✅ |
-| src\services\canonical-memory-types.ts | 52 | CanonicalChunkPlan, CanonicalArtifactPlan, NormalizedCanonicalCapture... | ✅ |
-| src\services\canonical-memory.ts | 221 | — | ⚠️ OVER LIMIT |
-| src\services\canonical-postgres-base-ddl.ts | 121 | CANONICAL_BASE_DDL | ✅ |
-| src\services\canonical-postgres-repository.ts | 993 | CanonicalMemoryStore, InMemoryCanonicalMemoryStore, PostgresCanonicalMemoryStore | ⚠️ OVER LIMIT |
-| src\services\canonical-postgres-schema.ts | 277 | CanonicalGraphIdentityKind, CanonicalGraphIdentityMapping, CANONICAL_POSTGRES_SCHEMA... | ⚠️ OVER LIMIT |
+| src\services\canonical-memory-types.ts | 79 | CanonicalChunkPlan, CanonicalArtifactPlan, NormalizedCanonicalCapture... | ✅ |
+| src\services\canonical-memory.ts | 231 | — | ⚠️ OVER LIMIT |
+| src\services\canonical-postgres-base-ddl.ts | 133 | CANONICAL_BASE_DDL | ✅ |
+| src\services\canonical-postgres-repository.ts | 1064 | CanonicalMemoryStore, InMemoryCanonicalMemoryStore, PostgresCanonicalMemoryStore | ⚠️ OVER LIMIT |
+| src\services\canonical-postgres-schema.ts | 298 | CanonicalGraphIdentityKind, CanonicalGraphIdentityMapping, CANONICAL_POSTGRES_SCHEMA... | ⚠️ OVER LIMIT |
 | src\services\canonical-postgres.ts | 34 | installCanonicalMemoryStore, installCanonicalMemoryTestStore, getCanonicalMemoryStore | ✅ |
 | src\services\canonical-projection-dispatch.ts | 51 | — | ✅ |
 | src\services\canonical-promotion.ts | 69 | PromoteClaimInput | ✅ |
 | src\services\canonical-source-attribution.ts | 64 | buildCanonicalSourceAttribution, applyCanonicalRoute | ✅ |
+| src\services\channel-media\delivery-state.ts | 45 | — | ✅ |
+| src\services\channel-media\delivery.ts | 58 | ChannelMediaDeliveryOutcome, ChannelMediaDeliver | ✅ |
+| src\services\channel-media\finalize-job.ts | 72 | channelMediaSearchableBody | ✅ |
+| src\services\channel-media\handoff.ts | 65 | — | ✅ |
+| src\services\channel-media\intake.ts | 27 | — | ✅ |
+| src\services\channel-media\jobs.ts | 150 | — | ✅ |
+| src\services\channel-media\orchestrator.ts | 128 | ChannelMediaOrchestratorDependencies | ✅ |
+| src\services\channel-media\providers-sendblue.ts | 74 | — | ✅ |
+| src\services\channel-media\providers-telegram.ts | 79 | — | ✅ |
+| src\services\channel-media\providers.ts | 16 | — | ✅ |
+| src\services\channel-media\reaper.ts | 40 | — | ✅ |
 | src\services\chief-of-staff-compiled-context-bundle.ts | 127 | buildCompiledChiefOfStaffBundle | ✅ |
 | src\services\chief-of-staff-compiled-context-gaps.ts | 33 | addSkippedAssetGap, addReadErrorGap | ✅ |
 | src\services\chief-of-staff-compiled-context-provenance.ts | 43 | linkedSourceRefs, linkedSourceCount, compiledEvidenceBlock | ✅ |
@@ -153,7 +179,7 @@ Last updated: 2026-04-18 | Session: 7.1 (Hindsight Projection Adapter)
 | src\services\compiled-synthesis.ts | 22 | — | ✅ |
 | src\services\decay\pass.ts | 114 | DecaySummary, scoreCapture | ✅ |
 | src\services\delivery\obsidian-write.ts | 52 | — | ✅ |
-| src\services\delivery\sendblue.ts | 58 | SendblueSendResult, sendblueAuthHeaders | ✅ |
+| src\services\delivery\sendblue.ts | 55 | SendblueSendResult, sendblueAuthHeaders | ✅ |
 | src\services\delivery\sms.ts | 35 | — | ✅ |
 | src\services\delivery\telegram.ts | 57 | TelegramSendOptions | ✅ |
 | src\services\dream\brief-section.ts | 33 | — | ✅ |
@@ -192,13 +218,13 @@ Last updated: 2026-04-18 | Session: 7.1 (Hindsight Projection Adapter)
 | src\services\prompts\registry.ts | 101 | SystemPromptEntry, PERSONA_CHAT_DEFAULT, GROUNDED_REPLY_DEFAULT... | ✅ |
 | src\services\retrieval-modes.ts | 149 | resolveTemporalWindow | ✅ |
 | src\services\retrieval-support.ts | 122 | CANONICAL_EMBEDDING_MODEL, citationOf, toRetrievalItem... | ✅ |
-| src\services\sendblue-inbound.ts | 106 | SendblueInboundBody | ✅ |
+| src\services\sendblue-inbound.ts | 98 | SendblueInboundBody | ✅ |
 | src\services\session\client.ts | 54 | recordSessionExchange | ✅ |
 | src\services\session\close-summary.ts | 65 | — | ✅ |
 | src\services\session\working-session.ts | 119 | SessionSql, WorkingSessionMessage, SESSION_WINDOW_LIMIT... | ✅ |
 | src\services\system\overview.ts | 72 | — | ✅ |
 | src\services\system\tasks.ts | 58 | PLATFORM_TASKS | ✅ |
-| src\services\telegram-inbound.ts | 138 | TelegramPhotoSize, TelegramMessage, TelegramUpdate | ✅ |
+| src\services\telegram-inbound.ts | 111 | TelegramPhotoSize, TelegramMessage, TelegramUpdate | ✅ |
 | src\services\telnyx.ts | 35 | — | ✅ |
 | src\services\tenant.ts | 133 | — | ✅ |
 | src\services\workers-ai-chat.ts | 129 | CHAT_MODEL, ChatContentPart, ChatMessage... | ✅ |
@@ -212,7 +238,13 @@ Last updated: 2026-04-18 | Session: 7.1 (Hindsight Projection Adapter)
 | src\tools\act\run-playbook.ts | 32 | runPlaybookSchema | ✅ |
 | src\tools\act\search.ts | 33 | searchSchema | ✅ |
 | src\tools\act\send-message.ts | 35 | sendMessageSchema | ✅ |
-| src\tools\bootstrap.ts | 179 | registerBootstrapTools | ⚠️ OVER LIMIT |
+| src\tools\artifact-intake-chatgpt-ui-template.ts | 150 | CHATGPT_ARTIFACT_CAPTURE_UI_HTML | ✅ |
+| src\tools\artifact-intake-chatgpt-ui.ts | 65 | CHATGPT_ARTIFACT_CAPTURE_UI_URI, registerChatGptArtifactCaptureUi | ✅ |
+| src\tools\artifact-intake-chatgpt.ts | 100 | registerChatGptArtifactTool | ✅ |
+| src\tools\artifact-intake-tool-contracts.ts | 82 | ARTIFACT_INTAKE_TOOL_NAMES, reserveArtifactUploadToolSchema, finalizeArtifactCaptureToolSchema... | ✅ |
+| src\tools\artifact-intake-tool-support.ts | 56 | artifactToolText, artifactToolErrorCode, requireArtifactToolContext | ✅ |
+| src\tools\artifact-intake.ts | 133 | registerArtifactIntakeTools | ✅ |
+| src\tools\bootstrap.ts | 104 | registerBootstrapTools | ✅ |
 | src\tools\brain-memory-surface.ts | 31 | BRAIN_MEMORY_TOOL_NAMES, BrainMemoryToolName, BrainMemorySurfaceContext... | ✅ |
 | src\tools\canonical-memory-schema.ts | 73 | captureSchema, searchSchema, recentSchema... | ✅ |
 | src\tools\canonical-memory.ts | 121 | registerCanonicalMemoryTools | ✅ |
@@ -220,34 +252,36 @@ Last updated: 2026-04-18 | Session: 7.1 (Hindsight Projection Adapter)
 | src\tools\recall.ts | 61 | — | ✅ |
 | src\tools\retain.ts | 74 | — | ✅ |
 | src\types\action.ts | 105 | CapabilityClass, AuthorizationLevel, AUTH_LEVEL_ORDINAL... | ✅ |
+| src\types\artifact-intake.ts | 76 | ArtifactRole, ArtifactStorageKind, ArtifactEncryptionFamily... | ✅ |
 | src\types\bootstrap.ts | 76 | BootstrapStatus, BootstrapParams, InterviewDomain... | ✅ |
-| src\types\canonical-capture-pipeline.ts | 63 | CanonicalPipelineCaptureInput, CanonicalProjectionDispatchMessage, CanonicalCapturePipelineResult | ✅ |
+| src\types\canonical-capture-pipeline.ts | 65 | CanonicalPipelineCaptureInput, CanonicalProjectionDispatchMessage, CanonicalCapturePipelineResult | ✅ |
 | src\types\canonical-governance-records.ts | 109 | CanonicalEventRecord, CanonicalEntityRecord, CanonicalClaimRecord... | ✅ |
 | src\types\canonical-governance.ts | 80 | CANONICAL_MEMORY_CLASSES, CanonicalMemoryClass, CANONICAL_TRUST_STATES... | ✅ |
 | src\types\canonical-graph-query.ts | 68 | TraceRelationshipInput, EntityTimelineInput, CanonicalProjectionProvenance... | ✅ |
 | src\types\canonical-memory-broker.ts | 106 | CanonicalBrokerBranchStatus, CanonicalBrokerOverlap, CanonicalBrokerDetailStatus... | ✅ |
-| src\types\canonical-memory-query.ts | 114 | MemoryQueryMode, MemoryQueryModePreference, CanonicalRetrievalCitation... | ✅ |
-| src\types\canonical-memory.ts | 71 | CanonicalProjectionKind, CanonicalArtifactMode, CanonicalArtifactRef... | ✅ |
+| src\types\canonical-memory-query.ts | 128 | MemoryQueryMode, MemoryQueryModePreference, CanonicalRetrievalCitation... | ✅ |
+| src\types\canonical-memory.ts | 84 | CanonicalProjectionKind, CanonicalArtifactMode, CanonicalArtifactRef... | ✅ |
+| src\types\channel-media.ts | 41 | ChannelMediaProvider, ChannelMediaJobStatus, ChannelMediaDeliveryStatus... | ✅ |
 | src\types\chief-of-staff-context.ts | 81 | ContextBundleIntent, ContextConfidenceLevel, PrepareContextForAgentInput... | ✅ |
 | src\types\cloudflare-env.generated.d.ts | 50 | — | ✅ |
-| src\types\env.ts | 32 | Env | ✅ |
+| src\types\env.ts | 33 | Env | ✅ |
 | src\types\external-brain.ts | 89 | BrainSurfaceId, BrainSurfaceStatus, BrainRiskLevel... | ✅ |
 | src\types\external-client-memory.ts | 73 | ExternalClientCaptureMode, BrainMemorySurfaceProfile, ExternalClientCaptureInput... | ✅ |
 | src\types\google-source-read.ts | 29 | GoogleSourceKind, GoogleSourceRef, GoogleSourceReadAttribution... | ✅ |
 | src\types\google.ts | 53 | GoogleOAuthTokens, GoogleThread, GoogleMessage... | ✅ |
-| src\types\ingestion.ts | 94 | IngestionSource, IngestionArtifact, SalienceResult... | ✅ |
+| src\types\ingestion.ts | 93 | IngestionSource, IngestionArtifact, SalienceResult... | ✅ |
 | src\types\ops-alert.ts | 41 | OpsAlertSeverity, OpsAlertSource, OpsAlertPayload... | ✅ |
 | src\types\tenant.ts | 30 | TenantContext, TenantRow | ✅ |
 | src\types\tools.ts | 59 | RetainInput, RetainOutput, RecallInput... | ✅ |
 | src\workers\action\index.ts | 134 | — | ✅ |
-| src\workers\ingestion\bootstrap-handlers.ts | 126 | — | ✅ |
+| src\workers\ingestion\bootstrap-handlers.ts | 91 | — | ✅ |
 | src\workers\ingestion\canonical-projection-consumer.ts | 28 | — | ✅ |
 | src\workers\ingestion\chat-consumer.ts | 68 | — | ✅ |
-| src\workers\ingestion\consumer.ts | 149 | — | ✅ |
-| src\workers\ingestion\handlers.ts | 112 | — | ✅ |
-| src\workers\ingestion\media-handlers.ts | 74 | — | ✅ |
+| src\workers\ingestion\consumer.ts | 163 | — | ⚠️ OVER LIMIT |
+| src\workers\ingestion\handlers.ts | 110 | — | ✅ |
 | src\workers\ingestion\ops-alert-memory-consumer.ts | 45 | — | ✅ |
 | src\workers\ingestion\retain-consumer.ts | 21 | — | ✅ |
+| src\workers\mcpagent\artifact-mcp-fast-path.ts | 97 | — | ✅ |
 | src\workers\mcpagent\dashboard-agents-html.ts | 49 | AGENT_DASHBOARD_HTML | ✅ |
 | src\workers\mcpagent\debug-inventory.ts | 82 | — | ✅ |
 | src\workers\mcpagent\do\action-scheduling.ts | 52 | ReminderSchedulePayload | ✅ |
@@ -260,22 +294,22 @@ Last updated: 2026-04-18 | Session: 7.1 (Hindsight Projection Adapter)
 | src\workers\mcpagent\do\automation-view.ts | 45 | — | ✅ |
 | src\workers\mcpagent\do\identity.ts | 13 | MCP_STREAMABLE_HTTP_PREFIX, getMcpAgentObjectName, getMcpAgentObjectId | ✅ |
 | src\workers\mcpagent\do\inbound-message.ts | 52 | — | ✅ |
-| src\workers\mcpagent\do\McpAgent.ts | 146 | McpAgentDO | ✅ |
+| src\workers\mcpagent\do\McpAgent.ts | 150 | McpAgentDO | ✅ |
 | src\workers\mcpagent\do\register-automation-tools.ts | 66 | registerAutomationTools | ✅ |
-| src\workers\mcpagent\do\register-tools.ts | 127 | registerLegacyMemoryTools, registerActTools, registerAllDoTools | ✅ |
+| src\workers\mcpagent\do\register-tools.ts | 133 | registerLegacyMemoryTools, registerActTools, registerAllDoTools | ✅ |
 | src\workers\mcpagent\do\session-runtime.ts | 71 | SessionHost | ✅ |
 | src\workers\mcpagent\do\session-store.ts | 57 | PersistedSessionRow, ensureSessionTable, readPersistedSession... | ✅ |
 | src\workers\mcpagent\do\tenant-context.ts | 58 | ResolvedTenantContext, acceptSessionWebSocket, broadcastToSessions | ✅ |
-| src\workers\mcpagent\index.ts | 149 | — | ✅ |
+| src\workers\mcpagent\index.ts | 148 | — | ✅ |
 | src\workers\mcpagent\ops-alert-webhook.ts | 57 | registerOpsAlertWebhook | ✅ |
-| src\workers\mcpagent\public-webhooks.ts | 88 | registerPublicWebhooks | ✅ |
+| src\workers\mcpagent\public-webhooks.ts | 89 | registerPublicWebhooks | ✅ |
 | src\workers\mcpagent\routes\actions.ts | 79 | actions | ✅ |
 | src\workers\mcpagent\routes\agent-runs.ts | 84 | agentRuns, agentDashboard | ✅ |
 | src\workers\mcpagent\routes\approval.ts | 102 | approval | ✅ |
+| src\workers\mcpagent\routes\artifact-content.ts | 114 | artifactContent | ✅ |
 | src\workers\mcpagent\routes\audit.ts | 51 | audit | ✅ |
 | src\workers\mcpagent\routes\auth.ts | 90 | — | ✅ |
 | src\workers\mcpagent\routes\automations.ts | 79 | automations | ✅ |
-| src\workers\mcpagent\routes\backfill.ts | 67 | backfill | ✅ |
 | src\workers\mcpagent\routes\canary.ts | 15 | canary, hasCanonicalHyperdriveBinding | ✅ |
 | src\workers\mcpagent\routes\compiled.ts | 55 | compiled | ✅ |
 | src\workers\mcpagent\routes\dashboard-data.ts | 117 | dashboardData | ✅ |
@@ -286,10 +320,10 @@ Last updated: 2026-04-18 | Session: 7.1 (Hindsight Projection Adapter)
 | src\workers\mcpagent\routes\settings.ts | 73 | settings | ✅ |
 | src\workers\mcpagent\routes\system-telegram.ts | 62 | WEBHOOK_HOSTS, systemTelegram | ✅ |
 | src\workers\mcpagent\routes\system.ts | 89 | system | ✅ |
-| src\workers\mcpagent\runtime.ts | 48 | — | ✅ |
+| src\workers\mcpagent\runtime.ts | 50 | — | ✅ |
 | src\workers\mcpagent\self-registration.ts | 39 | — | ✅ |
 | src\workflows\action-approval.ts | 49 | ActionApprovalParams, ActionApprovalWorkflow | ✅ |
-| src\workflows\bootstrap.ts | 118 | BootstrapWorkflow | ✅ |
+| src\workflows\bootstrap.ts | 110 | BootstrapWorkflow | ✅ |
 | src\workflows\dream-cycle.ts | 79 | DreamCycleParams, DreamCycleWorkflow | ✅ |
 
 ### pages/src/

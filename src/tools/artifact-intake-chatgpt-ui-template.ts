@@ -115,9 +115,9 @@ button{width:fit-content;border:0;border-radius:8px;padding:9px 13px;font:inheri
   async function callCapture(args) {
     try {
       return await request('tools/call', { name: 'prepare_artifact_file_capture', arguments: args });
-    } catch {
+    } catch (requestError) {
       const openai = window.openai;
-      if (!openai || typeof openai.callTool !== 'function') throw new Error('host_tool_call_failed');
+      if (!openai || typeof openai.callTool !== 'function') throw new Error(classifyHostError(requestError));
       try {
         return await openai.callTool('prepare_artifact_file_capture', args);
       } catch (error) {

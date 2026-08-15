@@ -276,8 +276,9 @@ Last updated: 2026-04-18 | Session: 7.1 (Hindsight Projection Adapter)
 | src\workers\action\index.ts | 134 | — | ✅ |
 | src\workers\ingestion\bootstrap-handlers.ts | 91 | — | ✅ |
 | src\workers\ingestion\canonical-projection-consumer.ts | 28 | — | ✅ |
+| src\workers\ingestion\channel-media-consumer.ts | 29 | — | ✅ |
 | src\workers\ingestion\chat-consumer.ts | 68 | — | ✅ |
-| src\workers\ingestion\consumer.ts | 163 | — | ⚠️ OVER LIMIT |
+| src\workers\ingestion\consumer.ts | 147 | — | ✅ |
 | src\workers\ingestion\handlers.ts | 110 | — | ✅ |
 | src\workers\ingestion\ops-alert-memory-consumer.ts | 45 | — | ✅ |
 | src\workers\ingestion\retain-consumer.ts | 21 | — | ✅ |

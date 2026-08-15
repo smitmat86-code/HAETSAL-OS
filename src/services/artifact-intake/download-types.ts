@@ -16,6 +16,7 @@ export interface ArtifactDownloadResponse {
 }
 
 export interface ArtifactDownloadNetwork {
+  connectionSafety?: 'peer_address' | 'isolated_fetch'
   resolve: (hostname: string) => Promise<string[]>
   request: (url: URL, pinnedAddress: string, signal: AbortSignal) => Promise<ArtifactDownloadResponse>
 }

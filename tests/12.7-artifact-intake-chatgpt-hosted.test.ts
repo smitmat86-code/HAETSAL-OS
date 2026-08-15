@@ -213,6 +213,26 @@ describe('12.7 Session 4 ChatGPT hosted attachment downloader', () => {
     expect(net.value.resolve).toHaveBeenCalledTimes(4)
   })
 
+  it('accepts address-less responses only from the isolated Workers fetch transport', async () => {
+    const png = Uint8Array.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])
+    const isolated: ArtifactDownloadNetwork = {
+      connectionSafety: 'isolated_fetch',
+      resolve: async () => ['93.184.216.34'],
+      request: async () => response({ chunks: [png], remoteAddress: '' }),
+    }
+    await expect(downloadHostedArtifactFile({
+      download_url: 'https://files.example.com/image', file_id: 'file_isolated', mime_type: 'image/png',
+    }, isolated, LIMITS)).resolves.toMatchObject({ detectedMimeType: 'image/png' })
+
+    const unverified: ArtifactDownloadNetwork = {
+      resolve: isolated.resolve,
+      request: isolated.request,
+    }
+    await expect(downloadHostedArtifactFile({
+      download_url: 'https://files.example.com/image', file_id: 'file_unverified', mime_type: 'image/png',
+    }, unverified, LIMITS)).rejects.toMatchObject({ code: 'ssrf_url_blocked' })
+  })
+
   it('blocks private URLs, private DNS answers, and DNS rebinding before a request', async () => {
     const unused = network({ responses: [] })
     await expect(downloadHostedArtifactFile({

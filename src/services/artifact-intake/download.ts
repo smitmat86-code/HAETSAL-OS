@@ -58,8 +58,13 @@ async function resolveForConnection(
   return stable
 }
 
-function assertPinnedResponse(response: ArtifactDownloadResponse, pinnedAddress: string): void {
+function assertPinnedResponse(
+  response: ArtifactDownloadResponse,
+  pinnedAddress: string,
+  network: ArtifactDownloadNetwork,
+): void {
   const connected = response.remoteAddress ? normalizeArtifactIpAddress(response.remoteAddress) : null
+  if (!connected && network.connectionSafety === 'isolated_fetch') return
   if (!connected || connected !== normalizeArtifactIpAddress(pinnedAddress)) {
     response.cancel()
     throw new ArtifactIntakeContractError(ARTIFACT_INTAKE_ERROR.SSRF_URL_BLOCKED)
@@ -104,7 +109,7 @@ export async function downloadHostedArtifactFile(
         throw new ArtifactIntakeContractError(code)
       }
       stage = 'response_validation'
-      assertPinnedResponse(response, pinnedAddress)
+      assertPinnedResponse(response, pinnedAddress, network)
 
       if (REDIRECT_STATUSES.has(response.status)) {
         const location = response.headers.get('location')

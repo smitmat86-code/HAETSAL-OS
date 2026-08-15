@@ -5,6 +5,7 @@ import { deliverChannelMediaClaim, type ChannelMediaDeliver } from './delivery'
 import { getChannelMediaJob } from './jobs'
 import { readChannelMediaHandoff } from './handoff'
 import { markChannelMediaDeliveryUnknown } from './delivery-state'
+import { markChannelMediaFailed } from './job-transitions'
 
 export interface ChannelMediaOrchestratorDependencies {
   acquire?: (descriptor: ChannelMediaDescriptor, env: Env) => Promise<AcquiredChannelMedia>
@@ -12,6 +13,21 @@ export interface ChannelMediaOrchestratorDependencies {
   deliver?: ChannelMediaDeliver
   afterCanonicalFinalization?: () => void | Promise<void>
 }
+
+export interface ProcessChannelMediaJobArgs {
+  tenantId: string
+  operationId: string
+  tmk: CryptoKey
+  kek: CryptoKey
+  env: Env
+  dependencies?: ChannelMediaOrchestratorDependencies
+}
+
+export type ChannelMediaProcessResult =
+  | 'processed'
+  | 'ignored'
+  | 'terminal_failed'
+  | { status: 'lease_held'; retryAfterSeconds: number }
 
 export const PERMANENT_CHANNEL_MEDIA_ERRORS = new Set<string>([
   ARTIFACT_INTAKE_ERROR.PROVIDER_LOCATOR_INVALID,
@@ -78,4 +94,20 @@ export async function handleTerminalChannelMediaJob(args: {
   })
   if (outcome === 'retry') throw new ArtifactIntakeContractError(ARTIFACT_INTAKE_ERROR.DELIVERY_REJECTED)
   return 'terminal_failed'
+}
+
+export async function handleExpiredChannelMediaJob(args: {
+  job: ChannelMediaJob
+  leaseToken: string
+  kek: CryptoKey
+  env: Env
+  deliver: ChannelMediaDeliver
+}): Promise<'processed' | 'ignored' | 'terminal_failed'> {
+  await markChannelMediaFailed(
+    args.job.tenantId, args.job.id, args.leaseToken, ARTIFACT_INTAKE_ERROR.LOCATOR_EXPIRED, args.env,
+  )
+  const failed = await getChannelMediaJob(args.job.tenantId, args.job.id, args.env)
+  return failed
+    ? handleTerminalChannelMediaJob({ job: failed, kek: args.kek, env: args.env, deliver: args.deliver })
+    : 'ignored'
 }

@@ -11,8 +11,16 @@ import {
 
 export const LEGACY_INVENTORY_VERSION = 2
 
+export type LegacyRemediationCategory = ExactTargetManifestEntry['disposition']
+
+const LEGACY_REMEDIATION_CATEGORY_ORDER: readonly LegacyRemediationCategory[] = [
+  'migrate_replace_delete',
+  'delete_confirmed_orphan',
+]
+
 export interface LegacyRemediationPlan {
   approvalDigest: string
+  approvalCategories: readonly LegacyRemediationCategory[]
   inventoryVersion: number
   inventoryAt: string
   executorCommit: string
@@ -47,6 +55,8 @@ export async function buildLegacyRemediationPlan(args: {
     throw new Error('invalid_inventory_identity')
   }
   const targets = await buildExactTargetManifest(args.privateEntries, args.approvalHmacSecret)
+  const approvalCategories = LEGACY_REMEDIATION_CATEGORY_ORDER.filter(category =>
+    targets.some(target => target.disposition === category))
   const exactTotal = (channel: 'telegram' | 'sendblue', disposition: ExactTargetManifestEntry['disposition']) =>
     targets.filter(target => target.channel === channel && target.disposition === disposition)
       .reduce((sum, target) => ({ count: sum.count + 1, bytes: sum.bytes + target.byteCount }), { count: 0, bytes: 0 })
@@ -63,6 +73,7 @@ export async function buildLegacyRemediationPlan(args: {
     inventoryVersion: LEGACY_INVENTORY_VERSION,
     inventoryAt: args.inventoryAt,
     executorCommit: args.executorCommit.toLowerCase(),
+    approvalCategories,
     exactTargetCount: targets.length,
     migrate: { telegram: args.report.referencedTelegram, sendblue: args.report.referencedSendblue },
     deleteAfterVerifiedReplacement: total(args.report.referencedTelegram, args.report.referencedSendblue),
@@ -110,8 +121,18 @@ export function requireLegacyRemediationApproval(args: {
   plan: LegacyRemediationPlan
   approved: boolean
   approvalDigest?: string
+  approvedCategories?: readonly LegacyRemediationCategory[]
 }): void {
-  if (!args.approved || !args.approvalDigest || args.approvalDigest !== args.plan.approvalDigest) {
+  const approvedCategories = args.approvedCategories ?? []
+  const normalized = LEGACY_REMEDIATION_CATEGORY_ORDER.filter(category =>
+    approvedCategories.includes(category))
+  const exactCategories = approvedCategories.length === normalized.length &&
+    normalized.length === args.plan.approvalCategories.length &&
+    normalized.every((category, index) => category === args.plan.approvalCategories[index])
+  if (
+    !args.approved || !args.approvalDigest || args.approvalDigest !== args.plan.approvalDigest ||
+    !exactCategories
+  ) {
     throw new Error('explicit_remediation_approval_required')
   }
 }

@@ -135,9 +135,22 @@ async function main(): Promise<void> {
       r2_key: string; tenant_id: string; capture_id: string
     }>(`SELECT r2_key, tenant_id, capture_id FROM haetsal_canonical.canonical_artifacts
         WHERE r2_key LIKE 'telegram-media/%' OR r2_key LIKE 'sendblue-media/%'`)
-    const managed = await client.query<{ capture_id: string }>(
-      `SELECT DISTINCT capture_id FROM haetsal_canonical.canonical_artifacts
-       WHERE storage_kind = 'managed_r2' AND r2_key LIKE 'artifact-intake/v1/%'`,
+    const managedPrimarySourceReplacements = await client.query<{
+      key: string; tenant_id: string; capture_id: string
+    }>(
+      `SELECT DISTINCT legacy.r2_key AS key, legacy.tenant_id, legacy.capture_id
+       FROM haetsal_canonical.canonical_artifacts legacy
+       JOIN haetsal_canonical.canonical_captures capture
+         ON capture.id = legacy.capture_id AND capture.tenant_id = legacy.tenant_id
+       JOIN haetsal_canonical.canonical_documents document
+         ON document.capture_id = capture.id AND document.tenant_id = capture.tenant_id
+       JOIN haetsal_canonical.canonical_artifacts managed
+         ON managed.id = capture.artifact_id AND managed.id = document.artifact_id
+        AND managed.tenant_id = capture.tenant_id
+       WHERE (legacy.r2_key LIKE 'telegram-media/%' OR legacy.r2_key LIKE 'sendblue-media/%')
+         AND managed.storage_kind = 'managed_r2'
+         AND managed.r2_key LIKE 'artifact-intake/v1/%'
+         AND managed.role = 'source'`,
     )
     const documents = await client.query<{ id: string; body_sha256: string; chunk_count: number }>(
       `SELECT DISTINCT d.id, d.body_sha256, d.chunk_count
@@ -151,7 +164,9 @@ async function main(): Promise<void> {
       objects,
       neonReferences: legacy.rows.map(row => ({ key: row.r2_key, tenantId: row.tenant_id, captureId: row.capture_id })),
       d1References: await d1References(),
-      capturesWithManagedArtifact: new Set(managed.rows.map(row => row.capture_id)),
+      managedPrimarySourceReplacements: managedPrimarySourceReplacements.rows.map(row => ({
+        key: row.key, tenantId: row.tenant_id, captureId: row.capture_id,
+      })),
     })
     const canonicalContentFingerprint = createHash('sha256')
       .update(JSON.stringify(documents.rows)).digest('hex')

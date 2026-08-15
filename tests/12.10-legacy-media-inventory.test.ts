@@ -22,7 +22,9 @@ describe('12.10 legacy media inventory classification', () => {
         { key: 'telegram-media/t/a', tenantId: 't', captureId: 'capture-a' },
         { key: 'sendblue-media/t/d', tenantId: 't', captureId: 'stale-d1-capture' },
       ],
-      capturesWithManagedArtifact: new Set(['capture-b']),
+      managedPrimarySourceReplacements: [
+        { key: 'sendblue-media/t/b', tenantId: 't', captureId: 'capture-b' },
+      ],
     })
     expect(report).toMatchObject({
       referencedTelegram: { count: 1, bytes: 10 },
@@ -57,17 +59,112 @@ describe('12.10 legacy media inventory classification', () => {
         { key: 'telegram-media/t/shared', tenantId: 't', captureId: 'two' },
       ],
       d1References: [],
-      capturesWithManagedArtifact: new Set(),
+      managedPrimarySourceReplacements: [],
     })
     expect(report.ambiguous).toEqual({ count: 1, bytes: 50 })
     expect(report.referencedTelegram).toEqual({ count: 0, bytes: 0 })
     expect(report.alreadyEncrypted).toEqual({ count: 0, bytes: 0 })
   })
 
+  it('treats two identical authoritative Neon references as ambiguous and deletion-ineligible', () => {
+    const object = identified('telegram-media/t/duplicate-neon', 17, 'telegram', 'plaintext')
+    const classified = classifyLegacyMediaInventory({
+      objects: [object],
+      neonReferences: [
+        { key: object.key, tenantId: 't', captureId: 'same-capture' },
+        { key: object.key, tenantId: 't', captureId: 'same-capture' },
+      ],
+      d1References: [],
+      managedPrimarySourceReplacements: [],
+    })
+    expect(classified.report.ambiguous).toEqual({ count: 1, bytes: 17 })
+    expect(classified.report.orphanTelegram).toEqual({ count: 0, bytes: 0 })
+    expect(classified.report.referencedTelegram).toEqual({ count: 0, bytes: 0 })
+    expect(classified.privateEntries[0]?.disposition).toBe('exclude_ambiguous')
+  })
+
+  it('keeps duplicate Neon references ambiguous even when D1 has the matching reference', () => {
+    const object = identified('sendblue-media/t/duplicate-neon-matching-d1', 18, 'sendblue', 'plaintext')
+    const reference = { key: object.key, tenantId: 't', captureId: 'same-capture' }
+    const classified = classifyLegacyMediaInventory({
+      objects: [object],
+      neonReferences: [reference, reference],
+      d1References: [reference],
+      managedPrimarySourceReplacements: [],
+    })
+    expect(classified.report.ambiguous).toEqual({ count: 1, bytes: 18 })
+    expect(classified.report.orphanSendblue).toEqual({ count: 0, bytes: 0 })
+    expect(classified.privateEntries[0]?.disposition).toBe('exclude_ambiguous')
+  })
+
+  it('treats duplicate D1 references as ambiguous and deletion-ineligible', () => {
+    const object = identified('telegram-media/t/duplicate-d1', 19, 'telegram', 'plaintext')
+    const reference = { key: object.key, tenantId: 't', captureId: 'capture' }
+    const classified = classifyLegacyMediaInventory({
+      objects: [object],
+      neonReferences: [reference],
+      d1References: [reference, reference],
+      managedPrimarySourceReplacements: [],
+    })
+    expect(classified.report.ambiguous).toEqual({ count: 1, bytes: 19 })
+    expect(classified.report.referencedTelegram).toEqual({ count: 0, bytes: 0 })
+    expect(classified.report.orphanTelegram).toEqual({ count: 0, bytes: 0 })
+    expect(classified.privateEntries[0]?.disposition).toBe('exclude_ambiguous')
+  })
+
+  it('treats multiple owners and captures as ambiguous and deletion-ineligible', () => {
+    const object = identified('sendblue-media/t/multiple-owners', 21, 'sendblue', 'plaintext')
+    const classified = classifyLegacyMediaInventory({
+      objects: [object],
+      neonReferences: [
+        { key: object.key, tenantId: 'tenant-a', captureId: 'capture-a' },
+        { key: object.key, tenantId: 'tenant-b', captureId: 'capture-b' },
+      ],
+      d1References: [
+        { key: object.key, tenantId: 'tenant-a', captureId: 'capture-a' },
+        { key: object.key, tenantId: 'tenant-b', captureId: 'capture-b' },
+      ],
+      managedPrimarySourceReplacements: [],
+    })
+    expect(classified.report.ambiguous).toEqual({ count: 1, bytes: 21 })
+    expect(classified.report.referencedSendblue).toEqual({ count: 0, bytes: 0 })
+    expect(classified.report.orphanSendblue).toEqual({ count: 0, bytes: 0 })
+    expect(classified.privateEntries[0]?.disposition).toBe('exclude_ambiguous')
+  })
+
+  it('allows only zero authoritative and zero compatibility references to start as an orphan', () => {
+    const object = identified('telegram-media/t/only-orphan-start', 23, 'telegram', 'plaintext')
+    const classified = classifyLegacyMediaInventory({
+      objects: [object],
+      neonReferences: [],
+      d1References: [],
+      managedPrimarySourceReplacements: [],
+    })
+    expect(classified.report.orphanTelegram).toEqual({ count: 1, bytes: 23 })
+    expect(classified.report.ambiguous).toEqual({ count: 0, bytes: 0 })
+    expect(classified.privateEntries[0]).toMatchObject({
+      disposition: 'delete_confirmed_orphan', tenantId: null, captureId: null,
+    })
+  })
+
+  it('does not treat a managed derivative or unrelated managed artifact as a migrated legacy source', () => {
+    const object = identified('telegram-media/t/legacy-source', 29, 'telegram', 'plaintext')
+    const reference = { key: object.key, tenantId: 't', captureId: 'capture-with-managed-derivative' }
+    const classified = classifyLegacyMediaInventory({
+      objects: [object],
+      neonReferences: [reference],
+      d1References: [reference],
+      managedPrimarySourceReplacements: [],
+    })
+    expect(classified.report.alreadyMigrated).toEqual({ count: 0, bytes: 0 })
+    expect(classified.report.referencedTelegram).toEqual({ count: 1, bytes: 29 })
+    expect(classified.privateEntries[0]?.disposition).toBe('migrate_replace_delete')
+  })
+
   it('makes unknown unreferenced objects ambiguous and deletion-ineligible', () => {
     const classified = classifyLegacyMediaInventory({
       objects: [identified('telegram-media/t/unknown', 9, 'telegram', 'unknown')],
-      neonReferences: [], d1References: [], capturesWithManagedArtifact: new Set(),
+      neonReferences: [], d1References: [], managedPrimarySourceReplacements: [],
     })
     expect(classified.report.ambiguous).toEqual({ count: 1, bytes: 9 })
     expect(classified.report.orphanTelegram).toEqual({ count: 0, bytes: 0 })
@@ -86,7 +183,7 @@ describe('12.10 legacy media inventory classification', () => {
         { key: 'telegram-media/t/missing', tenantId: 't', captureId: 'missing' },
         { key: mismatch.key, tenantId: 'other', captureId: 'd1-capture' },
       ],
-      capturesWithManagedArtifact: new Set(),
+      managedPrimarySourceReplacements: [],
     })
     expect(report.ambiguous).toEqual({ count: 2, bytes: 12 })
     expect(report.reconciliation.referencedMissingR2).toEqual({ count: 1, bytes: 0 })

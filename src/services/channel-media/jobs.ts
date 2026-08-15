@@ -5,11 +5,14 @@ import type {
   ChannelMediaJobStatus,
   ChannelMediaProvider,
 } from '../../types/channel-media'
-import { CHANNEL_MEDIA_HANDOFF_EXPIRY_MS, CHANNEL_MEDIA_JOB_LEASE_MS } from '../artifact-intake/config'
+import {
+  CHANNEL_MEDIA_HANDOFF_EXPIRY_MS,
+  CHANNEL_MEDIA_JOB_LEASE_MS,
+} from '../artifact-intake/config'
 import { ArtifactIntakeContractError, ARTIFACT_INTAKE_ERROR } from '../artifact-intake/contracts'
 import { sha256Text } from '../artifact-intake/crypto'
 import { writeChannelMediaHandoff } from './handoff'
-import { markChannelMediaFailed } from './job-transitions'
+import { validateChannelMediaDescriptor } from './descriptor'
 
 interface JobRow {
   id: string; tenant_id: string; provider: ChannelMediaProvider; status: ChannelMediaJobStatus
@@ -57,7 +60,8 @@ export async function reserveChannelMediaJob(args: {
   kek: CryptoKey
   now?: number
 }, env: Env): Promise<ChannelMediaJob> {
-  if (args.descriptor.provider !== args.provider || args.eventIdentity.length < 1) {
+  const descriptor = validateChannelMediaDescriptor(args.descriptor)
+  if (descriptor.provider !== args.provider || args.eventIdentity.length < 1) {
     throw new ArtifactIntakeContractError(ARTIFACT_INTAKE_ERROR.PROVIDER_LOCATOR_INVALID)
   }
   const now = args.now ?? Date.now()
@@ -81,7 +85,7 @@ export async function reserveChannelMediaJob(args: {
   if (!row) throw new ArtifactIntakeContractError(ARTIFACT_INTAKE_ERROR.INVALID_STATE)
   if (row.handoff_status === 'pending' && row.delivery_status === 'pending') {
     await writeChannelMediaHandoff({
-      tenantId: args.tenantId, operationId: row.id, descriptor: args.descriptor, kek: args.kek,
+      tenantId: args.tenantId, operationId: row.id, descriptor, kek: args.kek,
     }, env)
   }
   return toJob(row)
@@ -114,18 +118,12 @@ export async function claimChannelMediaJob(
      SET status = 'processing', error_code = NULL, attempt_count = attempt_count + 1,
          lease_token = ?, lease_expires_at = ?, updated_at = ?
      WHERE tenant_id = ? AND id = ? AND
-       (status IN ('accepted', 'retryable') OR (status = 'processing' AND lease_expires_at < ?))`,
+       (status IN ('accepted', 'retryable') OR (status = 'processing' AND lease_expires_at <= ?))`,
   ).bind(token, now + CHANNEL_MEDIA_JOB_LEASE_MS, now, tenantId, operationId, now).run()
   if (!changedExactlyOnce(claimed)) return null
   const row = await env.D1_US.prepare(
     'SELECT * FROM channel_media_jobs WHERE tenant_id = ? AND id = ? AND lease_token = ? LIMIT 1',
   ).bind(tenantId, operationId, token).first<JobRow>()
   if (!row) throw new ArtifactIntakeContractError(ARTIFACT_INTAKE_ERROR.LEASE_LOST)
-  if (existing.expiresAt <= now) {
-    await markChannelMediaFailed(
-      tenantId, operationId, token, ARTIFACT_INTAKE_ERROR.LOCATOR_EXPIRED, env,
-    )
-    return await getChannelMediaJob(tenantId, operationId, env)
-  }
   return toJob(row)
 }

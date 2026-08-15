@@ -69,9 +69,20 @@ export default {
           `SELECT r2_key, tenant_id, capture_id FROM haetsal_canonical.canonical_artifacts
            WHERE r2_key LIKE 'telegram-media/%' OR r2_key LIKE 'sendblue-media/%'`,
         ),
-        client.query<{ capture_id: string }>(
-          `SELECT DISTINCT capture_id FROM haetsal_canonical.canonical_artifacts
-           WHERE storage_kind = 'managed_r2' AND r2_key LIKE 'artifact-intake/v1/%'`,
+        client.query<{ key: string; tenant_id: string; capture_id: string }>(
+          `SELECT DISTINCT legacy.r2_key AS key, legacy.tenant_id, legacy.capture_id
+           FROM haetsal_canonical.canonical_artifacts legacy
+           JOIN haetsal_canonical.canonical_captures capture
+             ON capture.id = legacy.capture_id AND capture.tenant_id = legacy.tenant_id
+           JOIN haetsal_canonical.canonical_documents document
+             ON document.capture_id = capture.id AND document.tenant_id = capture.tenant_id
+           JOIN haetsal_canonical.canonical_artifacts managed
+             ON managed.id = capture.artifact_id AND managed.id = document.artifact_id
+            AND managed.tenant_id = capture.tenant_id
+           WHERE (legacy.r2_key LIKE 'telegram-media/%' OR legacy.r2_key LIKE 'sendblue-media/%')
+             AND managed.storage_kind = 'managed_r2'
+             AND managed.r2_key LIKE 'artifact-intake/v1/%'
+             AND managed.role = 'source'`,
         ),
         client.query<{ id: string; body_sha256: string; chunk_count: number }>(
           `SELECT DISTINCT d.id, d.body_sha256, d.chunk_count
@@ -85,7 +96,9 @@ export default {
         objects,
         d1References: d1,
         neonReferences: legacy.rows.map(row => ({ key: row.r2_key, tenantId: row.tenant_id, captureId: row.capture_id })),
-        capturesWithManagedArtifact: new Set(managed.rows.map(row => row.capture_id)),
+        managedPrimarySourceReplacements: managed.rows.map(row => ({
+          key: row.key, tenantId: row.tenant_id, captureId: row.capture_id,
+        })),
       })
       const fingerprint = createHash('sha256').update(JSON.stringify(documents.rows)).digest('hex')
       const inventoryAt = new Date().toISOString()

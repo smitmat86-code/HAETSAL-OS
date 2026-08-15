@@ -5,6 +5,7 @@ import type {
   LegacyInventoryDisposition,
   LegacyInventoryReport,
   LegacyInventoryTotal,
+  LegacyManagedPrimarySourceReplacement,
   LegacyObjectInventoryInput,
   LegacyPrivateInventoryEntry,
 } from './legacy-inventory-types'
@@ -37,7 +38,7 @@ export function classifyLegacyMediaInventory(args: {
   objects: LegacyObjectInventoryInput[]
   neonReferences: LegacyCanonicalReference[]
   d1References: LegacyCanonicalReference[]
-  capturesWithManagedArtifact: Set<string>
+  managedPrimarySourceReplacements: LegacyManagedPrimarySourceReplacement[]
 }): LegacyInventoryClassification {
   const report: LegacyInventoryReport = {
     referencedTelegram: zero(), referencedSendblue: zero(),
@@ -51,6 +52,9 @@ export function classifyLegacyMediaInventory(args: {
   const objects = new Map(args.objects.map(object => [object.key, object]))
   const neon = groupReferences(args.neonReferences)
   const d1 = groupReferences(args.d1References)
+  const managedPrimarySourceReplacements = new Set(
+    args.managedPrimarySourceReplacements.map(reference => `${reference.key}\0${referenceIdentity(reference)}`),
+  )
   const keys = [...new Set([...objects.keys(), ...neon.keys(), ...d1.keys()])].sort()
   const privateEntries: LegacyPrivateInventoryEntry[] = []
 
@@ -62,6 +66,8 @@ export function classifyLegacyMediaInventory(args: {
     const channel = object?.channel ?? inferredChannel(key)
     const neonIdentities = new Set(authoritative.map(referenceIdentity))
     const d1Identities = new Set(compatibility.map(referenceIdentity))
+    const authoritativeMultiplicity = authoritative.length > 0 && authoritative.length !== 1
+    const compatibilityMultiplicity = compatibility.length > 1
     const multiOwner = neonIdentities.size > 1 || d1Identities.size > 1
     const ownershipMismatch = authoritative.length > 0 && compatibility.length > 0 && (
       neonIdentities.size !== d1Identities.size ||
@@ -73,11 +79,14 @@ export function classifyLegacyMediaInventory(args: {
     const incompleteObjectEvidence = Boolean(object) && (
       !object?.etag || !object.objectSha256 || !/^[a-f0-9]{64}$/i.test(object.objectSha256)
     )
-    const ambiguous = missingR2 || multiOwner || ownershipMismatch || d1MissingNeon ||
+    const ambiguous = missingR2 || authoritativeMultiplicity || compatibilityMultiplicity ||
+      multiOwner || ownershipMismatch || d1MissingNeon ||
       object?.envelopeFamily === 'unknown' || incompleteObjectEvidence
     let disposition: LegacyInventoryDisposition
     let reconciliationState = 'reconciled'
     if (missingR2) reconciliationState = 'referenced_missing_r2'
+    else if (authoritativeMultiplicity) reconciliationState = 'authoritative_reference_multiplicity'
+    else if (compatibilityMultiplicity) reconciliationState = 'd1_reference_multiplicity'
     else if (ownershipMismatch || multiOwner) reconciliationState = 'ownership_mismatch'
     else if (d1MissingNeon) reconciliationState = 'd1_only_reference'
     else if (neonMissingD1) reconciliationState = 'neon_reference_missing_d1'
@@ -87,7 +96,10 @@ export function classifyLegacyMediaInventory(args: {
     if (ambiguous) {
       disposition = 'exclude_ambiguous'
       add(report.ambiguous, size)
-    } else if (authoritative.some(reference => args.capturesWithManagedArtifact.has(reference.captureId))) {
+    } else if (
+      authoritative.length === 1 &&
+      managedPrimarySourceReplacements.has(`${key}\0${referenceIdentity(authoritative[0]!)}`)
+    ) {
       disposition = 'exclude_already_migrated'
       add(report.alreadyMigrated, size)
     } else if (object!.envelopeFamily === 'tmk' || object!.envelopeFamily === 'kek') {
@@ -104,7 +116,9 @@ export function classifyLegacyMediaInventory(args: {
     if (neonMissingD1) add(report.reconciliation.neonReferencedMissingD1, size)
     if (d1MissingNeon) add(report.reconciliation.d1ReferencedMissingNeon, size)
     if (missingR2) add(report.reconciliation.referencedMissingR2, size)
-    if (ownershipMismatch || multiOwner) add(report.reconciliation.ownershipMismatch, size)
+    if (authoritativeMultiplicity || compatibilityMultiplicity || ownershipMismatch || multiOwner) {
+      add(report.reconciliation.ownershipMismatch, size)
+    }
     const owner = authoritative.length === 1 ? authoritative[0] : null
     privateEntries.push({
       key, size, channel,

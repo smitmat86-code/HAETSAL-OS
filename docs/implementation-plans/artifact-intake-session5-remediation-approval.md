@@ -28,14 +28,14 @@ The historical proposed scope was two managed replacements plus deletion of two 
 
 ## Corrected exact-approval binding
 
-The next public packet will disclose only aggregate counts/bytes, inventory version/time, executor commit, canonical-content fingerprint, exact-target count, named dispositions, exclusions, and the approval digest. The private sorted manifest used to compute that digest binds, for every deletion-capable target:
+The next public packet will disclose only aggregate counts/bytes, inventory version/time, executor commit, canonical-content fingerprint, exact-target count, explicitly approvable named categories, exclusions, and the approval digest. The digest binds both the exact named category set and the private sorted manifest used for every deletion-capable target:
 
 - an HMACed object identity and HMACed tenant/capture ownership identity;
 - exact byte count, object version when available, complete object SHA-256, and ETag;
 - Telegram or Sendblue channel, exact disposition, and reconciliation state; and
 - inventory version/time, executor commit, and canonical-content fingerprint.
 
-Unknown or unreadable envelopes, missing R2 references, incomplete object evidence, D1-only references, multi-owner references, and D1/Neon ownership disagreements are ambiguous and deletion-ineligible. Changing any exact target, even while preserving aggregate counts and byte totals, changes the digest.
+Unknown or unreadable envelopes, missing R2 references, incomplete object evidence, any non-singleton authoritative Neon reference set, duplicate D1 references, D1-only references, multi-owner references, and D1/Neon ownership disagreements are ambiguous and deletion-ineligible. Only an object with zero Neon and zero D1 references can begin as an orphan. A legacy source is “already migrated” only when the inventory proves the exact legacy key/tenant/capture relationship to a managed primary source selected by both the capture and document; a managed derivative or unrelated artifact does not qualify. Changing any exact target or approved category, even while preserving aggregate counts and byte totals, changes the contract, and an executor rejects a matching digest if the named categories are absent or different.
 
 ## Exact migration method and order
 

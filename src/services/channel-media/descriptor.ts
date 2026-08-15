@@ -8,12 +8,13 @@ import {
 import { ArtifactIntakeContractError, ARTIFACT_INTAKE_ERROR } from '../artifact-intake/contracts'
 
 export function validateChannelMediaDescriptor(descriptor: Partial<ChannelMediaDescriptor>): ChannelMediaDescriptor {
-  const locatorLimit = descriptor.locatorKind === 'sendblue_temporary_url'
-    ? CHANNEL_MEDIA_LOCATOR_MAX_CHARS
-    : 512
+  const locatorLimit = Math.min(CHANNEL_MEDIA_LOCATOR_MAX_CHARS, 512)
+  const providerLocatorMatches =
+    (descriptor.provider === 'telegram' && descriptor.locatorKind === 'telegram_file_id') ||
+    (descriptor.provider === 'sendblue' && descriptor.locatorKind === 'sendblue_message_handle')
   const valid = descriptor.version === 1 &&
     (descriptor.provider === 'telegram' || descriptor.provider === 'sendblue') &&
-    ['telegram_file_id', 'sendblue_message_handle', 'sendblue_temporary_url'].includes(descriptor.locatorKind ?? '') &&
+    providerLocatorMatches &&
     typeof descriptor.locator === 'string' && descriptor.locator.length > 0 && descriptor.locator.length <= locatorLimit &&
     typeof descriptor.replyTarget === 'string' && descriptor.replyTarget.length > 0 &&
     descriptor.replyTarget.length <= CHANNEL_MEDIA_REPLY_TARGET_MAX_CHARS &&

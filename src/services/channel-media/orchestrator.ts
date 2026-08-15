@@ -16,7 +16,8 @@ import {
   defaultChannelMediaDeliver,
   deliverChannelMediaClaim,
 } from './delivery'
-import { claimChannelMediaJob, getChannelMediaJob } from './jobs'
+import { getChannelMediaJob } from './jobs'
+import { claimChannelMediaJobForProcessing } from './claim-outcome'
 import {
   markChannelMediaFailed,
   markChannelMediaRetryable,
@@ -27,23 +28,18 @@ import { readChannelMediaRecovery } from './recovery'
 import {
   channelMediaErrorCode as errorCode,
   deliverChannelMediaSuccess as deliverSuccess,
+  handleExpiredChannelMediaJob,
   handleTerminalChannelMediaJob,
   PERMANENT_CHANNEL_MEDIA_ERRORS as PERMANENT_ERRORS,
-  type ChannelMediaOrchestratorDependencies,
+  type ChannelMediaProcessResult,
+  type ProcessChannelMediaJobArgs,
 } from './orchestrator-support'
 
 export type { ChannelMediaOrchestratorDependencies } from './orchestrator-support'
-
-export async function processChannelMediaJob(args: {
-  tenantId: string
-  operationId: string
-  tmk: CryptoKey
-  kek: CryptoKey
-  env: Env
-  dependencies?: ChannelMediaOrchestratorDependencies
-}): Promise<'processed' | 'ignored' | 'terminal_failed'> {
-  const job = await claimChannelMediaJob(args.tenantId, args.operationId, args.env)
-  if (!job) return 'ignored'
+export async function processChannelMediaJob(args: ProcessChannelMediaJobArgs): Promise<ChannelMediaProcessResult> {
+  const claim = await claimChannelMediaJobForProcessing(args.tenantId, args.operationId, args.env)
+  if (!claim || claim.status === 'lease_held') return claim ?? 'ignored'
+  const job = claim
   const deliver = args.dependencies?.deliver ?? defaultChannelMediaDeliver
 
   if (job.status === 'finalized' || job.status === 'failed') {
@@ -67,6 +63,10 @@ export async function processChannelMediaJob(args: {
       return 'processed'
     }
   }
+
+  if (job.expiresAt <= Date.now()) return handleExpiredChannelMediaJob({
+    job, leaseToken, kek: args.kek, env: args.env, deliver,
+  })
 
   let descriptor: ChannelMediaDescriptor
   try {

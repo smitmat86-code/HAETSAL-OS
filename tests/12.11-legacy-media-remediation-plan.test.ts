@@ -54,12 +54,25 @@ describe('12.11 legacy remediation approval plan', () => {
 
   it('cannot authorize execution without an explicit matching approval digest', async () => {
     const plan = await buildLegacyRemediationPlan(args())
+    expect(plan.approvalCategories).toEqual(['migrate_replace_delete', 'delete_confirmed_orphan'])
     expect(() => requireLegacyRemediationApproval({ plan, approved: false }))
       .toThrow('explicit_remediation_approval_required')
     expect(() => requireLegacyRemediationApproval({ plan, approved: true, approvalDigest: 'wrong' }))
       .toThrow('explicit_remediation_approval_required')
     expect(() => requireLegacyRemediationApproval({
       plan, approved: true, approvalDigest: plan.approvalDigest,
+    })).toThrow('explicit_remediation_approval_required')
+    expect(() => requireLegacyRemediationApproval({
+      plan,
+      approved: true,
+      approvalDigest: plan.approvalDigest,
+      approvedCategories: ['migrate_replace_delete'],
+    })).toThrow('explicit_remediation_approval_required')
+    expect(() => requireLegacyRemediationApproval({
+      plan,
+      approved: true,
+      approvalDigest: plan.approvalDigest,
+      approvedCategories: plan.approvalCategories,
     })).not.toThrow()
   })
 

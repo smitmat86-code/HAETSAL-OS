@@ -14,6 +14,8 @@ import {
   markChannelMediaRetryable,
 } from '../src/services/channel-media/job-transitions'
 import { processChannelMediaJob } from '../src/services/channel-media/orchestrator'
+import { processChannelMediaMessage } from '../src/workers/ingestion/channel-media-consumer'
+import { acceptChannelMedia } from '../src/services/channel-media/intake'
 import { prepareChannelMediaCapture } from '../src/services/channel-media/finalize-job'
 import { reapExpiredChannelMediaJobs } from '../src/services/channel-media/reaper'
 import { channelMediaRecoveryKey } from '../src/services/channel-media/recovery'
@@ -22,6 +24,7 @@ import { getCanonicalMemoryStore, installCanonicalMemoryTestStore } from '../src
 import { getCanonicalDocument } from '../src/services/canonical-memory-query'
 import type { Env } from '../src/types/env'
 import type { ChannelMediaDescriptor } from '../src/types/channel-media'
+import type { IngestionQueueMessage } from '../src/types/ingestion'
 
 const SUITE = crypto.randomUUID()
 const TENANT_A = `test-channel-media-a-${SUITE}`
@@ -41,6 +44,28 @@ async function ensureTenant(tenantId: string): Promise<void> {
      (id, created_at, updated_at, data_region, primary_channel, hindsight_tenant_id, ai_cost_reset_at)
      VALUES (?, ?, ?, 'us', 'sms', ?, ?)`,
   ).bind(tenantId, now, now, `hindsight-${tenantId}`, now).run()
+}
+
+async function installTenantKek(tenantId: string): Promise<CryptoKey> {
+  const raw = crypto.getRandomValues(new Uint8Array(32))
+  await env.KV_SESSION.put(`cron_kek:${tenantId}`, btoa(String.fromCharCode(...raw)))
+  await env.D1_US.prepare(
+    'UPDATE tenants SET cron_kek_expires_at = ? WHERE id = ?',
+  ).bind(Date.now() + 60_000, tenantId).run()
+  return crypto.subtle.importKey('raw', raw, { name: 'AES-GCM' }, false, ['encrypt', 'decrypt'])
+}
+
+function queueMessage(operationId: string) {
+  const ack = vi.fn()
+  const retry = vi.fn()
+  const message = {
+    body: {
+      type: 'channel_media', tenantId: TENANT_A, payload: { operationId }, enqueuedAt: Date.now(),
+    } satisfies IngestionQueueMessage,
+    ack,
+    retry,
+  } as unknown as Message<IngestionQueueMessage>
+  return { message, ack, retry }
 }
 
 function telegramDescriptor(marker: string): ChannelMediaDescriptor {
@@ -126,6 +151,52 @@ describe('12.8 governed common channel media intake', () => {
     await markChannelMediaRetryable(
       TENANT_A, reserved.id, job!.leaseToken!, ARTIFACT_INTAKE_ERROR.INVALID_STATE, env,
     )
+  })
+
+  it('rejects an invalid provider descriptor before any D1 row, handoff, or queue message exists', async () => {
+    await installTenantKek(TENANT_A)
+    const send = vi.fn()
+    const testEnv = { ...env, QUEUE_HIGH: { send } } as unknown as Env
+    const beforeRows = await env.D1_US.prepare(
+      'SELECT COUNT(*) AS count FROM channel_media_jobs WHERE tenant_id = ?',
+    ).bind(TENANT_A).first<{ count: number }>()
+    const beforeHandoffs = await env.R2_ARTIFACTS.list({ prefix: 'artifact-intake/handoff/v1/' })
+    const invalid = {
+      ...telegramDescriptor(`pre-insert-${SUITE}`),
+      locatorKind: 'sendblue_message_handle' as const,
+    }
+
+    await expect(acceptChannelMedia({
+      tenantId: TENANT_A,
+      provider: 'telegram',
+      eventIdentity: `pre-insert-${SUITE}`,
+      descriptor: invalid,
+    }, testEnv)).rejects.toMatchObject({ code: ARTIFACT_INTAKE_ERROR.PROVIDER_LOCATOR_INVALID })
+
+    const afterRows = await env.D1_US.prepare(
+      'SELECT COUNT(*) AS count FROM channel_media_jobs WHERE tenant_id = ?',
+    ).bind(TENANT_A).first<{ count: number }>()
+    const afterHandoffs = await env.R2_ARTIFACTS.list({ prefix: 'artifact-intake/handoff/v1/' })
+    expect(Number(afterRows?.count)).toBe(Number(beforeRows?.count))
+    expect(afterHandoffs.objects).toHaveLength(beforeHandoffs.objects.length)
+    expect(send).not.toHaveBeenCalled()
+  })
+
+  it('retries a queue delivery for the remaining active processing lease instead of acknowledging it', async () => {
+    const kek = await installTenantKek(TENANT_A)
+    const tmk = await key()
+    const job = await reserve(`active-lease-${SUITE}`, kek)
+    const claimed = await claimChannelMediaJob(TENANT_A, job.id, env)
+    expect(claimed?.status).toBe('processing')
+    const queued = queueMessage(job.id)
+
+    await processChannelMediaMessage(queued.message, tmk, env)
+
+    expect(queued.ack).not.toHaveBeenCalled()
+    expect(queued.retry).toHaveBeenCalledTimes(1)
+    const delay = queued.retry.mock.calls[0]?.[0]?.delaySeconds
+    expect(delay).toBeGreaterThanOrEqual(1)
+    expect(delay).toBeLessThanOrEqual(300)
   })
 
   it('TMK-seals one original, finalizes one Telegram capture, verifies it, and replies exactly once', async () => {
@@ -268,6 +339,75 @@ describe('12.8 governed common channel media intake', () => {
       .toBe(finalizations.results[0]!.manifest_sha256)
   })
 
+  it('recovers a real post-finalization process death without duplicate vision, artifacts, captures, documents, or replies', async () => {
+    const kek = await installTenantKek(TENANT_A)
+    const tmk = await key()
+    const store = getCanonicalMemoryStore(env)
+    const beforeStats = await store.getStats(TENANT_A)
+    const job = await reserve(`process-death-${SUITE}`, kek)
+    const acquire = vi.fn(async () => ({ bytes: JPEG, detectedMimeType: 'image/jpeg' }))
+    const describe = vi.fn(async () => `process-death-description-${SUITE}`)
+    const deliver = vi.fn(async () => 'delivered' as const)
+    let canonicalReached!: () => void
+    const canonicalCommitted = new Promise<void>(resolve => { canonicalReached = resolve })
+    const abandonedForever = new Promise<void>(() => undefined)
+    const dependencies = {
+      acquire,
+      describe,
+      deliver,
+      afterCanonicalFinalization: async () => {
+        canonicalReached()
+        await abandonedForever
+      },
+    }
+    const first = queueMessage(job.id)
+
+    void processChannelMediaMessage(first.message, tmk, env, dependencies)
+    await canonicalCommitted
+    expect(first.ack).not.toHaveBeenCalled()
+    expect(first.retry).not.toHaveBeenCalled()
+
+    const whileHeld = queueMessage(job.id)
+    await processChannelMediaMessage(whileHeld.message, tmk, env, dependencies)
+    expect(whileHeld.ack).not.toHaveBeenCalled()
+    expect(whileHeld.retry).toHaveBeenCalledTimes(1)
+    expect(acquire).toHaveBeenCalledTimes(1)
+    expect(describe).toHaveBeenCalledTimes(1)
+    expect(deliver).not.toHaveBeenCalled()
+
+    await env.D1_US.prepare(
+      'UPDATE channel_media_jobs SET lease_expires_at = ? WHERE tenant_id = ? AND id = ?',
+    ).bind(Date.now() - 1, TENANT_A, job.id).run()
+    const recovered = queueMessage(job.id)
+    await processChannelMediaMessage(recovered.message, tmk, env, dependencies)
+    expect(recovered.ack).toHaveBeenCalledTimes(1)
+    expect(recovered.retry).not.toHaveBeenCalled()
+    expect(acquire).toHaveBeenCalledTimes(1)
+    expect(describe).toHaveBeenCalledTimes(1)
+    expect(deliver).toHaveBeenCalledTimes(1)
+
+    const completed = await getChannelMediaJob(TENANT_A, job.id, env)
+    expect(completed).toMatchObject({ status: 'delivered', deliveryStatus: 'delivered' })
+    const operations = await env.D1_US.prepare(
+      'SELECT id FROM artifact_intake_operations WHERE tenant_id = ? AND canonical_capture_id = ?',
+    ).bind(TENANT_A, completed!.canonicalCaptureId).all()
+    const finalizations = await env.D1_US.prepare(
+      'SELECT id FROM artifact_intake_finalizations WHERE tenant_id = ? AND canonical_capture_id = ?',
+    ).bind(TENANT_A, completed!.canonicalCaptureId).all()
+    expect(operations.results).toHaveLength(1)
+    expect(finalizations.results).toHaveLength(1)
+    const document = await store.getDocument(TENANT_A, completed!.canonicalDocumentId!)
+    expect(document?.artifact_manifest).toHaveLength(1)
+    const afterStats = await store.getStats(TENANT_A)
+    expect(afterStats.captureCount).toBe(beforeStats.captureCount + 1)
+    expect(afterStats.documentCount).toBe(beforeStats.documentCount + 1)
+
+    const redelivery = queueMessage(job.id)
+    await processChannelMediaMessage(redelivery.message, tmk, env, dependencies)
+    expect(redelivery.ack).toHaveBeenCalledTimes(1)
+    expect(deliver).toHaveBeenCalledTimes(1)
+  })
+
   it('rejects every stale-worker processing transition with an exact lease CAS', async () => {
     const kek = await key()
     const job = await reserve(`stale-lease-${SUITE}`, kek)
@@ -362,6 +502,50 @@ describe('12.8 governed common channel media intake', () => {
     expect(await env.R2_ARTIFACTS.get(await channelMediaHandoffKey(TENANT_A, job.id))).toBeNull()
     expect(await getChannelMediaJob(TENANT_A, job.id, env)).toMatchObject({
       status: 'failed', deliveryStatus: 'failed', errorCode: 'locator_expired',
+    })
+  })
+
+  it('recovers canonical success before the reaper can fail an expired processing job', async () => {
+    const kek = await installTenantKek(TENANT_A)
+    const tmk = await key()
+    const job = await reserve(`reaper-canonical-${SUITE}`, kek)
+    const acquire = vi.fn(async () => ({ bytes: JPEG, detectedMimeType: 'image/jpeg' }))
+    const describe = vi.fn(async () => `reaper-canonical-description-${SUITE}`)
+    const deliver = vi.fn(async () => 'delivered' as const)
+    let canonicalReached!: () => void
+    const canonicalCommitted = new Promise<void>(resolve => { canonicalReached = resolve })
+    const dependencies = {
+      acquire,
+      describe,
+      deliver,
+      afterCanonicalFinalization: async () => {
+        canonicalReached()
+        await new Promise<void>(() => undefined)
+      },
+    }
+    const abandoned = queueMessage(job.id)
+    void processChannelMediaMessage(abandoned.message, tmk, env, dependencies)
+    await canonicalCommitted
+    await env.D1_US.prepare(
+      `UPDATE channel_media_jobs SET lease_expires_at = ?, expires_at = ?
+       WHERE tenant_id = ? AND id = ?`,
+    ).bind(Date.now() - 2, Date.now() - 1, TENANT_A, job.id).run()
+
+    expect((await reapExpiredChannelMediaJobs(env, Date.now())).reaped).toBeGreaterThanOrEqual(1)
+    expect(await getChannelMediaJob(TENANT_A, job.id, env)).toMatchObject({
+      status: 'finalized', deliveryStatus: 'pending', errorCode: null,
+    })
+    expect(await env.R2_ARTIFACTS.get(await channelMediaHandoffKey(TENANT_A, job.id))).not.toBeNull()
+    expect(acquire).toHaveBeenCalledTimes(1)
+    expect(describe).toHaveBeenCalledTimes(1)
+    expect(deliver).not.toHaveBeenCalled()
+
+    const queued = queueMessage(job.id)
+    await processChannelMediaMessage(queued.message, tmk, env, dependencies)
+    expect(queued.ack).toHaveBeenCalledTimes(1)
+    expect(deliver).toHaveBeenCalledTimes(1)
+    expect(await getChannelMediaJob(TENANT_A, job.id, env)).toMatchObject({
+      status: 'delivered', deliveryStatus: 'delivered', errorCode: null,
     })
   })
 })

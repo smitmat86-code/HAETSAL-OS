@@ -2035,6 +2035,7 @@
 - `npm run postflight` — passed.
 - `npx wrangler deploy --dry-run` — passed.
 - Independent code/security review: no critical or high Session 4 findings after mixed-batch fail-closed and DNS-timeout hardening. `npm audit` could not run because this repository has no lockfile; Session 4 added no package dependencies.
+- Durable HAETSAL closeout queued as capture `d7604b4d-3f7b-4298-93e2-2dbf019e7d58`, document `5b75a395-b6ba-4ae9-b46c-8d4f517e826c`, canonical scope `general`.
 
 **Remaining limitations:**
 - ChatGPT intentionally does not allow a model to inject arbitrary hosted descriptor objects; unsafe/redirect/expired literal probes therefore stop at the OpenAI file-parameter boundary. HAETSAL's downstream branches are covered by the integration/security suite, while the supported real attachment surface passed end to end.

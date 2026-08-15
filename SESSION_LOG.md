@@ -2115,3 +2115,32 @@
 **Next:** Matt sends one fresh non-sensitive Telegram image and one fresh non-sensitive Sendblue image. Reconcile both live captures and redelivery/one-reply/privacy evidence, then generate the new exact-target remediation packet and stop for explicit category-and-digest approval. Do not begin Session 6.
 
 ---
+
+### Session 5 final correction pass — 2026-08-15
+
+**Status:** Final correction is deployed and exact-tree green. This pass stopped before live image requests, exact-target packet generation, Session 6, or Phase 2 remediation.
+
+**Commit and deployment evidence:**
+- Accepted baseline: `047d2170da4bdf2e7199a5e05e8a3d1b54a73de3`; prior deployed code tree: `e98ff79b2e9f6a2aa9d36df680c073874a2c93ce`.
+- Independent correction review: capture `2b7986cc-93d9-4609-b065-5ac33fe063d9`.
+- Final correction implementation and exact clean deployed tree: `02b8f13d1c12f6cbafba975f89bc6a7b986f2280`.
+- Production deployment `7b4b1fed-9206-4b2b-8dd1-7caa24aa8462`; Worker version `8f559092-a708-4cc7-b322-3254572b2c1a`, created `2026-08-15T07:42:25.256976Z`, serving 100%. No migration was added or applied.
+
+**Final corrected controls:**
+- A queue delivery that finds an active processing lease returns an explicit lease-held outcome and schedules retry after the bounded remaining lease duration; it is never ACKed as completed. Real process-death coverage abandons the first invocation after canonical commit and proves the recovery path does not repeat provider acquisition, vision, managed artifacts, canonical captures/documents, or replies.
+- Expiry reaping preserves active processing leases and attempts authoritative canonical recovery before failing an abandoned processing job. Canonical success retains the encrypted handoff for one delivery and always wins over expiry failure.
+- Descriptor/provider compatibility and all bounds are validated before accepted D1 insertion, encrypted handoff creation, or queue publication.
+- Any non-singleton authoritative Neon reference set, duplicate D1 references, multi-owner/capture evidence, or reference disagreement is ambiguous and deletion-ineligible. Only zero Neon and zero D1 references can start as an orphan.
+- “Already migrated” now requires the exact legacy-key/tenant/capture relationship to a managed source selected by both capture and document primary pointers. Managed derivatives and unrelated artifacts do not qualify.
+- The remediation digest binds the exact named categories as well as the exact-target manifest; missing, different, duplicate, or unknown category approval is rejected. Phase 2 remains unimplemented and unapproved.
+
+**Validation and live regression evidence:**
+- Focused correction lane: 33 passed across governed channel intake, provider boundaries, legacy inventory, and approval-plan tests.
+- Exact committed-tree suite: 594 passed, 1 skipped across 95 files.
+- `npm run postflight`: passed. `npx wrangler deploy --dry-run`: passed; upload 3,663.52 KiB, gzip 700.38 KiB.
+- Diff review found no raw-content, live identifier, URL, or credential leakage. The first deploy attempt used an invalid inherited API token and was rejected before upload; deployment then succeeded through the existing local Wrangler OAuth profile.
+- All six Session 3 upload receipts and both primary Session 4 receipts re-read as `finalized`, `tmk`, with non-null ciphertext hashes and their original canonical capture/document IDs after deployment.
+
+**Stop boundary:** No Telegram or Sendblue image was requested in this pass. No fresh inventory or remediation packet was generated, and no legacy object was read for remediation, migrated, overwritten, or deleted.
+
+---

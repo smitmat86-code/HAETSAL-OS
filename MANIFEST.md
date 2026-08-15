@@ -68,7 +68,7 @@ Last updated: 2026-04-18 | Session: 7.1 (Hindsight Projection Adapter)
 | src\services\agents\automation-chat.ts | 77 | AutomationChatRoute | ✅ |
 | src\services\agents\delegation.ts | 71 | DelegationDecision, decideDelegation, DelegationRoute | ✅ |
 | src\services\agents\router.ts | 50 | — | ✅ |
-| src\services\artifact-intake\config.ts | 45 | ARTIFACT_MAX_BYTES, TELEGRAM_ARTIFACT_MAX_BYTES, ARTIFACT_DOWNLOAD_TIMEOUT_MS... | ✅ |
+| src\services\artifact-intake\config.ts | 49 | ARTIFACT_MAX_BYTES, TELEGRAM_ARTIFACT_MAX_BYTES, ARTIFACT_DOWNLOAD_TIMEOUT_MS... | ✅ |
 | src\services\artifact-intake\contracts.ts | 135 | ARTIFACT_INTAKE_ERROR, ArtifactIntakeErrorCode, ArtifactIntakeContractError... | ✅ |
 | src\services\artifact-intake\crypto.ts | 108 | SealedArtifactBytes, detectArtifactEnvelopeFamily | ✅ |
 | src\services\artifact-intake\download-body.ts | 57 | — | ✅ |
@@ -78,9 +78,9 @@ Last updated: 2026-04-18 | Session: 7.1 (Hindsight Projection Adapter)
 | src\services\artifact-intake\download.ts | 150 | — | ✅ |
 | src\services\artifact-intake\finalize.ts | 292 | — | ⚠️ OVER LIMIT |
 | src\services\artifact-intake\legacy-approval-manifest.ts | 52 | ExactTargetManifestEntry | ✅ |
-| src\services\artifact-intake\legacy-inventory-types.ts | 59 | LegacyChannel, LegacyEnvelopeFamily, LegacyInventoryDisposition... | ✅ |
-| src\services\artifact-intake\legacy-inventory.ts | 130 | classifyLegacyMediaInventory, classifyLegacyMediaObjects | ✅ |
-| src\services\artifact-intake\legacy-remediation.ts | 118 | LEGACY_INVENTORY_VERSION, LegacyRemediationPlan, requireLegacyRemediationApproval | ✅ |
+| src\services\artifact-intake\legacy-inventory-types.ts | 60 | LegacyChannel, LegacyEnvelopeFamily, LegacyInventoryDisposition... | ✅ |
+| src\services\artifact-intake\legacy-inventory.ts | 144 | classifyLegacyMediaInventory, classifyLegacyMediaObjects | ✅ |
+| src\services\artifact-intake\legacy-remediation.ts | 139 | LEGACY_INVENTORY_VERSION, LegacyRemediationCategory, LegacyRemediationPlan... | ✅ |
 | src\services\artifact-intake\mime.ts | 41 | detectArtifactMimeType | ✅ |
 | src\services\artifact-intake\operations.ts | 296 | ArtifactIntakeOperationRow | ⚠️ OVER LIMIT |
 | src\services\artifact-intake\reaper.ts | 57 | ArtifactReaperResult | ✅ |
@@ -126,20 +126,21 @@ Last updated: 2026-04-18 | Session: 7.1 (Hindsight Projection Adapter)
 | src\services\canonical-promotion.ts | 69 | PromoteClaimInput | ✅ |
 | src\services\canonical-source-attribution.ts | 64 | buildCanonicalSourceAttribution, applyCanonicalRoute | ✅ |
 | src\services\channel-media\canonical-recovery.ts | 69 | — | ✅ |
+| src\services\channel-media\claim-outcome.ts | 34 | ChannelMediaJobClaim | ✅ |
 | src\services\channel-media\delivery-state.ts | 45 | — | ✅ |
 | src\services\channel-media\delivery.ts | 62 | ChannelMediaDeliveryOutcome, ChannelMediaDeliver | ✅ |
-| src\services\channel-media\descriptor.ts | 30 | validateChannelMediaDescriptor | ✅ |
+| src\services\channel-media\descriptor.ts | 31 | validateChannelMediaDescriptor | ✅ |
 | src\services\channel-media\finalize-job.ts | 145 | channelMediaSearchableBody | ✅ |
 | src\services\channel-media\handoff.ts | 65 | — | ✅ |
-| src\services\channel-media\intake.ts | 27 | — | ✅ |
+| src\services\channel-media\intake.ts | 32 | — | ✅ |
 | src\services\channel-media\job-transitions.ts | 64 | — | ✅ |
-| src\services\channel-media\jobs.ts | 132 | — | ✅ |
-| src\services\channel-media\orchestrator-support.ts | 82 | ChannelMediaOrchestratorDependencies, PERMANENT_CHANNEL_MEDIA_ERRORS, channelMediaErrorCode | ✅ |
+| src\services\channel-media\jobs.ts | 130 | — | ✅ |
+| src\services\channel-media\orchestrator-support.ts | 114 | ChannelMediaOrchestratorDependencies, ProcessChannelMediaJobArgs, ChannelMediaProcessResult... | ✅ |
 | src\services\channel-media\orchestrator.ts | 150 | — | ✅ |
 | src\services\channel-media\providers-sendblue.ts | 76 | — | ✅ |
 | src\services\channel-media\providers-telegram.ts | 79 | — | ✅ |
 | src\services\channel-media\providers.ts | 16 | — | ✅ |
-| src\services\channel-media\reaper.ts | 44 | — | ✅ |
+| src\services\channel-media\reaper.ts | 77 | — | ✅ |
 | src\services\channel-media\recovery.ts | 72 | — | ✅ |
 | src\services\chief-of-staff-compiled-context-bundle.ts | 127 | buildCompiledChiefOfStaffBundle | ✅ |
 | src\services\chief-of-staff-compiled-context-gaps.ts | 33 | addSkippedAssetGap, addReadErrorGap | ✅ |
@@ -283,7 +284,7 @@ Last updated: 2026-04-18 | Session: 7.1 (Hindsight Projection Adapter)
 | src\workers\action\index.ts | 134 | — | ✅ |
 | src\workers\ingestion\bootstrap-handlers.ts | 91 | — | ✅ |
 | src\workers\ingestion\canonical-projection-consumer.ts | 28 | — | ✅ |
-| src\workers\ingestion\channel-media-consumer.ts | 29 | — | ✅ |
+| src\workers\ingestion\channel-media-consumer.ts | 35 | — | ✅ |
 | src\workers\ingestion\chat-consumer.ts | 68 | — | ✅ |
 | src\workers\ingestion\consumer.ts | 147 | — | ✅ |
 | src\workers\ingestion\handlers.ts | 110 | — | ✅ |

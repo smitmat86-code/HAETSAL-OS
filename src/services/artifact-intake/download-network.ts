@@ -1,4 +1,4 @@
-import { lookup } from 'node:dns/promises'
+import { resolve4, resolve6 } from 'node:dns/promises'
 import { request as httpsRequest } from 'node:https'
 import type { IncomingMessage } from 'node:http'
 import { ArtifactIntakeContractError, ARTIFACT_INTAKE_ERROR } from './contracts'
@@ -32,11 +32,12 @@ function webBody(response: IncomingMessage, cancel: () => void): ReadableStream<
 async function resolveDefault(hostname: string): Promise<string[]> {
   const literal = normalizeArtifactIpAddress(hostname)
   if (literal) return [literal]
-  try {
-    return (await lookup(hostname, { all: true, verbatim: true })).map(result => result.address)
-  } catch {
+  const answers = await Promise.allSettled([resolve4(hostname), resolve6(hostname)])
+  const addresses = answers.flatMap(answer => answer.status === 'fulfilled' ? answer.value : [])
+  if (addresses.length === 0) {
     throw new ArtifactIntakeContractError(ARTIFACT_INTAKE_ERROR.DOWNLOAD_UNAVAILABLE)
   }
+  return addresses
 }
 
 async function requestPinnedHttps(

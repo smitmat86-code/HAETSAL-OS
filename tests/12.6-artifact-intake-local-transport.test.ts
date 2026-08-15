@@ -101,7 +101,6 @@ describe('12.6 Session 3 MCP and local binary transport', () => {
     expect([...reg.handlers.keys()]).toEqual([
       'reserve_artifact_upload',
       'capture_artifact_file',
-      'capture_artifact_file_from_widget',
       'prepare_artifact_file_capture',
       'finalize_artifact_capture',
       'artifact_intake_status',

@@ -59,7 +59,7 @@ export function registerArtifactIntakeTools(server: McpServer, ctx: ArtifactInta
   )
 
   registerChatGptArtifactTool(server, ctx)
-  registerChatGptArtifactCaptureUi(server)
+  registerChatGptArtifactCaptureUi(server, ctx)
 
   server.tool(
     'finalize_artifact_capture',

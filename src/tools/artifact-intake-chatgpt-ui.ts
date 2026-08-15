@@ -1,16 +1,17 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
-import { z } from 'zod'
 import {
-  artifactStatusAnnotations,
+  artifactWriteAnnotations,
+  type ArtifactIntakeToolContext,
   prepareArtifactFileCaptureToolSchema,
 } from './artifact-intake-tool-contracts'
+import { handleChatGptArtifactFile } from './artifact-intake-chatgpt'
 import { CHATGPT_ARTIFACT_CAPTURE_UI_HTML } from './artifact-intake-chatgpt-ui-template'
 
 export { CHATGPT_ARTIFACT_CAPTURE_UI_HTML } from './artifact-intake-chatgpt-ui-template'
 
-export const CHATGPT_ARTIFACT_CAPTURE_UI_URI = 'ui://haetsal/artifact-capture-v7.html'
+export const CHATGPT_ARTIFACT_CAPTURE_UI_URI = 'ui://haetsal/artifact-capture-v8.html'
 
-export function registerChatGptArtifactCaptureUi(server: McpServer): void {
+export function registerChatGptArtifactCaptureUi(server: McpServer, ctx: ArtifactIntakeToolContext): void {
   server.registerResource(
     'haetsal-artifact-capture',
     CHATGPT_ARTIFACT_CAPTURE_UI_URI,
@@ -38,11 +39,9 @@ export function registerChatGptArtifactCaptureUi(server: McpServer): void {
       title: 'Prepare attached file capture',
       description: 'Use only after inspecting a directly attached ChatGPT file and capture_artifact_file could not receive a retrievable descriptor. Pass the model-generated extraction; the user will select that existing ChatGPT-hosted file in a private capture card.',
       inputSchema: prepareArtifactFileCaptureToolSchema,
-      outputSchema: prepareArtifactFileCaptureToolSchema.extend({
-        status: z.literal('selection_required'),
-      }),
-      annotations: artifactStatusAnnotations,
+      annotations: artifactWriteAnnotations,
       _meta: {
+        'openai/fileParams': ['file'],
         ui: { resourceUri: CHATGPT_ARTIFACT_CAPTURE_UI_URI, visibility: ['model', 'app'] },
         'openai/outputTemplate': CHATGPT_ARTIFACT_CAPTURE_UI_URI,
         'openai/widgetAccessible': true,
@@ -52,6 +51,7 @@ export function registerChatGptArtifactCaptureUi(server: McpServer): void {
     },
     async (input) => {
       const typed = prepareArtifactFileCaptureToolSchema.parse(input)
+      if (typed.file) return handleChatGptArtifactFile(typed, ctx)
       return {
         structuredContent: { status: 'selection_required' as const, ...typed },
         content: [{

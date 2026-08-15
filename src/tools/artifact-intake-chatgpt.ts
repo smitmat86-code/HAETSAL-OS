@@ -18,7 +18,22 @@ import {
 } from './artifact-intake-tool-support'
 
 export function registerChatGptArtifactTool(server: McpServer, ctx: ArtifactIntakeToolContext): void {
-  const handler = async (input: unknown) => {
+  const handler = (input: unknown) => handleChatGptArtifactFile(input, ctx)
+
+  server.registerTool(
+    CHATGPT_ARTIFACT_FILE_TOOL_CONTRACT.name,
+    {
+      title: CHATGPT_ARTIFACT_FILE_TOOL_CONTRACT.title,
+      description: CHATGPT_ARTIFACT_FILE_TOOL_CONTRACT.description,
+      inputSchema: captureArtifactFileToolSchema,
+      annotations: artifactWriteAnnotations,
+      _meta: CHATGPT_ARTIFACT_FILE_TOOL_CONTRACT._meta,
+    },
+    handler,
+  )
+}
+
+export async function handleChatGptArtifactFile(input: unknown, ctx: ArtifactIntakeToolContext) {
     try {
       if (
         !input
@@ -81,33 +96,4 @@ export function registerChatGptArtifactTool(server: McpServer, ctx: ArtifactInta
     } catch (error) {
       return artifactToolText({ status: 'failed', error_code: artifactToolErrorCode(error) }, true)
     }
-  }
-
-  server.registerTool(
-    CHATGPT_ARTIFACT_FILE_TOOL_CONTRACT.name,
-    {
-      title: CHATGPT_ARTIFACT_FILE_TOOL_CONTRACT.title,
-      description: CHATGPT_ARTIFACT_FILE_TOOL_CONTRACT.description,
-      inputSchema: captureArtifactFileToolSchema,
-      annotations: artifactWriteAnnotations,
-      _meta: CHATGPT_ARTIFACT_FILE_TOOL_CONTRACT._meta,
-    },
-    handler,
-  )
-
-  server.registerTool(
-    'capture_artifact_file_from_widget',
-    {
-      title: 'Complete attached file capture',
-      description: 'Private MCP App continuation for an already prepared ChatGPT attachment capture.',
-      inputSchema: captureArtifactFileToolSchema,
-      annotations: artifactWriteAnnotations,
-      _meta: {
-        'openai/fileParams': ['file'],
-        ui: { visibility: ['app'] },
-        'openai/visibility': 'private',
-      },
-    },
-    handler,
-  )
 }

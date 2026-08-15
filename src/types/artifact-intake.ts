@@ -29,6 +29,9 @@ export interface FinalizeArtifactCaptureInput {
   idempotencyKey: string
   artifacts: ArtifactManifestEntry[]
   declaredDerivativeUploadIds?: string[]
+  /** Defaults preserve the Session 2-4 external-file contract. */
+  sourceSystem?: string
+  authorKind?: 'user' | 'external_client'
 }
 
 export interface ArtifactUploadReceipt {

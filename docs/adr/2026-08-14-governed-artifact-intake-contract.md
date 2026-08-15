@@ -1,7 +1,7 @@
 # ADR: governed artifact intake contract
 
 Date: 2026-08-14
-Status: accepted; Session 2 managed storage/persistence implemented, client transports deferred to Sessions 3-5
+Status: accepted; Sessions 2-4 deployed, Session 5 channel convergence implemented pending deployment and live proof
 
 ## Context
 
@@ -17,7 +17,7 @@ One capture permits zero or one source, zero or more derivatives, ordered parent
 
 ## Privacy and encryption boundary
 
-This remains the approved single-user posture. Authenticated coding/ChatGPT uploads require the active tenant master key and use the `TMK1` family. Provider-channel uploads require a valid Cron KEK and use `KEK1`. Missing authority-specific key material is `encryption_key_unavailable`; the service never falls back to plaintext R2.
+This remains the approved single-user posture. All durable managed originals, including provider-channel originals, require the active tenant master key and use the `TMK1` family. Provider webhooks additionally require a valid Cron KEK to seal the short-lived channel descriptor as `KEK1` until the queue consumer can obtain the tenant TMK. Missing authority-specific key material is `encryption_key_unavailable`; the service never falls back to plaintext R2.
 
 The original and durable derivatives are application-layer ciphertext in R2. Searchable extraction and normalized chunks remain plaintext in Neon so canonical retrieval and the existing dream cycle can use them. Plaintext file bodies and extractions do not belong in D1, KV, queue metadata, Analytics, AI Gateway, or logs.
 
@@ -45,6 +45,14 @@ Session 1 enforces schema and pre-fetch URL/address contracts. Session 2 owns se
 Session 2 adds a metadata-only D1 upload/finalization ledger, binary-safe `TMK1:`/`KEK1:` AES-GCM envelopes, deterministic tenant-scoped managed R2 keys, retry repair across R2/D1/canonical-write boundaries, and exact-key expiry cleanup. Canonical Postgres evolves additively from one artifact row to an ordered source/derivative manifest with parent links, plaintext/ciphertext hashes, and encryption family. The existing capture/document `artifact_id` columns remain the primary-artifact compatibility pointer.
 
 No Session 2 service registers an MCP tool, HTTP route, downloader, local helper, or channel adapter. Therefore every Session 1 client capability remains unavailable until its later transport session is implemented and proven.
+
+## Session 5 implementation record
+
+Telegram and Sendblue now converge on one provider-neutral channel-media job. A verified webhook resolves the tenant, hashes a stable tenant/provider event identity into content-free D1 state, writes the provider locator, reply target, and optional caption only inside an expiring tenant-KEK envelope, and queues only the opaque operation ID. The queue consumer acquires and sniffs bounded bytes, performs adapter-side vision extraction, TMK-seals the exact original into the existing managed namespace, calls the existing canonical finalizer with one primary source manifest, verifies `artifact_intake_status`, and only then claims the provider acknowledgement.
+
+Telegram uses `file_id` only against fixed Bot API origins and refuses redirects. Sendblue preferentially re-fetches current attachment metadata through the authenticated `message_handle` endpoint; the documented 30-day `media_url` remains subject to the Session 4 SSRF, DNS, redirect, timeout, MIME, and streaming limits. A webhook lacking a stable handle may use the same encrypted ephemeral descriptor, but its URL never enters D1, a queue, a log, a receipt, or a client error.
+
+Channel job leases, deterministic upload/finalize idempotency keys, and a separate delivery claim prevent duplicate artifacts, captures, documents, and acknowledgements under webhook and queue redelivery. An ambiguous provider-send result is recorded as `delivery_unknown` and is never automatically re-sent. Encrypted handoffs are deleted after a delivered or terminal result and independently reaped after expiry.
 
 ## Non-goals
 

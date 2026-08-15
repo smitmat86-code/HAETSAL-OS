@@ -44,6 +44,8 @@ async function manifestFingerprint(input: FinalizeArtifactCaptureInput): Promise
     sourceRef: input.sourceRef ?? null,
     clientName: input.clientName,
     agentIdentity: input.agentIdentity ?? input.clientName,
+    sourceSystem: input.sourceSystem ?? 'file',
+    authorKind: input.authorKind ?? 'external_client',
     modelRuntime: input.modelRuntime ?? null,
     artifacts: input.artifacts.map(artifact => ({
       uploadId: artifact.uploadId,
@@ -259,7 +261,7 @@ export async function finalizeArtifactCapture(
       captureId: finalization.canonical_capture_id,
       documentId: finalization.canonical_document_id,
       operationId: finalization.canonical_operation_id,
-      sourceSystem: 'file',
+      sourceSystem: input.sourceSystem ?? 'file',
       sourceRef: input.sourceRef ?? null,
       scope: input.scope,
       title: input.title ?? null,
@@ -267,7 +269,7 @@ export async function finalizeArtifactCapture(
       bodyEncrypted: await encryptContentForArchive(input.content, contentKey),
       artifactRefs: refs,
       governance: {
-        authorKind: 'external_client',
+        authorKind: input.authorKind ?? 'external_client',
         agentIdentity: input.agentIdentity ?? input.clientName,
         modelRuntime: input.modelRuntime ?? null,
         provenanceNote: input.provenance ?? null,

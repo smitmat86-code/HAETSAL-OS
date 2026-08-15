@@ -1,15 +1,13 @@
 // Mission Phase 4.1: Telegram channel contracts — webhook secret auth,
 // unknown-chat ignore, bot-echo ignore, slash-command skip, text -> grounded
-// reply + queued canonical capture, photo -> R2 + vision + queued capture,
-// telegram_media governed retain.
+// reply + queued canonical capture, governed opaque photo intake.
 
 import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import { env } from 'cloudflare:test'
 import { Hono } from 'hono'
 import { registerPublicWebhooks } from '../src/workers/mcpagent/public-webhooks'
-import { handleTelegramMedia } from '../src/workers/ingestion/handlers'
 import { processChatInbound } from '../src/workers/ingestion/chat-consumer'
-import { getCanonicalMemoryStore, installCanonicalMemoryTestStore } from '../src/services/canonical-postgres'
+import { installCanonicalMemoryTestStore } from '../src/services/canonical-postgres'
 import type { Env } from '../src/types/env'
 
 const SUITE_ID = crypto.randomUUID()
@@ -18,16 +16,6 @@ const CHAT_ID = 987654321
 const SECRET = 'test-telegram-secret'
 
 installCanonicalMemoryTestStore(env)
-
-async function deriveTestTmk(): Promise<CryptoKey> {
-  const material = await crypto.subtle.importKey(
-    'raw', new TextEncoder().encode(`mission-41-${SUITE_ID}`), { name: 'HKDF' }, false, ['deriveKey'],
-  )
-  return crypto.subtle.deriveKey(
-    { name: 'HKDF', hash: 'SHA-256', salt: new TextEncoder().encode('m41-salt'), info: new TextEncoder().encode('m41-info') },
-    material, { name: 'AES-GCM', length: 256 }, false, ['encrypt', 'decrypt'],
-  )
-}
 
 type SentRequest = { url: string; init?: RequestInit }
 
@@ -80,7 +68,7 @@ function update(overrides: Partial<{ chat: number; text: string; photo: unknown;
   if (overrides.text !== undefined) msg.text = overrides.text
   if (overrides.photo) msg.photo = overrides.photo
   if (overrides.caption !== undefined) msg.caption = overrides.caption
-  return { message: msg }
+  return { update_id: 7654321, message: msg }
 }
 
 beforeAll(async () => {
@@ -93,6 +81,11 @@ beforeAll(async () => {
   await env.D1_US.prepare(
     `INSERT OR IGNORE INTO telegram_chats (id, tenant_id, chat_id, label, created_at) VALUES (?, ?, ?, 'primary', ?)`,
   ).bind(crypto.randomUUID(), TENANT_ID, CHAT_ID, now).run()
+  const raw = crypto.getRandomValues(new Uint8Array(32))
+  await env.KV_SESSION.put(`cron_kek:${TENANT_ID}`, btoa(String.fromCharCode(...raw)))
+  await env.D1_US.prepare(
+    'UPDATE tenants SET cron_kek_expires_at = ? WHERE id = ?',
+  ).bind(now + 3_600_000, TENANT_ID).run()
 })
 
 beforeEach(() => { vi.unstubAllGlobals(); vi.restoreAllMocks() })
@@ -165,7 +158,7 @@ describe('mission 4.1 — telegram inbound text flow (queue-side since 14.3)', (
 })
 
 describe('mission 4.1 — telegram photo flow', () => {
-  it('stores media in R2, describes via vision, and confirms by reply', async () => {
+  it('accepts one durable opaque job without fetching, storing plaintext, or replying inline', async () => {
     const sent: SentRequest[] = []; const queue: unknown[] = []
     stubFetch(sent, new TextEncoder().encode('fake-jpeg').buffer as ArrayBuffer)
     const res = await makeApp(makeTgEnv(sent, queue)).post('/telegram/webhook', update({
@@ -173,42 +166,16 @@ describe('mission 4.1 — telegram photo flow', () => {
       caption: 'planning session',
     }))
     expect(res.status).toBe(200)
-    // 14.3: the photo pipeline detaches from the ack — wait for it to land.
-    await vi.waitFor(() => expect(queue.length).toBe(1), { timeout: 5000 })
+    expect(queue).toHaveLength(1)
     const msg = queue[0] as { type: string; payload: Record<string, unknown> }
-    expect(msg.type).toBe('telegram_media')
-    expect(String(msg.payload.description)).toContain('whiteboard')
-    expect(String(msg.payload.storageKey)).toContain(`telegram-media/${TENANT_ID}/`)
-    expect(await env.R2_ARTIFACTS.get(String(msg.payload.storageKey))).not.toBeNull()
-    expect(sent.some((r) => r.url.includes('/getFile?') && r.url.includes('big'))).toBe(true)
-  })
-
-  it('handleTelegramMedia retains a governed capture with telegram_photo provenance', async () => {
-    const tmk = await deriveTestTmk()
-    const queue: unknown[] = []
-    const sent: SentRequest[] = []
-    const testEnv = makeTgEnv(sent, queue)
-    const storageKey = `telegram-media/${TENANT_ID}/${Date.now()}-artifact-test`
-    await env.R2_ARTIFACTS.put(storageKey, 'raw-bytes')
-
-    await handleTelegramMedia(TENANT_ID, {
-      description: 'A whiteboard covered in project notes.',
-      caption: 'planning session',
-      storageKey,
-      mediaType: 'image/jpeg',
-      byteLength: 9,
-      occurredAt: Date.now(),
-      chatId: CHAT_ID,
-    }, tmk, testEnv, { waitUntil: () => {}, passThroughOnException: () => {} } as unknown as ExecutionContext)
-
-    const store = getCanonicalMemoryStore(testEnv)
-    const docs = await store.listRecentDocuments(TENANT_ID, null, 10)
-    const captureId = docs[0]?.capture_id
-    expect(captureId).toBeTruthy()
-    const capture = await store.getCapture(TENANT_ID, captureId!)
-    expect(capture?.source_system).toBe('telegram')
-    expect(capture?.provenance_note).toBe('telegram_photo')
-    expect(capture?.author_kind).toBe('user')
-    expect(capture?.memory_class).toBe('episode')
+    expect(msg.type).toBe('channel_media')
+    expect(Object.keys(msg.payload)).toEqual(['operationId'])
+    expect(String(msg.payload.operationId)).toMatch(/^[a-f0-9-]{36}$/i)
+    expect(JSON.stringify(msg)).not.toContain('big')
+    expect(JSON.stringify(msg)).not.toContain('planning session')
+    expect(JSON.stringify(msg)).not.toContain(String(CHAT_ID))
+    expect(sent.some((r) => r.url.includes('/getFile?'))).toBe(false)
+    expect(sent.some((r) => r.url.includes('sendMessage'))).toBe(false)
+    expect((await env.R2_ARTIFACTS.list({ prefix: `telegram-media/${TENANT_ID}/` })).objects).toHaveLength(0)
   })
 })

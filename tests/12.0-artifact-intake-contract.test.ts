@@ -131,11 +131,14 @@ describe('12.0 governed artifact intake contract', () => {
     expect(() => resolveArtifactSealFamily({
       authority: 'provider_channel', hasTmk: true, hasValidKek: false,
     })).toThrowError(new ArtifactIntakeContractError(ARTIFACT_INTAKE_ERROR.ENCRYPTION_KEY_UNAVAILABLE))
+    expect(() => resolveArtifactSealFamily({
+      authority: 'provider_channel', hasTmk: false, hasValidKek: true,
+    })).toThrowError(new ArtifactIntakeContractError(ARTIFACT_INTAKE_ERROR.ENCRYPTION_KEY_UNAVAILABLE))
     expect(resolveArtifactSealFamily({
       authority: 'authenticated_client', hasTmk: true, hasValidKek: false,
     })).toBe('TMK1')
     expect(resolveArtifactSealFamily({
-      authority: 'provider_channel', hasTmk: false, hasValidKek: true,
-    })).toBe('KEK1')
+      authority: 'provider_channel', hasTmk: true, hasValidKek: true,
+    })).toBe('TMK1')
   })
 })

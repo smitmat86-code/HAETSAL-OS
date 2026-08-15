@@ -3,6 +3,9 @@ export const TELEGRAM_ARTIFACT_MAX_BYTES = 20 * 1024 * 1024
 export const ARTIFACT_DOWNLOAD_TIMEOUT_MS = 20_000
 export const ARTIFACT_UPLOAD_EXPIRY_MS = 15 * 60 * 1000
 export const ARTIFACT_MAX_REDIRECTS = 3
+export const CHANNEL_MEDIA_HANDOFF_EXPIRY_MS = 24 * 60 * 60 * 1000
+export const CHANNEL_MEDIA_JOB_LEASE_MS = 2 * 60 * 1000
+export const CHANNEL_MEDIA_MAX_ATTEMPTS = 4
 
 export const ARTIFACT_INTAKE_CONFIG = Object.freeze({
   maxBytes: ARTIFACT_MAX_BYTES,
@@ -21,4 +24,9 @@ export const ARTIFACT_INTAKE_CONFIG = Object.freeze({
     pinResolvedAddressPerRequest: true,
   }),
   uploadExpiryMs: ARTIFACT_UPLOAD_EXPIRY_MS,
+  channelMedia: Object.freeze({
+    handoffExpiryMs: CHANNEL_MEDIA_HANDOFF_EXPIRY_MS,
+    leaseMs: CHANNEL_MEDIA_JOB_LEASE_MS,
+    maxAttempts: CHANNEL_MEDIA_MAX_ATTEMPTS,
+  }),
 } as const)

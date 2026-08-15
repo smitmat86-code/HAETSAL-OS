@@ -43,15 +43,12 @@ export async function sendSendblueMessage(
       // Metadata-only logging: status + error code, never message content.
       console.warn('SENDBLUE_SEND_FAILED', {
         status: response.status,
-        errorCode: body.error_code ?? null,
       })
       return { success: false, status: response.status, errorCode: body.error_code ?? null }
     }
     return { success: true, status: response.status }
-  } catch (error) {
-    console.warn('SENDBLUE_SEND_ERROR', {
-      error: error instanceof Error ? error.message : String(error),
-    })
+  } catch {
+    console.warn('SENDBLUE_SEND_ERROR')
     return { success: false, status: 0 }
   }
 }

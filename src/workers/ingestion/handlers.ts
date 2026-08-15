@@ -36,8 +36,6 @@ export async function handleSmsInbound(
   )
 }
 
-export { handleSendblueMedia, handleTelegramMedia } from './media-handlers'
-
 export async function handleGmailThread(
   tenantId: string,
   payload: Record<string, unknown>,

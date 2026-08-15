@@ -1,16 +1,21 @@
 // Telegram inbound processing (mission Phase 4.1; queue-side since 14.3).
 // Text -> TWO durable jobs enqueued before the webhook acks: sms_inbound
 // (canonical capture, unchanged) + chat_inbound (the reply pipeline runs in
-// the queue consumer — src/workers/ingestion/chat-consumer.ts). Photo -> the
-// heavy leg (file fetch, R2, vision) detaches via waitUntil so the ack stays
-// fast. Tenant routing is chat.id -> tenant via telegram_chats D1 table.
+// the queue consumer — src/workers/ingestion/chat-consumer.ts). Photo -> one
+// durable governed operation plus an opaque queue locator. Tenant routing is
+// chat.id -> tenant via telegram_chats D1 table.
 
 import type { Env } from '../types/env'
 import type { ChatInboundPayload, IngestionQueueMessage } from '../types/ingestion'
-import { sendTelegramReply } from './delivery/telegram'
-import { describeInboundPhoto } from './messaging-helpers'
+import { acceptChannelMedia } from './channel-media/intake'
 
-export interface TelegramPhotoSize { file_id: string; width?: number; height?: number; file_size?: number }
+export interface TelegramPhotoSize {
+  file_id: string
+  file_unique_id?: string
+  width?: number
+  height?: number
+  file_size?: number
+}
 export interface TelegramMessage {
   chat?: { id?: number }
   text?: string
@@ -44,72 +49,40 @@ export async function resolveTelegramTenant(chatId: number, env: Env): Promise<s
   return row?.tenant_id ?? null
 }
 
-/** Infer an image mime from a Telegram file_path extension; the Bot File API
- *  serves photos with content-type: application/octet-stream, which the
- *  vision model rejects — trust the extension instead. */
-function mediaTypeFromPath(path: string): string {
-  const ext = path.split('.').pop()?.toLowerCase() ?? ''
-  if (ext === 'png') return 'image/png'
-  if (ext === 'webp') return 'image/webp'
-  if (ext === 'gif') return 'image/gif'
-  if (ext === 'heic') return 'image/heic'
-  return 'image/jpeg'
-}
-
-/** Given a Telegram file_id, fetch the raw bytes via the Bot File API. */
-async function fetchTelegramFile(fileId: string, env: Env): Promise<{ bytes: ArrayBuffer; mediaType: string } | null> {
-  const meta = await fetch(`https://api.telegram.org/bot${env.TELEGRAM_BOT_TOKEN}/getFile?file_id=${encodeURIComponent(fileId)}`)
-  if (!meta.ok) return null
-  const parsed = await meta.json() as { ok?: boolean; result?: { file_path?: string } }
-  const path = parsed?.result?.file_path
-  if (!path) return null
-  const file = await fetch(`https://api.telegram.org/file/bot${env.TELEGRAM_BOT_TOKEN}/${path}`)
-  if (!file.ok) return null
-  const headerType = file.headers.get('content-type')
-  const mediaType = headerType?.startsWith('image/') ? headerType : mediaTypeFromPath(path)
-  return { bytes: await file.arrayBuffer(), mediaType }
-}
-
 export async function processTelegramInbound(
   update: TelegramUpdate,
   env: Env,
-  ctx: Pick<ExecutionContext, 'waitUntil'>,
+  _ctx: Pick<ExecutionContext, 'waitUntil'>,
 ): Promise<{ handled: boolean; kind: 'text' | 'media' | 'ignored' | 'command' }> {
   const msg = update.message
   const chatId = msg?.chat?.id
   if (!msg || typeof chatId !== 'number' || msg.from?.is_bot) return { handled: false, kind: 'ignored' }
   const tenantId = await resolveTelegramTenant(chatId, env)
   if (!tenantId) {
-    console.warn('TELEGRAM_UNKNOWN_CHAT', { chatId })
+    console.warn('TELEGRAM_UNKNOWN_CHAT')
     return { handled: false, kind: 'ignored' }
   }
   const occurredAt = typeof msg.date === 'number' ? msg.date * 1000 : Date.now()
 
   if (Array.isArray(msg.photo) && msg.photo.length > 0) {
-    const photos = msg.photo
-    const caption = msg.caption ?? null
-    ctx.waitUntil((async () => {
-      const largest = photos.reduce((a, b) => ((a.file_size ?? 0) > (b.file_size ?? 0) ? a : b))
-      const file = await fetchTelegramFile(largest.file_id, env)
-      if (!file) return
-      const storageKey = `telegram-media/${tenantId}/${occurredAt}-${crypto.randomUUID()}`
-      await env.R2_ARTIFACTS.put(storageKey, file.bytes, { httpMetadata: { contentType: file.mediaType } })
-      const description = await describeInboundPhoto(env, file.bytes, file.mediaType)
-      const message: IngestionQueueMessage = {
-        type: 'telegram_media', tenantId,
-        payload: {
-          chatId, description, caption, storageKey,
-          mediaType: file.mediaType, byteLength: file.bytes.byteLength, occurredAt,
-        },
-        enqueuedAt: Date.now(),
-      }
-      await env.QUEUE_HIGH.send(message)
-      await sendTelegramReply(chatId, `Captured that photo: ${description}`, env)
-    })().catch((error: unknown) => {
-      console.error('TELEGRAM_PHOTO_PIPELINE_FAILED', {
-        error: error instanceof Error ? error.message : String(error),
-      })
-    }))
+    const largest = msg.photo.reduce((a, b) => ((a.file_size ?? 0) > (b.file_size ?? 0) ? a : b))
+    const eventIdentity = typeof update.update_id === 'number'
+      ? `update:${update.update_id}`
+      : `file:${largest.file_unique_id ?? largest.file_id}`
+    await acceptChannelMedia({
+      tenantId,
+      provider: 'telegram',
+      eventIdentity,
+      descriptor: {
+        version: 1,
+        provider: 'telegram',
+        locatorKind: 'telegram_file_id',
+        locator: largest.file_id,
+        replyTarget: String(chatId),
+        caption: msg.caption ?? null,
+        occurredAt,
+      },
+    }, env)
     return { handled: true, kind: 'media' }
   }
 

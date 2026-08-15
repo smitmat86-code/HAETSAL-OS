@@ -41,7 +41,7 @@ export function registerPublicWebhooks(
     }
     const lineNumber = body.to_number ?? body.number
     if (!lineNumber || lineNumber !== c.env.SENDBLUE_PHONE_NUMBER) {
-      console.warn('SENDBLUE_WEBHOOK_WRONG_LINE', { suffix: (lineNumber ?? '').slice(-4) })
+      console.warn('SENDBLUE_WEBHOOK_WRONG_LINE')
       return c.json({ status: 'ignored' }, 200)
     }
     let ctx: Pick<ExecutionContext, 'waitUntil'>
@@ -55,16 +55,16 @@ export function registerPublicWebhooks(
       const outcome = await processSendblueInbound(body, c.env, ctx)
       return c.json({ status: outcome.handled ? 'processed' : 'ignored', kind: outcome.kind }, 200)
     } catch (error) {
-      console.error('SENDBLUE_WEBHOOK_FAILED', {
-        error: error instanceof Error ? error.message : String(error),
-      })
-      return c.json({ status: 'error' }, 200)
+      console.error('SENDBLUE_WEBHOOK_FAILED')
+      return body.media_url
+        ? c.json({ status: 'retry' }, 503)
+        : c.json({ status: 'error' }, 200)
     }
   })
   // 14.3 queue-side chat: processTelegramInbound is enqueue-only for text
   // (two durable jobs, awaited so they exist before Telegram gets its 200)
-  // and detaches the photo pipeline internally — so awaiting here is
-  // milliseconds and the 14.2 timeout class (inline model calls blowing
+  // and durably accepts an opaque governed photo job — so awaiting here has
+  // no provider download or model call and the 14.2 timeout class (inline calls blowing
   // Telegram's ~60s read window → cancel + redelivery storm) cannot recur.
   app.post('/telegram/webhook', async (c) => {
     const secret = c.req.header('X-Telegram-Bot-Api-Secret-Token')
@@ -77,10 +77,11 @@ export function registerPublicWebhooks(
     }
     try {
       await processTelegramInbound(update, c.env, ctx)
-    } catch (err) {
-      console.error('TELEGRAM_WEBHOOK_FAILED', {
-        error: err instanceof Error ? err.message : String(err),
-      })
+    } catch {
+      console.error('TELEGRAM_WEBHOOK_FAILED')
+      if (Array.isArray(update.message?.photo) && update.message.photo.length > 0) {
+        return c.json({ ok: false }, 503)
+      }
     }
     return c.json({ ok: true })
   })

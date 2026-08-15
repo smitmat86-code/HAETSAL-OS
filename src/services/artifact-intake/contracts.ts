@@ -19,6 +19,12 @@ export const ARTIFACT_INTAKE_ERROR = Object.freeze({
   CLIENT_IDENTITY_UNAVAILABLE: 'client_identity_unavailable',
   NOT_FOUND: 'not_found',
   INVALID_MANIFEST: 'invalid_manifest',
+  PROVIDER_LOCATOR_INVALID: 'provider_locator_invalid',
+  PROVIDER_RESPONSE_MISMATCH: 'provider_response_mismatch',
+  LOCATOR_EXPIRED: 'locator_expired',
+  UNSUPPORTED_MEDIA: 'unsupported_media',
+  DELIVERY_REJECTED: 'delivery_rejected',
+  DELIVERY_UNKNOWN: 'delivery_unknown',
 } as const)
 
 export type ArtifactIntakeErrorCode = typeof ARTIFACT_INTAKE_ERROR[keyof typeof ARTIFACT_INTAKE_ERROR]
@@ -113,11 +119,15 @@ export function resolveArtifactSealFamily(args: {
   authority: 'authenticated_client' | 'provider_channel'
   hasTmk: boolean
   hasValidKek: boolean
-}): 'TMK1' | 'KEK1' {
+}): 'TMK1' {
   if (args.authority === 'authenticated_client') {
     if (!args.hasTmk) throw new ArtifactIntakeContractError(ARTIFACT_INTAKE_ERROR.ENCRYPTION_KEY_UNAVAILABLE)
     return 'TMK1'
   }
-  if (!args.hasValidKek) throw new ArtifactIntakeContractError(ARTIFACT_INTAKE_ERROR.ENCRYPTION_KEY_UNAVAILABLE)
-  return 'KEK1'
+  // Provider adapters need KEK authority for the encrypted ephemeral handoff,
+  // then the tenant TMK for the durable managed original.
+  if (!args.hasValidKek || !args.hasTmk) {
+    throw new ArtifactIntakeContractError(ARTIFACT_INTAKE_ERROR.ENCRYPTION_KEY_UNAVAILABLE)
+  }
+  return 'TMK1'
 }

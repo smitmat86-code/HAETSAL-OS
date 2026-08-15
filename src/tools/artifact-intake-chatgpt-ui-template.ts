@@ -91,11 +91,25 @@ button{width:fit-content;border:0;border-radius:8px;padding:9px 13px;font:inheri
       'bulk_import_required','canonical_write_failed','capture_failed','chatgpt_file_picker_unavailable',
       'ciphertext_invalid','client_identity_unavailable','download_timeout','download_unavailable',
       'encryption_family_mismatch','encryption_key_unavailable','extraction_unavailable','hash_mismatch',
-      'host_tool_call_failed','host_unavailable','invalid_manifest','invalid_state','mime_mismatch','missing_declared_derivative',
+      'host_approval_required','host_arguments_rejected','host_auth_required','host_internal_rejection',
+      'host_tool_call_failed','host_tool_not_accessible','host_tool_unavailable','host_unavailable',
+      'invalid_manifest','invalid_state','mime_mismatch','missing_declared_derivative',
       'not_found','raw_bytes_unavailable','receipt_unavailable','select_exactly_one_file',
       'ssrf_url_blocked','storage_write_failed','tenant_mismatch',
     ]);
     return allowed.has(value) ? value : 'capture_failed';
+  }
+
+  function classifyHostError(error) {
+    const code = error && typeof error.code === 'number' ? error.code : 0;
+    const message = error && typeof error.message === 'string' ? error.message.toLowerCase() : '';
+    if (code === -32601 || /unknown tool|tool not found/.test(message)) return 'host_tool_unavailable';
+    if (code === -32602 || /invalid (argument|parameter|input)|schema/.test(message)) return 'host_arguments_rejected';
+    if (/approval|confirm/.test(message)) return 'host_approval_required';
+    if (/auth|oauth|unauthorized/.test(message)) return 'host_auth_required';
+    if (/accessible|permission|not allowed|forbidden/.test(message)) return 'host_tool_not_accessible';
+    if (code === -32603 || /internal/.test(message)) return 'host_internal_rejection';
+    return 'host_tool_call_failed';
   }
 
   async function callCapture(args) {
@@ -106,8 +120,8 @@ button{width:fit-content;border:0;border-radius:8px;padding:9px 13px;font:inheri
       if (!openai || typeof openai.callTool !== 'function') throw new Error('host_tool_call_failed');
       try {
         return await openai.callTool('prepare_artifact_file_capture', args);
-      } catch {
-        throw new Error('host_tool_call_failed');
+      } catch (error) {
+        throw new Error(classifyHostError(error));
       }
     }
   }

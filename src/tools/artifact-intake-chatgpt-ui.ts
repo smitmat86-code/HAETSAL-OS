@@ -8,7 +8,7 @@ import { CHATGPT_ARTIFACT_CAPTURE_UI_HTML } from './artifact-intake-chatgpt-ui-t
 
 export { CHATGPT_ARTIFACT_CAPTURE_UI_HTML } from './artifact-intake-chatgpt-ui-template'
 
-export const CHATGPT_ARTIFACT_CAPTURE_UI_URI = 'ui://haetsal/artifact-capture-v4.html'
+export const CHATGPT_ARTIFACT_CAPTURE_UI_URI = 'ui://haetsal/artifact-capture-v5.html'
 
 export function registerChatGptArtifactCaptureUi(server: McpServer): void {
   server.registerResource(
@@ -43,8 +43,9 @@ export function registerChatGptArtifactCaptureUi(server: McpServer): void {
       }),
       annotations: artifactStatusAnnotations,
       _meta: {
-        ui: { resourceUri: CHATGPT_ARTIFACT_CAPTURE_UI_URI },
+        ui: { resourceUri: CHATGPT_ARTIFACT_CAPTURE_UI_URI, visibility: ['model', 'app'] },
         'openai/outputTemplate': CHATGPT_ARTIFACT_CAPTURE_UI_URI,
+        'openai/widgetAccessible': true,
         'openai/toolInvocation/invoking': 'Preparing secure capture…',
         'openai/toolInvocation/invoked': 'Capture card ready.',
       },

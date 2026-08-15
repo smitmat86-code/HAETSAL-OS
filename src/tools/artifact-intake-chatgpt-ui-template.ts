@@ -102,10 +102,10 @@ button{width:fit-content;border:0;border-radius:8px;padding:9px 13px;font:inheri
     try {
       return await request('tools/call', { name: 'capture_artifact_file', arguments: args });
     } catch {
-      const callTool = window.openai && window.openai.callTool;
-      if (typeof callTool !== 'function') throw new Error('host_tool_call_failed');
+      const openai = window.openai;
+      if (!openai || typeof openai.callTool !== 'function') throw new Error('host_tool_call_failed');
       try {
-        return await callTool('capture_artifact_file', args);
+        return await openai.callTool('capture_artifact_file', args);
       } catch {
         throw new Error('host_tool_call_failed');
       }

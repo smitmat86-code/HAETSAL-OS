@@ -5,6 +5,10 @@ export const ARTIFACT_UPLOAD_EXPIRY_MS = 15 * 60 * 1000
 export const ARTIFACT_MAX_REDIRECTS = 3
 export const CHANNEL_MEDIA_HANDOFF_EXPIRY_MS = 24 * 60 * 60 * 1000
 export const CHANNEL_MEDIA_JOB_LEASE_MS = 2 * 60 * 1000
+// A reservation is not abandoned until it outlives both the provider handoff
+// window and one complete Worker lease. This is longer than any live isolate.
+export const CHANNEL_MEDIA_FINALIZATION_STALE_MS =
+  CHANNEL_MEDIA_HANDOFF_EXPIRY_MS + CHANNEL_MEDIA_JOB_LEASE_MS
 export const CHANNEL_MEDIA_QUEUE_RETRY_MIN_SECONDS = 1
 export const CHANNEL_MEDIA_QUEUE_RETRY_MAX_SECONDS = 5 * 60
 export const CHANNEL_MEDIA_MAX_ATTEMPTS = 4
@@ -35,6 +39,7 @@ export const ARTIFACT_INTAKE_CONFIG = Object.freeze({
   channelMedia: Object.freeze({
     handoffExpiryMs: CHANNEL_MEDIA_HANDOFF_EXPIRY_MS,
     leaseMs: CHANNEL_MEDIA_JOB_LEASE_MS,
+    finalizationStaleMs: CHANNEL_MEDIA_FINALIZATION_STALE_MS,
     queueRetryMinSeconds: CHANNEL_MEDIA_QUEUE_RETRY_MIN_SECONDS,
     queueRetryMaxSeconds: CHANNEL_MEDIA_QUEUE_RETRY_MAX_SECONDS,
     maxAttempts: CHANNEL_MEDIA_MAX_ATTEMPTS,

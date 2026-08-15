@@ -50,6 +50,26 @@ export async function markChannelMediaFinalized(args: {
   requireLeaseChange(result)
 }
 
+/** Canonical proof is authoritative and may repair a competing pending failure. */
+export async function repairChannelMediaFinalized(args: {
+  tenantId: string; operationId: string; uploadId: string
+  captureId: string; documentId: string; canonicalOperationId: string
+}, env: Env): Promise<void> {
+  const result = await env.D1_US.prepare(
+    `UPDATE channel_media_jobs SET status = 'finalized', error_code = NULL,
+     artifact_upload_id = ?, canonical_capture_id = ?, canonical_document_id = ?,
+     canonical_operation_id = ?, lease_token = NULL, lease_expires_at = NULL, updated_at = ?
+     WHERE tenant_id = ? AND id = ? AND delivery_status = 'pending'
+       AND status IN ('accepted', 'processing', 'retryable', 'finalized', 'failed')`,
+  ).bind(
+    args.uploadId, args.captureId, args.documentId, args.canonicalOperationId,
+    Date.now(), args.tenantId, args.operationId,
+  ).run()
+  if (Number(result.meta.changes ?? 0) !== 1) {
+    throw new ArtifactIntakeContractError(ARTIFACT_INTAKE_ERROR.LEASE_LOST)
+  }
+}
+
 export async function markChannelMediaFailed(
   tenantId: string, operationId: string, leaseToken: string, errorCode: string, env: Env,
 ): Promise<void> {

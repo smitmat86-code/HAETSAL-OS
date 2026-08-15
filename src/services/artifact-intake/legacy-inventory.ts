@@ -11,7 +11,7 @@ import type {
 } from './legacy-inventory-types'
 
 export type * from './legacy-inventory-types'
-
+export { exactManagedPrimarySourceReplacements, LEGACY_MANAGED_REPLACEMENT_CANDIDATES_SQL } from './legacy-managed-replacements'
 const zero = (): LegacyInventoryTotal => ({ count: 0, bytes: 0 })
 const add = (target: LegacyInventoryTotal, size: number): void => {
   target.count += 1
@@ -52,6 +52,11 @@ export function classifyLegacyMediaInventory(args: {
   const objects = new Map(args.objects.map(object => [object.key, object]))
   const neon = groupReferences(args.neonReferences)
   const d1 = groupReferences(args.d1References)
+  const authoritativeCaptureCounts = new Map<string, number>()
+  for (const reference of args.neonReferences) {
+    const identity = referenceIdentity(reference)
+    authoritativeCaptureCounts.set(identity, (authoritativeCaptureCounts.get(identity) ?? 0) + 1)
+  }
   const managedPrimarySourceReplacements = new Set(
     args.managedPrimarySourceReplacements.map(reference => `${reference.key}\0${referenceIdentity(reference)}`),
   )
@@ -67,6 +72,8 @@ export function classifyLegacyMediaInventory(args: {
     const neonIdentities = new Set(authoritative.map(referenceIdentity))
     const d1Identities = new Set(compatibility.map(referenceIdentity))
     const authoritativeMultiplicity = authoritative.length > 0 && authoritative.length !== 1
+    const captureSourceMultiplicity = authoritative.length === 1 &&
+      authoritativeCaptureCounts.get(referenceIdentity(authoritative[0]!)) !== 1
     const compatibilityMultiplicity = compatibility.length > 1
     const multiOwner = neonIdentities.size > 1 || d1Identities.size > 1
     const ownershipMismatch = authoritative.length > 0 && compatibility.length > 0 && (
@@ -79,13 +86,14 @@ export function classifyLegacyMediaInventory(args: {
     const incompleteObjectEvidence = Boolean(object) && (
       !object?.etag || !object.objectSha256 || !/^[a-f0-9]{64}$/i.test(object.objectSha256)
     )
-    const ambiguous = missingR2 || authoritativeMultiplicity || compatibilityMultiplicity ||
+    const ambiguous = missingR2 || authoritativeMultiplicity || captureSourceMultiplicity || compatibilityMultiplicity ||
       multiOwner || ownershipMismatch || d1MissingNeon ||
       object?.envelopeFamily === 'unknown' || incompleteObjectEvidence
     let disposition: LegacyInventoryDisposition
     let reconciliationState = 'reconciled'
     if (missingR2) reconciliationState = 'referenced_missing_r2'
     else if (authoritativeMultiplicity) reconciliationState = 'authoritative_reference_multiplicity'
+    else if (captureSourceMultiplicity) reconciliationState = 'capture_legacy_source_multiplicity'
     else if (compatibilityMultiplicity) reconciliationState = 'd1_reference_multiplicity'
     else if (ownershipMismatch || multiOwner) reconciliationState = 'ownership_mismatch'
     else if (d1MissingNeon) reconciliationState = 'd1_only_reference'
@@ -116,7 +124,7 @@ export function classifyLegacyMediaInventory(args: {
     if (neonMissingD1) add(report.reconciliation.neonReferencedMissingD1, size)
     if (d1MissingNeon) add(report.reconciliation.d1ReferencedMissingNeon, size)
     if (missingR2) add(report.reconciliation.referencedMissingR2, size)
-    if (authoritativeMultiplicity || compatibilityMultiplicity || ownershipMismatch || multiOwner) {
+    if (authoritativeMultiplicity || captureSourceMultiplicity || compatibilityMultiplicity || ownershipMismatch || multiOwner) {
       add(report.reconciliation.ownershipMismatch, size)
     }
     const owner = authoritative.length === 1 ? authoritative[0] : null
@@ -136,8 +144,6 @@ export function classifyLegacyMediaInventory(args: {
   return { report, privateEntries }
 }
 
-export function classifyLegacyMediaObjects(
-  args: Parameters<typeof classifyLegacyMediaInventory>[0],
-): LegacyInventoryReport {
+export function classifyLegacyMediaObjects(args: Parameters<typeof classifyLegacyMediaInventory>[0]): LegacyInventoryReport {
   return classifyLegacyMediaInventory(args).report
 }

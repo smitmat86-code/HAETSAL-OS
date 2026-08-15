@@ -27,7 +27,11 @@ export type ChannelMediaProcessResult =
   | 'processed'
   | 'ignored'
   | 'terminal_failed'
-  | { status: 'lease_held'; retryAfterSeconds: number }
+  | {
+    status: 'deferred'
+    reason: 'processing_lease_held' | 'delivery_claim_held' | 'actionable_retryable' | 'recovery_in_progress'
+    retryAfterSeconds: number
+  }
 
 export const PERMANENT_CHANNEL_MEDIA_ERRORS = new Set<string>([
   ARTIFACT_INTAKE_ERROR.PROVIDER_LOCATOR_INVALID,
@@ -51,7 +55,7 @@ export async function deliverChannelMediaSuccess(args: {
   descriptor: ChannelMediaDescriptor
   env: Env
   deliver: ChannelMediaDeliver
-}): Promise<'processed'> {
+}): Promise<ChannelMediaProcessResult> {
   const current = await getChannelMediaJob(args.tenantId, args.operationId, args.env)
   if (!current || (current.status !== 'finalized' && current.status !== 'delivered')) {
     throw new ArtifactIntakeContractError(ARTIFACT_INTAKE_ERROR.INVALID_STATE)
@@ -63,12 +67,18 @@ export async function deliverChannelMediaSuccess(args: {
   if (outcome === 'retry') {
     throw new ArtifactIntakeContractError(ARTIFACT_INTAKE_ERROR.DELIVERY_REJECTED)
   }
+  if (typeof outcome === 'object') {
+    return {
+      status: 'deferred', reason: 'delivery_claim_held',
+      retryAfterSeconds: outcome.retryAfterSeconds,
+    }
+  }
   return 'processed'
 }
 
 export async function handleTerminalChannelMediaJob(args: {
   job: ChannelMediaJob; kek: CryptoKey; env: Env; deliver: ChannelMediaDeliver
-}): Promise<'processed' | 'terminal_failed'> {
+}): Promise<ChannelMediaProcessResult> {
   let descriptor: ChannelMediaDescriptor
   try {
     descriptor = await readChannelMediaHandoff({
@@ -93,6 +103,12 @@ export async function handleTerminalChannelMediaJob(args: {
     env: args.env, deliver: args.deliver,
   })
   if (outcome === 'retry') throw new ArtifactIntakeContractError(ARTIFACT_INTAKE_ERROR.DELIVERY_REJECTED)
+  if (typeof outcome === 'object') {
+    return {
+      status: 'deferred', reason: 'delivery_claim_held',
+      retryAfterSeconds: outcome.retryAfterSeconds,
+    }
+  }
   return 'terminal_failed'
 }
 
@@ -102,7 +118,7 @@ export async function handleExpiredChannelMediaJob(args: {
   kek: CryptoKey
   env: Env
   deliver: ChannelMediaDeliver
-}): Promise<'processed' | 'ignored' | 'terminal_failed'> {
+}): Promise<ChannelMediaProcessResult> {
   await markChannelMediaFailed(
     args.job.tenantId, args.job.id, args.leaseToken, ARTIFACT_INTAKE_ERROR.LOCATOR_EXPIRED, args.env,
   )

@@ -1,7 +1,8 @@
 import { beforeAll, describe, expect, it, vi } from 'vitest'
 import { env } from 'cloudflare:test'
 import { ArtifactIntakeContractError, ARTIFACT_INTAKE_ERROR } from '../src/services/artifact-intake/contracts'
-import { unsealArtifactBytes } from '../src/services/artifact-intake/crypto'
+import { sha256Text, unsealArtifactBytes } from '../src/services/artifact-intake/crypto'
+import { CHANNEL_MEDIA_FINALIZATION_STALE_MS } from '../src/services/artifact-intake/config'
 import { channelMediaHandoffKey, readChannelMediaHandoff } from '../src/services/channel-media/handoff'
 import {
   claimChannelMediaJob,
@@ -14,13 +15,21 @@ import {
   markChannelMediaRetryable,
 } from '../src/services/channel-media/job-transitions'
 import { processChannelMediaJob } from '../src/services/channel-media/orchestrator'
+import { claimChannelMediaJobForProcessing } from '../src/services/channel-media/claim-outcome'
+import { claimChannelMediaDelivery } from '../src/services/channel-media/delivery-state'
+import { deliverChannelMediaClaim } from '../src/services/channel-media/delivery'
 import { processChannelMediaMessage } from '../src/workers/ingestion/channel-media-consumer'
 import { acceptChannelMedia } from '../src/services/channel-media/intake'
 import { prepareChannelMediaCapture } from '../src/services/channel-media/finalize-job'
 import { reapExpiredChannelMediaJobs } from '../src/services/channel-media/reaper'
 import { channelMediaRecoveryKey } from '../src/services/channel-media/recovery'
 import { getArtifactIntakeOperation } from '../src/services/artifact-intake/operations'
-import { getCanonicalMemoryStore, installCanonicalMemoryTestStore } from '../src/services/canonical-postgres'
+import {
+  getCanonicalMemoryStore,
+  installCanonicalMemoryStore,
+  installCanonicalMemoryTestStore,
+} from '../src/services/canonical-postgres'
+import type { CanonicalMemoryStore } from '../src/services/canonical-postgres-repository'
 import { getCanonicalDocument } from '../src/services/canonical-memory-query'
 import type { Env } from '../src/types/env'
 import type { ChannelMediaDescriptor } from '../src/types/channel-media'
@@ -88,6 +97,64 @@ async function reserve(marker: string, kek: CryptoKey) {
     descriptor: telegramDescriptor(marker),
     kek,
   }, env)
+}
+
+async function finalizeForDelivery(marker: string, kek: CryptoKey) {
+  const reserved = await reserve(marker, kek)
+  const claimed = await claimChannelMediaJob(TENANT_A, reserved.id, env)
+  expect(claimed).toMatchObject({ status: 'processing' })
+  await markChannelMediaFinalized({
+    tenantId: TENANT_A,
+    operationId: reserved.id,
+    uploadId: crypto.randomUUID(),
+    captureId: crypto.randomUUID(),
+    documentId: crypto.randomUUID(),
+    canonicalOperationId: crypto.randomUUID(),
+    leaseToken: claimed!.leaseToken!,
+  }, env)
+  return (await getChannelMediaJob(TENANT_A, reserved.id, env))!
+}
+
+function claimRaceEnv(
+  operationId: string,
+  nextStatus: 'retryable' | 'finalized' | 'failed',
+): Env {
+  let injected = false
+  const original = env.D1_US
+  const wrap = (statement: D1PreparedStatement, sql: string): D1PreparedStatement => new Proxy(statement, {
+    get(target, property) {
+      if (property === 'bind') {
+        return (...values: unknown[]) => wrap(target.bind(...values), sql)
+      }
+      if (property === 'run' && sql.includes("SET status = 'processing'")) {
+        return async () => {
+          if (injected && nextStatus === 'retryable') {
+            return { success: true, meta: { changes: 0 }, results: [] } as unknown as D1Result
+          }
+          const result = await target.run()
+          if (!injected) {
+            injected = true
+            await original.prepare(
+              `UPDATE channel_media_jobs SET status = ?, delivery_status = 'pending',
+               lease_token = NULL, lease_expires_at = NULL, updated_at = ?
+               WHERE tenant_id = ? AND id = ?`,
+            ).bind(nextStatus, Date.now(), TENANT_A, operationId).run()
+          }
+          return { ...result, meta: { ...result.meta, changes: 0 } }
+        }
+      }
+      const value = Reflect.get(target, property)
+      return typeof value === 'function' ? value.bind(target) : value
+    },
+  })
+  const d1 = new Proxy(original, {
+    get(target, property) {
+      if (property === 'prepare') return (sql: string) => wrap(target.prepare(sql), sql)
+      const value = Reflect.get(target, property)
+      return typeof value === 'function' ? value.bind(target) : value
+    },
+  })
+  return { ...env, D1_US: d1 } as unknown as Env
 }
 
 beforeAll(async () => Promise.all([ensureTenant(TENANT_A), ensureTenant(TENANT_B)]))
@@ -197,6 +264,118 @@ describe('12.8 governed common channel media intake', () => {
     const delay = queued.retry.mock.calls[0]?.[0]?.delaySeconds
     expect(delay).toBeGreaterThanOrEqual(1)
     expect(delay).toBeLessThanOrEqual(300)
+  })
+
+  it('delays a redelivery after an isolate dies with a delivery claim and cleans up at the ambiguity boundary', async () => {
+    const kek = await installTenantKek(TENANT_A)
+    const tmk = await key()
+    const job = await finalizeForDelivery(`delivery-claim-death-${SUITE}`, kek)
+    expect(await claimChannelMediaDelivery(TENANT_A, job.id, env)).toBeTruthy()
+    const deliver = vi.fn(async () => 'delivered' as const)
+
+    const whileClaimed = queueMessage(job.id)
+    await processChannelMediaMessage(whileClaimed.message, tmk, env, { deliver })
+    expect(whileClaimed.ack).not.toHaveBeenCalled()
+    expect(whileClaimed.retry).toHaveBeenCalledTimes(1)
+    expect(deliver).not.toHaveBeenCalled()
+
+    await env.D1_US.prepare(
+      `UPDATE channel_media_jobs SET lease_expires_at = ?, updated_at = ?
+       WHERE tenant_id = ? AND id = ?`,
+    ).bind(Date.now() - 2, Date.now() - 2, TENANT_A, job.id).run()
+    const afterBoundary = queueMessage(job.id)
+    await processChannelMediaMessage(afterBoundary.message, tmk, env, { deliver })
+    expect(afterBoundary.ack).toHaveBeenCalledTimes(1)
+    expect(afterBoundary.retry).not.toHaveBeenCalled()
+    expect(deliver).not.toHaveBeenCalled()
+    expect(await getChannelMediaJob(TENANT_A, job.id, env)).toMatchObject({
+      status: 'delivery_unknown', deliveryStatus: 'unknown', errorCode: 'delivery_unknown',
+      handoffStatus: 'deleted',
+    })
+    expect(await env.R2_ARTIFACTS.get(await channelMediaHandoffKey(TENANT_A, job.id))).toBeNull()
+  })
+
+  it('does not resend or ACK while a provider call is in flight and fences its stale completion after expiry', async () => {
+    const kek = await installTenantKek(TENANT_A)
+    const tmk = await key()
+    const job = await finalizeForDelivery(`delivery-call-death-${SUITE}`, kek)
+    let providerStarted!: () => void
+    let releaseProvider!: (outcome: 'delivered') => void
+    const started = new Promise<void>(resolve => { providerStarted = resolve })
+    const providerOutcome = new Promise<'delivered'>(resolve => { releaseProvider = resolve })
+    const deliver = vi.fn(async () => {
+      providerStarted()
+      return providerOutcome
+    })
+    const inFlight = deliverChannelMediaClaim({
+      job,
+      descriptor: telegramDescriptor(`delivery-call-death-${SUITE}`),
+      message: 'Captured that photo.',
+      env,
+      deliver,
+    })
+    await started
+
+    const whileClaimed = queueMessage(job.id)
+    await processChannelMediaMessage(whileClaimed.message, tmk, env, { deliver })
+    expect(whileClaimed.ack).not.toHaveBeenCalled()
+    expect(whileClaimed.retry).toHaveBeenCalledTimes(1)
+    expect(deliver).toHaveBeenCalledTimes(1)
+
+    await env.D1_US.prepare(
+      `UPDATE channel_media_jobs SET lease_expires_at = ?, updated_at = ?
+       WHERE tenant_id = ? AND id = ?`,
+    ).bind(Date.now() - 2, Date.now() - 2, TENANT_A, job.id).run()
+    const afterBoundary = queueMessage(job.id)
+    await processChannelMediaMessage(afterBoundary.message, tmk, env, { deliver })
+    expect(afterBoundary.ack).toHaveBeenCalledTimes(1)
+    expect(deliver).toHaveBeenCalledTimes(1)
+
+    releaseProvider('delivered')
+    await inFlight
+    expect(await getChannelMediaJob(TENANT_A, job.id, env)).toMatchObject({
+      status: 'delivery_unknown', deliveryStatus: 'unknown', handoffStatus: 'deleted',
+    })
+    expect(deliver).toHaveBeenCalledTimes(1)
+  })
+
+  it('classifies failed-claim races as actionable instead of a terminal ACK', async () => {
+    const expected = [
+      ['retryable', 'actionable_retryable'],
+      ['finalized', 'finalized_delivery_pending'],
+      ['failed', 'failed_delivery_pending'],
+    ] as const
+    for (const [nextStatus, expectedStatus] of expected) {
+      const kek = await key()
+      const job = await reserve(`claim-race-${nextStatus}-${SUITE}`, kek)
+      const outcome = await claimChannelMediaJobForProcessing(
+        TENANT_A, job.id, claimRaceEnv(job.id, nextStatus),
+      )
+      expect(outcome).toMatchObject({ status: expectedStatus })
+    }
+  })
+
+  it('ACKs only stable delivered, delivery-unknown, and terminal delivery states', async () => {
+    const kek = await installTenantKek(TENANT_A)
+    const tmk = await key()
+    const deliver = vi.fn(async () => 'delivered' as const)
+    for (const [status, deliveryStatus] of [
+      ['delivered', 'delivered'],
+      ['delivery_unknown', 'unknown'],
+      ['failed', 'failed'],
+    ] as const) {
+      const job = await reserve(`stable-ack-${status}-${SUITE}`, kek)
+      await env.D1_US.prepare(
+        `UPDATE channel_media_jobs SET status = ?, delivery_status = ?,
+         lease_token = NULL, lease_expires_at = NULL, updated_at = ?
+         WHERE tenant_id = ? AND id = ?`,
+      ).bind(status, deliveryStatus, Date.now(), TENANT_A, job.id).run()
+      const queued = queueMessage(job.id)
+      await processChannelMediaMessage(queued.message, tmk, env, { deliver })
+      expect(queued.ack).toHaveBeenCalledTimes(1)
+      expect(queued.retry).not.toHaveBeenCalled()
+    }
+    expect(deliver).not.toHaveBeenCalled()
   })
 
   it('TMK-seals one original, finalizes one Telegram capture, verifies it, and replies exactly once', async () => {
@@ -547,5 +726,118 @@ describe('12.8 governed common channel media intake', () => {
     expect(await getChannelMediaJob(TENANT_A, job.id, env)).toMatchObject({
       status: 'delivered', deliveryStatus: 'delivered', errorCode: null,
     })
+  })
+
+  it('keeps a reserved canonical finalization recovery-pending across lease expiry, then repairs canonical success exactly once', async () => {
+    const kek = await key()
+    const tmk = await key()
+    const store = getCanonicalMemoryStore(env)
+    const beforeStats = await store.getStats(TENANT_A)
+    const job = await reserve(`reserved-finalization-${SUITE}`, kek)
+    const acquire = vi.fn(async () => ({ bytes: JPEG, detectedMimeType: 'image/jpeg' }))
+    const describe = vi.fn(async () => `reserved-finalization-description-${SUITE}`)
+    const deliver = vi.fn(async () => 'delivered' as const)
+    let writeStarted!: () => void
+    let releaseWrite!: () => void
+    const started = new Promise<void>(resolve => { writeStarted = resolve })
+    const release = new Promise<void>(resolve => { releaseWrite = resolve })
+    const delayedStore = new Proxy(store, {
+      get(target, property) {
+        if (property === 'writeCapture') {
+          return async (...args: Parameters<CanonicalMemoryStore['writeCapture']>) => {
+            writeStarted()
+            await release
+            return target.writeCapture(...args)
+          }
+        }
+        const value = Reflect.get(target, property)
+        return typeof value === 'function' ? value.bind(target) : value
+      },
+    })
+    installCanonicalMemoryStore(env, delayedStore)
+    let firstRun: Promise<unknown> | undefined
+    try {
+      firstRun = processChannelMediaJob({
+        tenantId: TENANT_A, operationId: job.id, tmk, kek, env,
+        dependencies: { acquire, describe, deliver },
+      })
+      await started
+      expect(await env.D1_US.prepare(
+        `SELECT status FROM artifact_intake_finalizations
+         WHERE tenant_id = ? AND idempotency_hash = ?`,
+      ).bind(TENANT_A, await sha256Text(`channel-media-finalize:${job.id}`)).first<{ status: string }>())
+        .toMatchObject({ status: 'reserved' })
+
+      await env.D1_US.prepare(
+        `UPDATE channel_media_jobs SET lease_expires_at = ?, expires_at = ?
+         WHERE tenant_id = ? AND id = ?`,
+      ).bind(Date.now() - 2, Date.now() - 1, TENANT_A, job.id).run()
+      await reapExpiredChannelMediaJobs(env, Date.now())
+      expect(await getChannelMediaJob(TENANT_A, job.id, env)).not.toMatchObject({ status: 'failed' })
+      expect(await env.R2_ARTIFACTS.get(await channelMediaHandoffKey(TENANT_A, job.id))).not.toBeNull()
+      expect(await env.R2_ARTIFACTS.get(await channelMediaRecoveryKey(TENANT_A, job.id))).not.toBeNull()
+
+      releaseWrite()
+      await expect(firstRun).resolves.toBe('processed')
+    } finally {
+      releaseWrite?.()
+      await firstRun?.catch(() => undefined)
+      installCanonicalMemoryStore(env, store)
+    }
+
+    const completed = await getChannelMediaJob(TENANT_A, job.id, env)
+    expect(completed).toMatchObject({ status: 'delivered', deliveryStatus: 'delivered', errorCode: null })
+    const operations = await env.D1_US.prepare(
+      'SELECT id FROM artifact_intake_operations WHERE tenant_id = ? AND canonical_capture_id = ?',
+    ).bind(TENANT_A, completed!.canonicalCaptureId).all()
+    const finalizations = await env.D1_US.prepare(
+      'SELECT id FROM artifact_intake_finalizations WHERE tenant_id = ? AND canonical_capture_id = ?',
+    ).bind(TENANT_A, completed!.canonicalCaptureId).all()
+    expect(operations.results).toHaveLength(1)
+    expect(finalizations.results).toHaveLength(1)
+    expect((await store.getDocument(TENANT_A, completed!.canonicalDocumentId!))?.artifact_manifest).toHaveLength(1)
+    const afterStats = await store.getStats(TENANT_A)
+    expect(afterStats.captureCount).toBe(beforeStats.captureCount + 1)
+    expect(afterStats.documentCount).toBe(beforeStats.documentCount + 1)
+    expect(acquire).toHaveBeenCalledTimes(1)
+    expect(describe).toHaveBeenCalledTimes(1)
+    expect(deliver).toHaveBeenCalledTimes(1)
+  })
+
+  it('fails a genuinely abandoned stale finalization reservation instead of retrying forever', async () => {
+    const kek = await key()
+    const old = Date.now() - CHANNEL_MEDIA_FINALIZATION_STALE_MS - 1
+    const job = await reserveChannelMediaJob({
+      tenantId: TENANT_A,
+      provider: 'telegram',
+      eventIdentity: `abandoned-finalization-${SUITE}`,
+      descriptor: telegramDescriptor(`abandoned-finalization-${SUITE}`),
+      kek,
+      now: old,
+    }, env)
+    const claimed = await claimChannelMediaJob(TENANT_A, job.id, env)
+    await env.D1_US.prepare(
+      `INSERT INTO artifact_intake_finalizations
+       (id, tenant_id, idempotency_hash, manifest_sha256, status, error_code,
+        canonical_capture_id, canonical_document_id, canonical_operation_id, created_at, updated_at)
+       VALUES (?, ?, ?, ?, 'reserved', NULL, ?, ?, ?, ?, ?)`,
+    ).bind(
+      crypto.randomUUID(), TENANT_A, await sha256Text(`channel-media-finalize:${job.id}`),
+      'a'.repeat(64), crypto.randomUUID(), crypto.randomUUID(), crypto.randomUUID(), old, old,
+    ).run()
+    await env.D1_US.prepare(
+      `UPDATE channel_media_jobs SET lease_expires_at = ?, expires_at = ?
+       WHERE tenant_id = ? AND id = ? AND lease_token = ?`,
+    ).bind(Date.now() - 2, Date.now() - 1, TENANT_A, job.id, claimed!.leaseToken).run()
+
+    await reapExpiredChannelMediaJobs(env, Date.now())
+    expect(await getChannelMediaJob(TENANT_A, job.id, env)).toMatchObject({
+      status: 'failed', deliveryStatus: 'failed', handoffStatus: 'deleted',
+    })
+    expect(await env.D1_US.prepare(
+      `SELECT status FROM artifact_intake_finalizations
+       WHERE tenant_id = ? AND idempotency_hash = ?`,
+    ).bind(TENANT_A, await sha256Text(`channel-media-finalize:${job.id}`)).first<{ status: string }>())
+      .toMatchObject({ status: 'failed' })
   })
 })

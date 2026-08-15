@@ -10,7 +10,6 @@ import {
   finalizePreparedChannelMediaJob,
   prepareChannelMediaCapture,
 } from './finalize-job'
-import { recoverFinalizedChannelMediaJob } from './canonical-recovery'
 import {
   cleanupChannelMediaHandoff,
   defaultChannelMediaDeliver,
@@ -23,13 +22,12 @@ import {
   markChannelMediaRetryable,
   renewChannelMediaLease,
 } from './job-transitions'
-import { markChannelMediaDeliveryUnknown } from './delivery-state'
 import { readChannelMediaRecovery } from './recovery'
+import { resolveChannelMediaRecovery } from './orchestrator-recovery'
 import {
   channelMediaErrorCode as errorCode,
   deliverChannelMediaSuccess as deliverSuccess,
   handleExpiredChannelMediaJob,
-  handleTerminalChannelMediaJob,
   PERMANENT_CHANNEL_MEDIA_ERRORS as PERMANENT_ERRORS,
   type ChannelMediaProcessResult,
   type ProcessChannelMediaJobArgs,
@@ -38,31 +36,26 @@ import {
 export type { ChannelMediaOrchestratorDependencies } from './orchestrator-support'
 export async function processChannelMediaJob(args: ProcessChannelMediaJobArgs): Promise<ChannelMediaProcessResult> {
   const claim = await claimChannelMediaJobForProcessing(args.tenantId, args.operationId, args.env)
-  if (!claim || claim.status === 'lease_held') return claim ?? 'ignored'
-  const job = claim
   const deliver = args.dependencies?.deliver ?? defaultChannelMediaDeliver
-
-  if (job.status === 'finalized' || job.status === 'failed') {
-    return handleTerminalChannelMediaJob({ job, kek: args.kek, env: args.env, deliver })
+  if (
+    claim.status === 'processing_lease_held' || claim.status === 'delivery_claim_held' ||
+    claim.status === 'actionable_retryable'
+  ) {
+    return { status: 'deferred', reason: claim.status, retryAfterSeconds: claim.retryAfterSeconds }
   }
+  if (claim.status === 'completed_or_terminal') {
+    await cleanupChannelMediaHandoff(claim.job, args.env)
+    return 'ignored'
+  }
+  const initialRecovery = await resolveChannelMediaRecovery({
+    job: claim.job, leaseToken: claim.job.leaseToken ?? undefined,
+    kek: args.kek, env: args.env, deliver,
+  })
+  if (initialRecovery.status === 'result') return initialRecovery.result
+  const job = initialRecovery.job
 
   const leaseToken = job.leaseToken
   if (!leaseToken) throw new ArtifactIntakeContractError(ARTIFACT_INTAKE_ERROR.LEASE_LOST)
-
-  // The canonical store is authoritative. Repair a completed capture before
-  // decrypting a locator, fetching provider bytes, or invoking vision.
-  if (await recoverFinalizedChannelMediaJob(job, leaseToken, args.env)) {
-    try {
-      const descriptor = await readChannelMediaHandoff({
-        tenantId: job.tenantId, operationId: job.id, kek: args.kek,
-      }, args.env)
-      return deliverSuccess({ tenantId: job.tenantId, operationId: job.id, descriptor, env: args.env, deliver })
-    } catch (error) {
-      if (errorCode(error) === ARTIFACT_INTAKE_ERROR.DELIVERY_REJECTED) throw error
-      await markChannelMediaDeliveryUnknown(job.tenantId, job.id, args.env)
-      return 'processed'
-    }
-  }
 
   if (job.expiresAt <= Date.now()) return handleExpiredChannelMediaJob({
     job, leaseToken, kek: args.kek, env: args.env, deliver,
@@ -120,13 +113,14 @@ export async function processChannelMediaJob(args: ProcessChannelMediaJobArgs): 
   } catch (error) {
     const code = errorCode(error)
     if (code === ARTIFACT_INTAKE_ERROR.DELIVERY_REJECTED) throw error
-    if (code === ARTIFACT_INTAKE_ERROR.LEASE_LOST) throw error
 
     // A failure after canonical commit is success recovery, never a failed job
     // and never a false failure response.
-    if (await recoverFinalizedChannelMediaJob(job, leaseToken, args.env)) {
-      return deliverSuccess({ tenantId: job.tenantId, operationId: job.id, descriptor, env: args.env, deliver })
-    }
+    const recovered = await resolveChannelMediaRecovery({
+      job, leaseToken, kek: args.kek, env: args.env, deliver,
+    })
+    if (recovered.status === 'result') return recovered.result
+    if (code === ARTIFACT_INTAKE_ERROR.LEASE_LOST) throw error
 
     const terminal = PERMANENT_ERRORS.has(code) || job.attemptCount >= CHANNEL_MEDIA_MAX_ATTEMPTS
     if (!terminal) {

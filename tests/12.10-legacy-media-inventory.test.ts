@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest'
-import { classifyLegacyMediaInventory, classifyLegacyMediaObjects } from '../src/services/artifact-intake/legacy-inventory'
+import {
+  classifyLegacyMediaInventory,
+  classifyLegacyMediaObjects,
+  exactManagedPrimarySourceReplacements,
+  LEGACY_MANAGED_REPLACEMENT_CANDIDATES_SQL,
+} from '../src/services/artifact-intake/legacy-inventory'
 
 const identified = (key: string, size: number, channel: 'telegram' | 'sendblue', envelopeFamily: 'tmk' | 'kek' | 'plaintext' | 'unknown') => ({
   key, size, channel, envelopeFamily, etag: `etag-${key}`, objectSha256: 'a'.repeat(64), version: 'v1',
@@ -159,6 +164,60 @@ describe('12.10 legacy media inventory classification', () => {
     expect(classified.report.alreadyMigrated).toEqual({ count: 0, bytes: 0 })
     expect(classified.report.referencedTelegram).toEqual({ count: 1, bytes: 29 })
     expect(classified.privateEntries[0]?.disposition).toBe('migrate_replace_delete')
+  })
+
+  it('fails closed at the query boundary when two legacy keys share one capture', () => {
+    const first = identified('telegram-media/t/legacy-one', 31, 'telegram', 'plaintext')
+    const second = identified('telegram-media/t/legacy-two', 37, 'telegram', 'plaintext')
+    const queryRows = [first, second].map(object => ({
+      key: object.key,
+      tenant_id: 't',
+      capture_id: 'shared-capture',
+      eligible_legacy_source_count: '2',
+      managed_primary_source_count: '1',
+    }))
+    const replacements = exactManagedPrimarySourceReplacements(queryRows)
+    expect(replacements).toEqual([])
+    expect(LEGACY_MANAGED_REPLACEMENT_CANDIDATES_SQL).toContain(
+      'COUNT(*) OVER (PARTITION BY tenant_id, capture_id)',
+    )
+
+    const classified = classifyLegacyMediaInventory({
+      objects: [first, second],
+      neonReferences: [first, second].map(object => ({
+        key: object.key, tenantId: 't', captureId: 'shared-capture',
+      })),
+      d1References: [first, second].map(object => ({
+        key: object.key, tenantId: 't', captureId: 'shared-capture',
+      })),
+      managedPrimarySourceReplacements: replacements,
+    })
+    expect(classified.report.alreadyMigrated).toEqual({ count: 0, bytes: 0 })
+    expect(classified.report.ambiguous).toEqual({ count: 2, bytes: 68 })
+    expect(classified.privateEntries).toHaveLength(2)
+    expect(classified.privateEntries.every(entry => (
+      entry.disposition === 'exclude_ambiguous' &&
+      entry.reconciliationState === 'capture_legacy_source_multiplicity'
+    ))).toBe(true)
+  })
+
+  it('accepts one exact singleton query candidate only when the managed primary source is unique', () => {
+    expect(exactManagedPrimarySourceReplacements([{
+      key: 'sendblue-media/t/singleton',
+      tenant_id: 't',
+      capture_id: 'capture',
+      eligible_legacy_source_count: 1,
+      managed_primary_source_count: 1,
+    }])).toEqual([{
+      key: 'sendblue-media/t/singleton', tenantId: 't', captureId: 'capture',
+    }])
+    expect(exactManagedPrimarySourceReplacements([{
+      key: 'sendblue-media/t/unclear',
+      tenant_id: 't',
+      capture_id: 'capture',
+      eligible_legacy_source_count: 1,
+      managed_primary_source_count: 2,
+    }])).toEqual([])
   })
 
   it('makes unknown unreferenced objects ambiguous and deletion-ineligible', () => {

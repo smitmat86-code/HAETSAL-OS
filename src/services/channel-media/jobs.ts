@@ -99,17 +99,7 @@ export async function claimChannelMediaJob(
   if (!existing) throw new ArtifactIntakeContractError(ARTIFACT_INTAKE_ERROR.NOT_FOUND)
   if (existing.status === 'finalized' && existing.deliveryStatus === 'pending') return existing
   if (existing.status === 'failed' && existing.deliveryStatus === 'pending') return existing
-  if (existing.deliveryStatus === 'claimed') {
-    if (existing.updatedAt + CHANNEL_MEDIA_JOB_LEASE_MS > Date.now()) return null
-    await env.D1_US.prepare(
-      `UPDATE channel_media_jobs SET
-       status = CASE WHEN status = 'failed' THEN 'failed' ELSE 'delivery_unknown' END,
-       delivery_status = 'unknown',
-       error_code = CASE WHEN status = 'failed' THEN error_code ELSE ? END,
-       updated_at = ? WHERE tenant_id = ? AND id = ? AND delivery_status = 'claimed'`,
-    ).bind(ARTIFACT_INTAKE_ERROR.DELIVERY_UNKNOWN, Date.now(), tenantId, operationId).run()
-    return null
-  }
+  if (existing.deliveryStatus === 'claimed') return null
   if (existing.status === 'delivered' || existing.status === 'failed' || existing.status === 'delivery_unknown') return null
   const now = Date.now()
   const token = crypto.randomUUID()

@@ -21,7 +21,7 @@ export async function processChannelMediaMessage(
       return
     }
     const outcome = await processChannelMediaJob({ tenantId, operationId, tmk, kek, env, dependencies })
-    if (typeof outcome === 'object' && outcome.status === 'lease_held') {
+    if (typeof outcome === 'object' && outcome.status === 'deferred') {
       msg.retry({ delaySeconds: outcome.retryAfterSeconds })
       return
     }

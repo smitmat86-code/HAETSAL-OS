@@ -19,6 +19,13 @@ export interface LegacyObjectInventoryInput {
 
 export interface LegacyCanonicalReference { key: string; tenantId: string; captureId: string }
 export interface LegacyManagedPrimarySourceReplacement extends LegacyCanonicalReference {}
+export interface LegacyManagedReplacementQueryRow {
+  key: string
+  tenant_id: string
+  capture_id: string
+  eligible_legacy_source_count: number | string
+  managed_primary_source_count: number | string
+}
 export interface LegacyInventoryTotal { count: number; bytes: number }
 
 export interface LegacyInventoryReport {

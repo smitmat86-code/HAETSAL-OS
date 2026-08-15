@@ -1,6 +1,9 @@
 import type { Env } from '../../types/env'
+import { CHANNEL_MEDIA_JOB_LEASE_MS } from '../artifact-intake/config'
 import { ARTIFACT_INTAKE_ERROR } from '../artifact-intake/contracts'
 import { recoverFinalizedChannelMediaJob } from './canonical-recovery'
+import { cleanupChannelMediaHandoff } from './delivery'
+import { expireChannelMediaDeliveryClaim } from './delivery-state'
 import { deleteChannelMediaHandoff } from './handoff'
 import { claimChannelMediaJob, getChannelMediaJob } from './jobs'
 import { markChannelMediaFailed } from './job-transitions'
@@ -26,6 +29,18 @@ export async function reapExpiredChannelMediaJobs(
   ).bind(now, limit).all<ExpiredRow>()
   let reaped = 0
   for (const row of rows.results) {
+    if (row.delivery_status === 'claimed') {
+      const claimedDelivery = await getChannelMediaJob(row.tenant_id, row.id, env)
+      if (!claimedDelivery) continue
+      const boundary = claimedDelivery.leaseExpiresAt ??
+        (claimedDelivery.updatedAt + CHANNEL_MEDIA_JOB_LEASE_MS)
+      if (boundary > Date.now()) continue
+      if (await expireChannelMediaDeliveryClaim(claimedDelivery, env)) {
+        await cleanupChannelMediaHandoff(claimedDelivery, env)
+        reaped += 1
+      }
+      continue
+    }
     if (
       row.status === 'processing' && row.lease_expires_at !== null &&
       Number(row.lease_expires_at) > Date.now()
@@ -37,12 +52,18 @@ export async function reapExpiredChannelMediaJobs(
     ) {
       const claimed = await claimChannelMediaJob(row.tenant_id, row.id, env)
       if (!claimed || claimed.status !== 'processing' || !claimed.leaseToken) continue
-      if (await recoverFinalizedChannelMediaJob(claimed, claimed.leaseToken, env)) {
+      const recovery = await recoverFinalizedChannelMediaJob(claimed, env)
+      if (recovery.status === 'recovered') {
         reaped += 1
         continue
       }
+      if (recovery.status === 'in_progress') continue
       await markChannelMediaFailed(
-        row.tenant_id, row.id, claimed.leaseToken, ARTIFACT_INTAKE_ERROR.LOCATOR_EXPIRED, env,
+        row.tenant_id, row.id, claimed.leaseToken,
+        recovery.status === 'failed' || recovery.status === 'inconsistent'
+          ? recovery.errorCode
+          : ARTIFACT_INTAKE_ERROR.LOCATOR_EXPIRED,
+        env,
       )
     }
 

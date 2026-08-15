@@ -5,6 +5,8 @@ import { sendSendblueMessage } from '../delivery/sendblue'
 import { deleteChannelMediaHandoff } from './handoff'
 import { deleteChannelMediaRecovery } from './recovery'
 import { claimChannelMediaDelivery, finishChannelMediaDelivery } from './delivery-state'
+import { channelMediaRetrySeconds } from './claim-outcome'
+import { getChannelMediaJob } from './jobs'
 
 export type ChannelMediaDeliveryOutcome = 'delivered' | 'rejected' | 'unknown'
 export type ChannelMediaDeliver = (
@@ -49,13 +51,25 @@ export async function deliverChannelMediaClaim(args: {
   message: string
   env: Env
   deliver: ChannelMediaDeliver
-}): Promise<'done' | 'retry'> {
-  if (!await claimChannelMediaDelivery(args.job.tenantId, args.job.id, args.env)) return 'done'
+}): Promise<'done' | 'retry' | { status: 'held'; retryAfterSeconds: number }> {
+  const claim = await claimChannelMediaDelivery(args.job.tenantId, args.job.id, args.env)
+  if (!claim) {
+    const current = await getChannelMediaJob(args.job.tenantId, args.job.id, args.env)
+    if (current?.deliveryStatus === 'claimed') {
+      return {
+        status: 'held',
+        retryAfterSeconds: channelMediaRetrySeconds(current.leaseExpiresAt),
+      }
+    }
+    if (current?.deliveryStatus === 'pending') return 'retry'
+    return 'done'
+  }
   const outcome = await args.deliver(args.descriptor, args.message, args.env)
-  await finishChannelMediaDelivery({
-    tenantId: args.job.tenantId, operationId: args.job.id, outcome,
+  const completion = await finishChannelMediaDelivery({
+    tenantId: args.job.tenantId, operationId: args.job.id,
+    leaseToken: claim.leaseToken, outcome,
   }, args.env)
-  if (outcome === 'rejected') return 'retry'
+  if (outcome === 'rejected' && completion === 'finished') return 'retry'
   await cleanupChannelMediaHandoff(args.job, args.env)
   return 'done'
 }

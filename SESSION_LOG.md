@@ -2084,4 +2084,34 @@
 - Production `channel_media_jobs` was empty immediately after deploy. Matt must send one fresh non-sensitive image through Telegram and one through Sendblue so envelope/hash/manifest/status/search, redelivery, one-reply, and prohibited-value scans can be reconciled.
 - Matt must separately approve the exact remediation categories and frozen digest before any referenced original or orphan is touched. Ambiguous or changed items remain excluded even after approval.
 
+### Session 5 correction pass — 2026-08-15
+
+**Status:** Corrected implementation is deployed and committed-tree green; Session 5 remains open pending fresh Telegram and Sendblue image gates. Remediation Phase 2 remains prohibited.
+
+**Commit and deployment evidence:**
+- Accepted correction baseline: `56cdcde` with deployed code tree `25fda7d594680a718d8515943e39de0451384ec5`.
+- Correction implementation: `c702751a5e3d208d2b850249bc6e7f133a0ad3f8`.
+- Exact clean deployed tree: `e98ff79b2e9f6a2aa9d36df680c073874a2c93ce`.
+- Production deployment `86f235ea-14f0-4456-826b-a2b2d5c9799b`; Worker version `3f8ba9bb-6432-475b-bf38-f6fd562e7914`, serving 100%. No migration was added or applied.
+
+**Corrected controls:**
+- Retry processing now performs canonical-first recovery before provider fetch or vision. Every processing transition requires the current lease token and an exact one-row CAS; stale workers cannot renew, finalize, retry, or fail a job. Post-canonical extraction recovery exists only in a bounded TMK-encrypted R2 envelope.
+- Sendblue now requires both the current `sb-signing-secret` header and the existing path secret, and authenticated refetch must prove exact handle, sender, receiving line, and inbound direction. Temporary-URL-only media is rejected.
+- Legacy inventory reconciles the union of R2, Neon, and D1; missing, unreadable, unknown-envelope, incomplete, or ownership-conflicting entries are ambiguous and deletion-ineligible. Approval digests bind a sorted private exact-target HMAC manifest with object and ownership identities, bytes, version/hash/ETag, disposition, reconciliation state, inventory identity, canonical fingerprint, and executor commit.
+- The Phase 2 design preserves exactly one source artifact by atomically replacing the legacy source row and pointers under a rollback snapshot, and requires one source plus a valid primary pointer before any legacy-byte deletion. No destructive Phase 2 executor was implemented or run.
+- Provider locators, captions, reply targets, and encrypted handoff/recovery descriptors have strict length limits. Missing or expired Cron KEK returns retry before any D1 job or queue message; focused operational tests cover both cases.
+
+**Validation and production regressions:**
+- Exact committed-tree suite: 584 passed, 1 skipped across 95 files.
+- `npm run postflight`: passed on the exact committed tree.
+- `npx wrangler deploy --dry-run`: passed on the exact committed tree; upload 3,660.66 KiB, gzip 699.86 KiB.
+- All six Session 3 artifact receipts and both primary Session 4 receipts re-read as finalized and TMK-encrypted. Their six canonical documents still expose exactly one source and one primary pointer; the two Session 4 lexical canaries still resolve to their original documents.
+- The registered Sendblue receive webhook has a per-webhook signing secret. The deployed route returned 404 for missing/wrong signing headers and 200 for the configured signed request; no provider message was sent.
+
+**Remediation approval:**
+- The prior aggregate digest `62a3ad605be33091628eecd0cb607396c96ea1030a4d3f8da692969518089559` is revoked and cannot authorize Phase 2.
+- A fresh read-only exact-target inventory and corrected public approval packet will be generated only after the two live channel gates. No legacy object has been migrated, overwritten, or deleted.
+
+**Next:** Matt sends one fresh non-sensitive Telegram image and one fresh non-sensitive Sendblue image. Reconcile both live captures and redelivery/one-reply/privacy evidence, then generate the new exact-target remediation packet and stop for explicit category-and-digest approval. Do not begin Session 6.
+
 ---

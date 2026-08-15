@@ -2144,3 +2144,29 @@
 **Stop boundary:** No Telegram or Sendblue image was requested in this pass. No fresh inventory or remediation packet was generated, and no legacy object was read for remediation, migrated, overwritten, or deleted.
 
 ---
+
+### Session 5 final concurrency correction — 2026-08-15
+
+**Status:** Correction is committed, deployed, and exact-tree green. Session 5 remains open only for the fresh Telegram and Sendblue live image gates. Remediation Phase 2 remains unapproved and did not run.
+
+**Commit and deployment evidence:**
+- Reviewed baseline: `893cac3a4f43d0415bcdec2f43ab22e03ec53227`; implementation parent: `02b8f13d1c12f6cbafba975f89bc6a7b986f2280`.
+- Concurrency and managed-migration correction: `a00725aac0bf9cb32e73da4082a589abb0acb2ab`.
+- Production deployment `5146b665-0890-4b1e-af76-c18eeb54f178`; Worker version `207a36f4-fb0a-4a03-a326-9d1d23f0c0c2`, created `2026-08-15T16:56:01.376633Z`, serving 100%. No migration was added or applied.
+
+**Corrected invariants:**
+- Queue state is explicit: processing lease held, delivery claim held, actionable retryable, finalized/delivery-pending, failed/delivery-pending, and completed/terminal outcomes cannot collapse to `null`. Held/actionable states retry at a bounded boundary; only completed/terminal states ACK.
+- Delivery ownership uses a token and expiry on the existing lease fields. Redelivery inside the lease is delayed and does not call the provider. Expiry performs a guarded transition to terminal `delivery_unknown`, fences stale completion, and cleans encrypted handoff/recovery state without resend.
+- Canonical finalization recovery distinguishes recovered, in-progress, stably absent, failed, and inconsistent. A fresh reservation blocks expiry failure and deletion; a reservation is abandoned only after the 24-hour handoff window plus one Worker lease. Canonical proof repairs a competing pending failure by CAS and then delivers the success response exactly once.
+- The inventory SQL emits legacy-source and managed-primary cardinalities. Without explicit replacement provenance, only one legacy source row plus one canonical managed primary qualifies; multiple legacy keys in one capture are ambiguous and deletion-ineligible.
+
+**Validation:**
+- Focused channel-media and legacy lane: 36 passed across 3 files.
+- Exact committed-tree suite: 602 passed, 1 skipped across 95 files.
+- `npm run postflight`: passed. `npx wrangler deploy --dry-run`: passed; upload 3,673.81 KiB, gzip 701.82 KiB.
+- Adversarial coverage includes death immediately after a delivery claim, death during the provider call, redelivery inside the delivery lease, ambiguity-boundary cleanup, claim/read races into retryable and pending-delivery states, delayed canonical commit across lease expiry/reaping, and stale abandoned finalization.
+- The first deploy attempt inherited an invalid API token and was rejected before upload; deployment succeeded through the existing local Wrangler OAuth profile.
+
+**Stop boundary:** No Telegram or Sendblue live gate was run. No legacy inventory/remediation command was run, no approval was inferred, and no legacy object was migrated, overwritten, or deleted. The primary `codex/artifact-intake-session-1` branch was not advanced.
+
+---

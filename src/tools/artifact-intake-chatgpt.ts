@@ -103,6 +103,7 @@ export function registerChatGptArtifactTool(server: McpServer, ctx: ArtifactInta
       inputSchema: captureArtifactFileToolSchema,
       annotations: artifactWriteAnnotations,
       _meta: {
+        'openai/fileParams': ['file'],
         ui: { visibility: ['app'] },
         'openai/visibility': 'private',
       },

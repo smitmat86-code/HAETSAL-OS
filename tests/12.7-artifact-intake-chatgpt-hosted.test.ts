@@ -190,6 +190,7 @@ describe('12.7 Session 4 ChatGPT hosted attachment downloader', () => {
       _meta: Record<string, unknown>
     }
     expect(privateConfig._meta).toEqual({
+      'openai/fileParams': ['file'],
       ui: { visibility: ['app'] },
       'openai/visibility': 'private',
     })

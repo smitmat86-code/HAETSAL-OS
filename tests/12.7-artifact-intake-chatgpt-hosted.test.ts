@@ -16,6 +16,7 @@ import {
   CHATGPT_ARTIFACT_CAPTURE_UI_HTML,
   CHATGPT_ARTIFACT_CAPTURE_UI_URI,
 } from '../src/tools/artifact-intake-chatgpt-ui'
+import { tryHandleArtifactMcpFastPath } from '../src/workers/mcpagent/artifact-mcp-fast-path'
 
 const SUITE_ID = crypto.randomUUID()
 const TENANT = `session-4-chatgpt-${SUITE_ID}`
@@ -267,6 +268,49 @@ describe('12.7 Session 4 ChatGPT hosted attachment downloader', () => {
 })
 
 describe('12.7 Session 4 ChatGPT hosted attachment integration', () => {
+  it('handles the sensitive tool in the authenticated POST without a Durable Object forwarding hop', async () => {
+    const secretPath = '/mnt/data/private-session4-file.png'
+    const request = new Request('https://haetsal.example/mcp', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify([{
+        jsonrpc: '2.0', id: 7, method: 'tools/call',
+        params: {
+          name: 'capture_artifact_file',
+          arguments: { file: secretPath, searchable_content: 'private extraction' },
+        },
+      }]),
+    })
+    const response = await tryHandleArtifactMcpFastPath(request, env, {
+      tenantId: TENANT,
+      jwtSub: SUBJECT,
+      clientName: null,
+      agentIdentity: null,
+      actorKind: 'human',
+    })
+    expect(response?.status).toBe(200)
+    expect(response?.headers.get('cache-control')).toBe('no-store')
+    const body = await response!.text()
+    expect(JSON.parse(body)).toEqual([{
+      jsonrpc: '2.0', id: 7,
+      result: {
+        isError: true,
+        content: [{ type: 'text', text: JSON.stringify({ status: 'failed', error_code: 'raw_bytes_unavailable' }) }],
+      },
+    }])
+    expect(body).not.toContain(secretPath)
+    expect(body).not.toContain('private extraction')
+
+    const unrelated = await tryHandleArtifactMcpFastPath(new Request('https://haetsal.example/mcp', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ jsonrpc: '2.0', id: 8, method: 'tools/call', params: { name: 'search_memory', arguments: {} } }),
+    }), env, {
+      tenantId: TENANT, jwtSub: SUBJECT, clientName: null, agentIdentity: null, actorKind: 'human',
+    })
+    expect(unrelated).toBeNull()
+  })
+
   it('downloads, seals, finalizes, attributes, and searches image and PDF extractions without metadata leaks', async () => {
     const key = await deriveTmk(SUBJECT, AUDIENCE)
     const image = Uint8Array.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 1, 2, 3])

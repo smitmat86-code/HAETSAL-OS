@@ -90,6 +90,14 @@ export async function downloadHostedArtifactFile(
         response = await network.request(current, pinnedAddress, abort.signal)
       } catch (error) {
         if (error instanceof ArtifactIntakeContractError) throw error
+        const cause = error && typeof error === 'object' ? error as { name?: unknown; code?: unknown } : null
+        const transportName = typeof cause?.name === 'string' && /^[A-Za-z]{1,40}$/.test(cause.name)
+          ? cause.name
+          : 'Error'
+        const transportCode = typeof cause?.code === 'string' && /^[A-Z0-9_]{1,64}$/.test(cause.code)
+          ? cause.code
+          : 'UNCLASSIFIED'
+        console.warn(JSON.stringify({ event: 'artifact_hosted_download_transport_failure', transportName, transportCode }))
         const code = timedOut || abort.signal.aborted
           ? ARTIFACT_INTAKE_ERROR.DOWNLOAD_TIMEOUT
           : ARTIFACT_INTAKE_ERROR.DOWNLOAD_UNAVAILABLE

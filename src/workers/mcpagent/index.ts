@@ -26,6 +26,7 @@ import { registerPhoneQuery, registerTelegramQuery } from './self-registration'
 import { renderMemoryInventory } from './debug-inventory'
 import { renderGoogleSourceSync } from './routes/debug-google-source-sync'
 import { handleBrainQueue, handleBrainScheduled } from './runtime'
+import { tryHandleArtifactMcpFastPath } from './artifact-mcp-fast-path'
 
 type Variables = { tenantId: string; jwtSub: string; traceId: string; clientName?: string | null; agentIdentity?: string | null; actorKind?: 'human' | 'service' }
 const app = new Hono<{ Bindings: Env; Variables: Variables }>()
@@ -111,6 +112,14 @@ app.all('/mcp', async (c) => {
   const jwtSub = c.get('jwtSub')
 
   try {
+    const artifactResponse = await tryHandleArtifactMcpFastPath(c.req.raw, c.env, {
+      tenantId,
+      jwtSub,
+      clientName: c.get('clientName') ?? null,
+      agentIdentity: c.get('agentIdentity') ?? null,
+      actorKind: c.get('actorKind') ?? 'service',
+    })
+    if (artifactResponse) return artifactResponse
     return await mcpHandler.fetch(c.req.raw, c.env, {
       waitUntil: c.executionCtx.waitUntil.bind(c.executionCtx),
       passThroughOnException: c.executionCtx.passThroughOnException.bind(c.executionCtx),

@@ -21,7 +21,6 @@ button{width:fit-content;border:0;border-radius:8px;padding:9px 13px;font:inheri
   let nextId = 1;
   let toolInput = window.openai && window.openai.toolInput;
   let toolOutput = window.openai && window.openai.toolOutput;
-
   function request(method, params) {
     const id = nextId++;
     window.parent.postMessage({ jsonrpc: '2.0', id, method, params }, '*');
@@ -33,7 +32,6 @@ button{width:fit-content;border:0;border-radius:8px;padding:9px 13px;font:inheri
       });
     });
   }
-
   window.addEventListener('message', event => {
     if (event.source !== window.parent) return;
     const message = event.data;
@@ -46,14 +44,12 @@ button{width:fit-content;border:0;border-radius:8px;padding:9px 13px;font:inheri
     if (message.method === 'ui/notifications/tool-input') toolInput = message.params;
     if (message.method === 'ui/notifications/tool-result') toolOutput = message.params && message.params.structuredContent;
   }, { passive: true });
-
   window.addEventListener('openai:set_globals', event => {
     const globals = event.detail && event.detail.globals;
     if (!globals) return;
     if (globals.toolInput !== undefined) toolInput = globals.toolInput;
     if (globals.toolOutput !== undefined) toolOutput = globals.toolOutput;
   }, { passive: true });
-
   function preparedInput() {
     const openai = window.openai;
     const candidates = [toolInput, toolOutput, openai && openai.toolInput, openai && openai.toolOutput];
@@ -65,7 +61,6 @@ button{width:fit-content;border:0;border-radius:8px;padding:9px 13px;font:inheri
     if (typeof value.model_runtime === 'string') input.model_runtime = value.model_runtime;
     return input;
   }
-
   function parseReceipt(result) {
     const envelope = result && result.content ? result : result && result.result ? result.result : result;
     const item = envelope && Array.isArray(envelope.content)
@@ -75,7 +70,6 @@ button{width:fit-content;border:0;border-radius:8px;padding:9px 13px;font:inheri
     if (envelope.isError || parsed.status !== 'finalized') throw new Error(parsed.error_code || 'capture_failed');
     return parsed;
   }
-
   function showReceipt(value) {
     document.getElementById('capture-id').textContent = String(value.captureId || '—');
     document.getElementById('document-id').textContent = String(value.documentId || '—');
@@ -84,7 +78,6 @@ button{width:fit-content;border:0;border-radius:8px;padding:9px 13px;font:inheri
     document.getElementById('capture-status').textContent = String(value.status || '—');
     receipt.style.display = 'grid';
   }
-
   function safeErrorCode(error) {
     const value = error && typeof error.message === 'string' ? error.message : '';
     const allowed = new Set([
@@ -99,7 +92,6 @@ button{width:fit-content;border:0;border-radius:8px;padding:9px 13px;font:inheri
     ]);
     return allowed.has(value) ? value : 'capture_failed';
   }
-
   function classifyHostError(error) {
     const code = error && typeof error.code === 'number' ? error.code : 0;
     const message = error && typeof error.message === 'string' ? error.message.toLowerCase() : '';
@@ -111,7 +103,6 @@ button{width:fit-content;border:0;border-radius:8px;padding:9px 13px;font:inheri
     if (code === -32603 || /internal/.test(message)) return 'host_internal_rejection';
     return 'host_tool_call_failed';
   }
-
   async function callCapture(args) {
     try {
       return await request('tools/call', { name: 'prepare_artifact_file_capture', arguments: args });
@@ -125,7 +116,6 @@ button{width:fit-content;border:0;border-radius:8px;padding:9px 13px;font:inheri
       }
     }
   }
-
   button.addEventListener('click', async () => {
     button.disabled = true; receipt.style.display = 'none';
     try {

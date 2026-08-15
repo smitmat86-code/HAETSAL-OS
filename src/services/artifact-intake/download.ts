@@ -19,10 +19,8 @@ import type {
 } from './download-types'
 import { DEFAULT_ARTIFACT_DOWNLOAD_LIMITS } from './download-types'
 import { detectArtifactMimeType } from './mime'
-
 export * from './download-types'
 export { DEFAULT_ARTIFACT_DOWNLOAD_NETWORK } from './download-network'
-
 function normalizeAddressSet(addresses: string[]): string[] {
   const normalized = [...new Set(addresses
     .map(normalizeArtifactIpAddress)
@@ -33,7 +31,6 @@ function normalizeAddressSet(addresses: string[]): string[] {
   for (const address of normalized) assertArtifactResolvedAddressAllowed(address)
   return normalized.sort()
 }
-
 async function abortable<T>(promise: Promise<T>, signal: AbortSignal): Promise<T> {
   if (signal.aborted) throw new ArtifactIntakeContractError(ARTIFACT_INTAKE_ERROR.DOWNLOAD_TIMEOUT)
   return new Promise<T>((resolve, reject) => {
@@ -45,7 +42,6 @@ async function abortable<T>(promise: Promise<T>, signal: AbortSignal): Promise<T
     )
   })
 }
-
 async function resolveForConnection(
   hostname: string,
   network: ArtifactDownloadNetwork,
@@ -57,7 +53,6 @@ async function resolveForConnection(
   if (!stable) throw new ArtifactIntakeContractError(ARTIFACT_INTAKE_ERROR.SSRF_URL_BLOCKED)
   return stable
 }
-
 function assertPinnedResponse(
   response: ArtifactDownloadResponse,
   pinnedAddress: string,
@@ -71,9 +66,7 @@ function assertPinnedResponse(
   }
   assertArtifactResolvedAddressAllowed(connected)
 }
-
 const REDIRECT_STATUSES = new Set([301, 302, 303, 307, 308])
-
 export async function downloadHostedArtifactFile(
   descriptor: HostedArtifactFileDescriptor,
   network: ArtifactDownloadNetwork = DEFAULT_ARTIFACT_DOWNLOAD_NETWORK,
@@ -84,7 +77,6 @@ export async function downloadHostedArtifactFile(
   let stage = 'dns_resolution'
   const abort = new AbortController()
   const timer = setTimeout(() => { timedOut = true; abort.abort() }, limits.timeoutMs)
-
   try {
     for (let redirects = 0; redirects <= limits.maxRedirects; redirects += 1) {
       stage = 'dns_resolution'
@@ -110,7 +102,6 @@ export async function downloadHostedArtifactFile(
       }
       stage = 'response_validation'
       assertPinnedResponse(response, pinnedAddress, network)
-
       if (REDIRECT_STATUSES.has(response.status)) {
         const location = response.headers.get('location')
         response.cancel()
@@ -128,7 +119,6 @@ export async function downloadHostedArtifactFile(
         response.cancel()
         throw new ArtifactIntakeContractError(ARTIFACT_INTAKE_ERROR.DOWNLOAD_UNAVAILABLE)
       }
-
       stage = 'response_body'
       const bytes = await readBoundedArtifactResponse(response, limits.maxBytes)
       const detectedMimeType = detectArtifactMimeType(bytes)

@@ -331,6 +331,40 @@ describe('12.7 Session 4 ChatGPT hosted attachment integration', () => {
     expect(unrelated).toBeNull()
   })
 
+  it('rejects malformed or mixed capture batches before sensitive arguments can reach the Durable Object', async () => {
+    const mixed = await tryHandleArtifactMcpFastPath(new Request('https://haetsal.example/mcp', {
+      method: 'POST', headers: { 'content-type': 'application/json' },
+      body: JSON.stringify([
+        { jsonrpc: '2.0', id: 1, method: 'tools/list', params: {} },
+        {
+          jsonrpc: '2.0', id: 2, method: 'tools/call',
+          params: {
+            name: 'capture_artifact_file',
+            arguments: { file: '/mnt/data/private.pdf', searchable_content: 'private extraction' },
+          },
+        },
+      ]),
+    }), env, {
+      tenantId: TENANT, jwtSub: SUBJECT, clientName: null, agentIdentity: null, actorKind: 'human',
+    })
+    expect(mixed?.headers.get('cache-control')).toBe('no-store')
+    const mixedBody = await mixed!.text()
+    expect(JSON.parse(mixedBody)).toEqual({
+      jsonrpc: '2.0', id: null, error: { code: -32600, message: 'Invalid Request' },
+    })
+    expect(mixedBody).not.toContain('/mnt/data/private.pdf')
+    expect(mixedBody).not.toContain('private extraction')
+
+    const malformed = await tryHandleArtifactMcpFastPath(new Request('https://haetsal.example/mcp', {
+      method: 'POST', headers: { 'content-type': 'application/json' }, body: '{',
+    }), env, {
+      tenantId: TENANT, jwtSub: SUBJECT, clientName: null, agentIdentity: null, actorKind: 'human',
+    })
+    expect(await malformed!.json()).toEqual({
+      jsonrpc: '2.0', id: null, error: { code: -32600, message: 'Invalid Request' },
+    })
+  })
+
   it('downloads, seals, finalizes, attributes, and searches image and PDF extractions without metadata leaks', async () => {
     const key = await deriveTmk(SUBJECT, AUDIENCE)
     const image = Uint8Array.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 1, 2, 3])

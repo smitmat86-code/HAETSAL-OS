@@ -27,6 +27,24 @@ function singleRequest(value: unknown): { request: JsonRpcRequest; batched: bool
   return { request: value as JsonRpcRequest, batched: false }
 }
 
+function containsCaptureCall(value: unknown): boolean {
+  const values = Array.isArray(value) ? value : [value]
+  return values.some(candidate => {
+    if (!candidate || typeof candidate !== 'object') return false
+    const request = candidate as JsonRpcRequest
+    return request.method === 'tools/call' && request.params?.name === 'capture_artifact_file'
+  })
+}
+
+function invalidRequestResponse(): Response {
+  return new Response(JSON.stringify({
+    jsonrpc: '2.0', id: null, error: { code: -32600, message: 'Invalid Request' },
+  }), {
+    status: 200,
+    headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' },
+  })
+}
+
 /**
  * Keeps hosted file descriptors in the original POST body. The Agents SDK
  * otherwise forwards tool arguments to its Durable Object in cf-mcp-message,
@@ -43,15 +61,15 @@ export async function tryHandleArtifactMcpFastPath(
   try {
     parsed = await request.clone().json()
   } catch {
-    return null
+    return invalidRequestResponse()
   }
   const candidate = singleRequest(parsed)
   if (
     !candidate
     || candidate.request.method !== 'tools/call'
     || candidate.request.params?.name !== 'capture_artifact_file'
-    || candidate.request.id === undefined
-  ) return null
+  ) return containsCaptureCall(parsed) ? invalidRequestResponse() : null
+  if (candidate.request.id === undefined) return invalidRequestResponse()
 
   const tmk = await deriveTmk(identity.jwtSub, env.CF_ACCESS_AUD)
   const clientName = identity.clientName ?? (identity.actorKind === 'human' ? 'ChatGPT' : null)

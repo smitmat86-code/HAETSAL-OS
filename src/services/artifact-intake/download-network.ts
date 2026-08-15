@@ -25,12 +25,31 @@ function assertConnectionTimeAddressStable(addresses: string[], pinnedAddress: s
   }
 }
 
+async function resolveConnectionTime(
+  hostname: string,
+  pinnedAddress: string,
+  signal: AbortSignal,
+): Promise<void> {
+  if (signal.aborted) throw new ArtifactIntakeContractError(ARTIFACT_INTAKE_ERROR.DOWNLOAD_TIMEOUT)
+  await new Promise<void>((resolve, reject) => {
+    const abort = () => reject(new ArtifactIntakeContractError(ARTIFACT_INTAKE_ERROR.DOWNLOAD_TIMEOUT))
+    signal.addEventListener('abort', abort, { once: true })
+    resolveDefault(hostname).then(
+      addresses => {
+        signal.removeEventListener('abort', abort)
+        try { assertConnectionTimeAddressStable(addresses, pinnedAddress); resolve() } catch (error) { reject(error) }
+      },
+      error => { signal.removeEventListener('abort', abort); reject(error) },
+    )
+  })
+}
+
 async function requestIsolatedHttps(
   url: URL,
   pinnedAddress: string,
   signal: AbortSignal,
 ): Promise<ArtifactDownloadResponse> {
-  assertConnectionTimeAddressStable(await resolveDefault(url.hostname), pinnedAddress)
+  await resolveConnectionTime(url.hostname, pinnedAddress, signal)
   const response = await fetch(url.href, {
     method: 'GET',
     headers: { Accept: '*/*', 'Accept-Encoding': 'identity' },
@@ -38,7 +57,7 @@ async function requestIsolatedHttps(
     signal,
   })
   try {
-    assertConnectionTimeAddressStable(await resolveDefault(url.hostname), pinnedAddress)
+    await resolveConnectionTime(url.hostname, pinnedAddress, signal)
   } catch (error) {
     await response.body?.cancel().catch(() => undefined)
     throw error

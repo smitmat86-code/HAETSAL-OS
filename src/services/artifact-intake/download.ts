@@ -76,14 +76,17 @@ export async function downloadHostedArtifactFile(
 ): Promise<DownloadedArtifactFile> {
   let current = validateInitialArtifactDownloadUrl(descriptor.download_url)
   let timedOut = false
+  let stage = 'dns_resolution'
   const abort = new AbortController()
   const timer = setTimeout(() => { timedOut = true; abort.abort() }, limits.timeoutMs)
 
   try {
     for (let redirects = 0; redirects <= limits.maxRedirects; redirects += 1) {
+      stage = 'dns_resolution'
       const pinnedAddress = await resolveForConnection(current.hostname, network, abort.signal)
       let response: ArtifactDownloadResponse
       try {
+        stage = 'network_request'
         response = await network.request(current, pinnedAddress, abort.signal)
       } catch (error) {
         if (error instanceof ArtifactIntakeContractError) throw error
@@ -92,6 +95,7 @@ export async function downloadHostedArtifactFile(
           : ARTIFACT_INTAKE_ERROR.DOWNLOAD_UNAVAILABLE
         throw new ArtifactIntakeContractError(code)
       }
+      stage = 'response_validation'
       assertPinnedResponse(response, pinnedAddress)
 
       if (REDIRECT_STATUSES.has(response.status)) {
@@ -112,9 +116,11 @@ export async function downloadHostedArtifactFile(
         throw new ArtifactIntakeContractError(ARTIFACT_INTAKE_ERROR.DOWNLOAD_UNAVAILABLE)
       }
 
+      stage = 'response_body'
       const bytes = await readBoundedArtifactResponse(response, limits.maxBytes)
       const detectedMimeType = detectArtifactMimeType(bytes)
       const responseMimeType = response.headers.get('content-type')?.trim() || undefined
+      stage = 'mime_validation'
       for (const declaredMimeType of [descriptor.mime_type, responseMimeType]) {
         if (declaredMimeType) resolveArtifactMimeType({ declaredMimeType, detectedMimeType })
       }
@@ -126,6 +132,10 @@ export async function downloadHostedArtifactFile(
     }
     throw new ArtifactIntakeContractError(ARTIFACT_INTAKE_ERROR.DOWNLOAD_UNAVAILABLE)
   } catch (error) {
+    const code = error instanceof ArtifactIntakeContractError
+      ? error.code
+      : ARTIFACT_INTAKE_ERROR.DOWNLOAD_UNAVAILABLE
+    console.warn(JSON.stringify({ event: 'artifact_hosted_download_failed', stage, code }))
     if (timedOut || abort.signal.aborted) {
       throw new ArtifactIntakeContractError(ARTIFACT_INTAKE_ERROR.DOWNLOAD_TIMEOUT)
     }

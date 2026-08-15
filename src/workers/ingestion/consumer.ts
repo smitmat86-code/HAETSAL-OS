@@ -11,9 +11,7 @@ import { processCanonicalProjectionDispatch } from './canonical-projection-consu
 import { processQueuedRetainArtifact } from './retain-consumer'
 import { processOpsAlertMemory } from './ops-alert-memory-consumer'
 import { processChatInbound } from './chat-consumer'
-import { processChannelMediaJob } from '../../services/channel-media/orchestrator'
-import { fetchAndValidateKek } from '../../cron/kek'
-import { ArtifactIntakeContractError } from '../../services/artifact-intake/contracts'
+import { processChannelMediaMessage } from './channel-media-consumer'
 import {
   handleSmsInbound,
   handleGmailThread,
@@ -114,21 +112,7 @@ async function processIngestionMessage(
   }
 
   if (type === 'channel_media') {
-    const operationId = typeof payload.operationId === 'string' ? payload.operationId : ''
-    try {
-      const kek = await fetchAndValidateKek(tenantId, env)
-      if (!kek) {
-        console.warn('CHANNEL_MEDIA_WAITING_FOR_KEY')
-        msg.retry({ delaySeconds: 30 })
-        return
-      }
-      await processChannelMediaJob({ tenantId, operationId, tmk, kek, env })
-      msg.ack()
-    } catch (error) {
-      const code = error instanceof ArtifactIntakeContractError ? error.code : 'invalid_state'
-      console.warn('CHANNEL_MEDIA_JOB_RETRY', { code })
-      msg.retry({ delaySeconds: 30 })
-    }
+    await processChannelMediaMessage(msg, tmk, env)
     return
   }
 

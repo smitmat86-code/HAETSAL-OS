@@ -6,6 +6,7 @@ import { Client } from 'pg'
 import {
   classifyLegacyMediaInventory,
   exactManagedPrimarySourceReplacements,
+  LEGACY_D1_CANONICAL_REFERENCES_SQL,
   LEGACY_MANAGED_REPLACEMENT_CANDIDATES_SQL,
   type LegacyCanonicalReference,
   type LegacyManagedReplacementQueryRow,
@@ -50,10 +51,11 @@ async function listObjects(env: InventoryEnv): Promise<LegacyObjectInventoryInpu
 
 async function d1References(env: InventoryEnv): Promise<LegacyCanonicalReference[]> {
   const result = await env.D1_US.prepare(
-    `SELECT r2_key, tenant_id, capture_id FROM canonical_artifacts
-     WHERE r2_key LIKE 'telegram-media/%' OR r2_key LIKE 'sendblue-media/%'`,
-  ).all<{ r2_key: string; tenant_id: string; capture_id: string }>()
-  return result.results.map(row => ({ key: row.r2_key, tenantId: row.tenant_id, captureId: row.capture_id }))
+    LEGACY_D1_CANONICAL_REFERENCES_SQL,
+  ).all<{ r2_key: string; tenant_id: string; capture_id: string; role: string | null }>()
+  return result.results.map(row => ({
+    key: row.r2_key, tenantId: row.tenant_id, captureId: row.capture_id, role: row.role,
+  }))
 }
 
 export default {
@@ -68,8 +70,8 @@ export default {
       const [objects, d1, legacy, managed, documents] = await Promise.all([
         listObjects(env),
         d1References(env),
-        client.query<{ r2_key: string; tenant_id: string; capture_id: string }>(
-          `SELECT r2_key, tenant_id, capture_id FROM haetsal_canonical.canonical_artifacts
+        client.query<{ r2_key: string; tenant_id: string; capture_id: string; role: string | null }>(
+          `SELECT r2_key, tenant_id, capture_id, role FROM haetsal_canonical.canonical_artifacts
            WHERE r2_key LIKE 'telegram-media/%' OR r2_key LIKE 'sendblue-media/%'`,
         ),
         client.query<LegacyManagedReplacementQueryRow>(LEGACY_MANAGED_REPLACEMENT_CANDIDATES_SQL),
@@ -84,7 +86,9 @@ export default {
       const classification = classifyLegacyMediaInventory({
         objects,
         d1References: d1,
-        neonReferences: legacy.rows.map(row => ({ key: row.r2_key, tenantId: row.tenant_id, captureId: row.capture_id })),
+        neonReferences: legacy.rows.map(row => ({
+          key: row.r2_key, tenantId: row.tenant_id, captureId: row.capture_id, role: row.role,
+        })),
         managedPrimarySourceReplacements: exactManagedPrimarySourceReplacements(managed.rows),
       })
       const fingerprint = createHash('sha256').update(JSON.stringify(documents.rows)).digest('hex')

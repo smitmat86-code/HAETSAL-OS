@@ -46,25 +46,26 @@ export async function reapExpiredChannelMediaJobs(
       Number(row.lease_expires_at) > Date.now()
     ) continue
 
-    if (
-      row.delivery_status === 'pending' &&
-      ['accepted', 'retryable', 'processing'].includes(row.status)
-    ) {
-      const claimed = await claimChannelMediaJob(row.tenant_id, row.id, env)
-      if (!claimed || claimed.status !== 'processing' || !claimed.leaseToken) continue
-      const recovery = await recoverFinalizedChannelMediaJob(claimed, env)
+    if (row.delivery_status === 'pending') {
+      const current = await getChannelMediaJob(row.tenant_id, row.id, env)
+      if (!current) continue
+      const recovery = await recoverFinalizedChannelMediaJob(current, env)
       if (recovery.status === 'recovered') {
         reaped += 1
         continue
       }
       if (recovery.status === 'in_progress') continue
-      await markChannelMediaFailed(
-        row.tenant_id, row.id, claimed.leaseToken,
-        recovery.status === 'failed' || recovery.status === 'inconsistent'
-          ? recovery.errorCode
-          : ARTIFACT_INTAKE_ERROR.LOCATOR_EXPIRED,
-        env,
-      )
+      if (['accepted', 'retryable', 'processing'].includes(current.status)) {
+        const claimed = await claimChannelMediaJob(row.tenant_id, row.id, env)
+        if (!claimed || claimed.status !== 'processing' || !claimed.leaseToken) continue
+        await markChannelMediaFailed(
+          row.tenant_id, row.id, claimed.leaseToken,
+          recovery.status === 'failed' || recovery.status === 'inconsistent'
+            ? recovery.errorCode
+            : ARTIFACT_INTAKE_ERROR.LOCATOR_EXPIRED,
+          env,
+        )
+      }
     }
 
     await Promise.all([

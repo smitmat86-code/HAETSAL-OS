@@ -125,7 +125,11 @@ export async function finalizePreparedChannelMediaJob(args: {
       plaintextSha256: args.prepared.plaintextSha256,
     }],
     declaredDerivativeUploadIds: [],
-  }, args.tmk, args.env)
+  }, args.tmk, args.env, {
+    beforeCanonicalSideEffects: () => renewChannelMediaLease(
+      args.job.tenantId, args.job.id, args.leaseToken, args.env,
+    ),
+  })
   await args.afterCanonicalFinalization?.()
   const verified = await getArtifactIntakeStatus({
     tenantId: args.job.tenantId, uploadId: args.prepared.uploadId,

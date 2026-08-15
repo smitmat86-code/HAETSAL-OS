@@ -17,12 +17,20 @@ export interface LegacyObjectInventoryInput {
   objectSha256?: string | null
 }
 
-export interface LegacyCanonicalReference { key: string; tenantId: string; captureId: string }
+export interface LegacyCanonicalReference {
+  key: string
+  tenantId: string
+  captureId: string
+  /** Raw canonical provenance. Only the exact value `source` is eligible. */
+  role?: string | null
+}
 export interface LegacyManagedPrimarySourceReplacement extends LegacyCanonicalReference {}
 export interface LegacyManagedReplacementQueryRow {
   key: string
   tenant_id: string
   capture_id: string
+  legacy_role?: string | null
+  legacy_artifact_count?: number | string
   eligible_legacy_source_count: number | string
   managed_primary_source_count: number | string
 }

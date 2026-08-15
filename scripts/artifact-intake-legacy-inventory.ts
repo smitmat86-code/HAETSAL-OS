@@ -9,6 +9,7 @@ import pg from 'pg'
 import {
   classifyLegacyMediaInventory,
   exactManagedPrimarySourceReplacements,
+  LEGACY_D1_CANONICAL_REFERENCES_SQL,
   LEGACY_MANAGED_REPLACEMENT_CANDIDATES_SQL,
   type LegacyCanonicalReference,
   type LegacyManagedReplacementQueryRow,
@@ -97,14 +98,16 @@ async function d1References(): Promise<LegacyCanonicalReference[]> {
   const result = await cloudflare(`/d1/database/${D1_DATABASE_ID}/query`, {
     method: 'POST',
     body: JSON.stringify({
-      sql: `SELECT r2_key, tenant_id, capture_id FROM canonical_artifacts
-            WHERE r2_key LIKE 'telegram-media/%' OR r2_key LIKE 'sendblue-media/%'`,
+      sql: LEGACY_D1_CANONICAL_REFERENCES_SQL,
     }),
   })
   const blocks = Array.isArray(result.result) ? result.result as Array<Record<string, unknown>> : []
   const rows = Array.isArray(blocks[0]?.results) ? blocks[0]!.results as Array<Record<string, unknown>> : []
   return rows.flatMap(row => typeof row.r2_key === 'string' && typeof row.tenant_id === 'string' && typeof row.capture_id === 'string'
-    ? [{ key: row.r2_key, tenantId: row.tenant_id, captureId: row.capture_id }]
+    ? [{
+      key: row.r2_key, tenantId: row.tenant_id, captureId: row.capture_id,
+      role: typeof row.role === 'string' ? row.role : null,
+    }]
     : [])
 }
 
@@ -135,8 +138,8 @@ async function main(): Promise<void> {
     stage = 'neon_query'
     await client.query('BEGIN READ ONLY')
     const legacy = await client.query<{
-      r2_key: string; tenant_id: string; capture_id: string
-    }>(`SELECT r2_key, tenant_id, capture_id FROM haetsal_canonical.canonical_artifacts
+      r2_key: string; tenant_id: string; capture_id: string; role: string | null
+    }>(`SELECT r2_key, tenant_id, capture_id, role FROM haetsal_canonical.canonical_artifacts
         WHERE r2_key LIKE 'telegram-media/%' OR r2_key LIKE 'sendblue-media/%'`)
     const managedPrimarySourceReplacements =
       await client.query<LegacyManagedReplacementQueryRow>(LEGACY_MANAGED_REPLACEMENT_CANDIDATES_SQL)
@@ -150,7 +153,9 @@ async function main(): Promise<void> {
     stage = 'd1_query'
     const classification = classifyLegacyMediaInventory({
       objects,
-      neonReferences: legacy.rows.map(row => ({ key: row.r2_key, tenantId: row.tenant_id, captureId: row.capture_id })),
+      neonReferences: legacy.rows.map(row => ({
+        key: row.r2_key, tenantId: row.tenant_id, captureId: row.capture_id, role: row.role,
+      })),
       d1References: await d1References(),
       managedPrimarySourceReplacements:
         exactManagedPrimarySourceReplacements(managedPrimarySourceReplacements.rows),

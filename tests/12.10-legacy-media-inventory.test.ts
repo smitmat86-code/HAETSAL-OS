@@ -3,6 +3,7 @@ import {
   classifyLegacyMediaInventory,
   classifyLegacyMediaObjects,
   exactManagedPrimarySourceReplacements,
+  LEGACY_D1_CANONICAL_REFERENCES_SQL,
   LEGACY_MANAGED_REPLACEMENT_CANDIDATES_SQL,
 } from '../src/services/artifact-intake/legacy-inventory'
 
@@ -20,15 +21,15 @@ describe('12.10 legacy media inventory classification', () => {
         identified('sendblue-media/t/d', 40, 'sendblue', 'unknown'),
       ],
       neonReferences: [
-        { key: 'telegram-media/t/a', tenantId: 't', captureId: 'capture-a' },
-        { key: 'sendblue-media/t/b', tenantId: 't', captureId: 'capture-b' },
+        { key: 'telegram-media/t/a', tenantId: 't', captureId: 'capture-a', role: 'source' },
+        { key: 'sendblue-media/t/b', tenantId: 't', captureId: 'capture-b', role: 'source' },
       ],
       d1References: [
-        { key: 'telegram-media/t/a', tenantId: 't', captureId: 'capture-a' },
-        { key: 'sendblue-media/t/d', tenantId: 't', captureId: 'stale-d1-capture' },
+        { key: 'telegram-media/t/a', tenantId: 't', captureId: 'capture-a', role: 'source' },
+        { key: 'sendblue-media/t/d', tenantId: 't', captureId: 'stale-d1-capture', role: 'source' },
       ],
       managedPrimarySourceReplacements: [
-        { key: 'sendblue-media/t/b', tenantId: 't', captureId: 'capture-b' },
+        { key: 'sendblue-media/t/b', tenantId: 't', captureId: 'capture-b', role: 'source' },
       ],
     })
     expect(report).toMatchObject({
@@ -60,8 +61,8 @@ describe('12.10 legacy media inventory classification', () => {
     const report = classifyLegacyMediaObjects({
       objects: [identified('telegram-media/t/shared', 50, 'telegram', 'kek')],
       neonReferences: [
-        { key: 'telegram-media/t/shared', tenantId: 't', captureId: 'one' },
-        { key: 'telegram-media/t/shared', tenantId: 't', captureId: 'two' },
+        { key: 'telegram-media/t/shared', tenantId: 't', captureId: 'one', role: 'source' },
+        { key: 'telegram-media/t/shared', tenantId: 't', captureId: 'two', role: 'source' },
       ],
       d1References: [],
       managedPrimarySourceReplacements: [],
@@ -76,8 +77,8 @@ describe('12.10 legacy media inventory classification', () => {
     const classified = classifyLegacyMediaInventory({
       objects: [object],
       neonReferences: [
-        { key: object.key, tenantId: 't', captureId: 'same-capture' },
-        { key: object.key, tenantId: 't', captureId: 'same-capture' },
+        { key: object.key, tenantId: 't', captureId: 'same-capture', role: 'source' },
+        { key: object.key, tenantId: 't', captureId: 'same-capture', role: 'source' },
       ],
       d1References: [],
       managedPrimarySourceReplacements: [],
@@ -90,7 +91,7 @@ describe('12.10 legacy media inventory classification', () => {
 
   it('keeps duplicate Neon references ambiguous even when D1 has the matching reference', () => {
     const object = identified('sendblue-media/t/duplicate-neon-matching-d1', 18, 'sendblue', 'plaintext')
-    const reference = { key: object.key, tenantId: 't', captureId: 'same-capture' }
+    const reference = { key: object.key, tenantId: 't', captureId: 'same-capture', role: 'source' }
     const classified = classifyLegacyMediaInventory({
       objects: [object],
       neonReferences: [reference, reference],
@@ -104,7 +105,7 @@ describe('12.10 legacy media inventory classification', () => {
 
   it('treats duplicate D1 references as ambiguous and deletion-ineligible', () => {
     const object = identified('telegram-media/t/duplicate-d1', 19, 'telegram', 'plaintext')
-    const reference = { key: object.key, tenantId: 't', captureId: 'capture' }
+    const reference = { key: object.key, tenantId: 't', captureId: 'capture', role: 'source' }
     const classified = classifyLegacyMediaInventory({
       objects: [object],
       neonReferences: [reference],
@@ -122,12 +123,12 @@ describe('12.10 legacy media inventory classification', () => {
     const classified = classifyLegacyMediaInventory({
       objects: [object],
       neonReferences: [
-        { key: object.key, tenantId: 'tenant-a', captureId: 'capture-a' },
-        { key: object.key, tenantId: 'tenant-b', captureId: 'capture-b' },
+        { key: object.key, tenantId: 'tenant-a', captureId: 'capture-a', role: 'source' },
+        { key: object.key, tenantId: 'tenant-b', captureId: 'capture-b', role: 'source' },
       ],
       d1References: [
-        { key: object.key, tenantId: 'tenant-a', captureId: 'capture-a' },
-        { key: object.key, tenantId: 'tenant-b', captureId: 'capture-b' },
+        { key: object.key, tenantId: 'tenant-a', captureId: 'capture-a', role: 'source' },
+        { key: object.key, tenantId: 'tenant-b', captureId: 'capture-b', role: 'source' },
       ],
       managedPrimarySourceReplacements: [],
     })
@@ -154,7 +155,9 @@ describe('12.10 legacy media inventory classification', () => {
 
   it('does not treat a managed derivative or unrelated managed artifact as a migrated legacy source', () => {
     const object = identified('telegram-media/t/legacy-source', 29, 'telegram', 'plaintext')
-    const reference = { key: object.key, tenantId: 't', captureId: 'capture-with-managed-derivative' }
+    const reference = {
+      key: object.key, tenantId: 't', captureId: 'capture-with-managed-derivative', role: 'source',
+    }
     const classified = classifyLegacyMediaInventory({
       objects: [object],
       neonReferences: [reference],
@@ -173,6 +176,8 @@ describe('12.10 legacy media inventory classification', () => {
       key: object.key,
       tenant_id: 't',
       capture_id: 'shared-capture',
+      legacy_role: 'source',
+      legacy_artifact_count: '2',
       eligible_legacy_source_count: '2',
       managed_primary_source_count: '1',
     }))
@@ -185,10 +190,10 @@ describe('12.10 legacy media inventory classification', () => {
     const classified = classifyLegacyMediaInventory({
       objects: [first, second],
       neonReferences: [first, second].map(object => ({
-        key: object.key, tenantId: 't', captureId: 'shared-capture',
+        key: object.key, tenantId: 't', captureId: 'shared-capture', role: 'source',
       })),
       d1References: [first, second].map(object => ({
-        key: object.key, tenantId: 't', captureId: 'shared-capture',
+        key: object.key, tenantId: 't', captureId: 'shared-capture', role: 'source',
       })),
       managedPrimarySourceReplacements: replacements,
     })
@@ -202,22 +207,110 @@ describe('12.10 legacy media inventory classification', () => {
   })
 
   it('accepts one exact singleton query candidate only when the managed primary source is unique', () => {
-    expect(exactManagedPrimarySourceReplacements([{
+    const object = identified('sendblue-media/t/singleton', 41, 'sendblue', 'plaintext')
+    const replacement = exactManagedPrimarySourceReplacements([{
       key: 'sendblue-media/t/singleton',
       tenant_id: 't',
       capture_id: 'capture',
+      legacy_role: 'source',
+      legacy_artifact_count: 1,
       eligible_legacy_source_count: 1,
       managed_primary_source_count: 1,
-    }])).toEqual([{
-      key: 'sendblue-media/t/singleton', tenantId: 't', captureId: 'capture',
+    }])
+    expect(replacement).toEqual([{
+      key: 'sendblue-media/t/singleton', tenantId: 't', captureId: 'capture', role: 'source',
     }])
     expect(exactManagedPrimarySourceReplacements([{
       key: 'sendblue-media/t/unclear',
       tenant_id: 't',
       capture_id: 'capture',
+      legacy_role: 'source',
+      legacy_artifact_count: 1,
       eligible_legacy_source_count: 1,
       managed_primary_source_count: 2,
     }])).toEqual([])
+    const classified = classifyLegacyMediaInventory({
+      objects: [object],
+      neonReferences: [{ key: object.key, tenantId: 't', captureId: 'capture', role: 'source' }],
+      d1References: [{ key: object.key, tenantId: 't', captureId: 'capture', role: 'source' }],
+      managedPrimarySourceReplacements: replacement,
+    })
+    expect(classified.report.alreadyMigrated).toEqual({ count: 1, bytes: 41 })
+    expect(classified.privateEntries[0]?.disposition).toBe('exclude_already_migrated')
+  })
+
+  it('keeps a singleton legacy derivative visible and ambiguous despite a managed primary source', () => {
+    const object = identified('telegram-media/t/legacy-derivative', 43, 'telegram', 'plaintext')
+    const queryRows = [{
+      key: object.key, tenant_id: 't', capture_id: 'capture', legacy_role: 'derivative',
+      legacy_artifact_count: 1, eligible_legacy_source_count: 0, managed_primary_source_count: 1,
+    }]
+    expect(exactManagedPrimarySourceReplacements(queryRows)).toEqual([])
+    expect(LEGACY_MANAGED_REPLACEMENT_CANDIDATES_SQL).toContain('role AS legacy_role')
+    expect(LEGACY_D1_CANONICAL_REFERENCES_SQL).toContain("THEN 'source' ELSE NULL END AS role")
+    const reference = { key: object.key, tenantId: 't', captureId: 'capture', role: 'derivative' }
+    const classified = classifyLegacyMediaInventory({
+      objects: [object], neonReferences: [reference], d1References: [reference],
+      managedPrimarySourceReplacements: [],
+    })
+    expect(classified.report.ambiguous).toEqual({ count: 1, bytes: 43 })
+    expect(classified.report.alreadyMigrated).toEqual({ count: 0, bytes: 0 })
+    expect(classified.privateEntries[0]).toMatchObject({
+      disposition: 'exclude_ambiguous', reconciliationState: 'legacy_role_not_source',
+    })
+  })
+
+  it('classifies missing and unknown legacy roles ambiguous at the query and classifier boundaries', () => {
+    const missing = identified('telegram-media/t/missing-role', 47, 'telegram', 'plaintext')
+    const unknown = identified('sendblue-media/t/unknown-role', 53, 'sendblue', 'plaintext')
+    expect(exactManagedPrimarySourceReplacements([
+      {
+        key: missing.key, tenant_id: 't', capture_id: 'missing', legacy_role: null,
+        legacy_artifact_count: 1, eligible_legacy_source_count: 0, managed_primary_source_count: 1,
+      },
+      {
+        key: unknown.key, tenant_id: 't', capture_id: 'unknown', legacy_role: 'legacy',
+        legacy_artifact_count: 1, eligible_legacy_source_count: 0, managed_primary_source_count: 1,
+      },
+    ])).toEqual([])
+    const classified = classifyLegacyMediaInventory({
+      objects: [missing, unknown],
+      neonReferences: [
+        { key: missing.key, tenantId: 't', captureId: 'missing', role: null },
+        { key: unknown.key, tenantId: 't', captureId: 'unknown', role: 'legacy' },
+      ],
+      d1References: [
+        { key: missing.key, tenantId: 't', captureId: 'missing' },
+        { key: unknown.key, tenantId: 't', captureId: 'unknown', role: 'legacy' },
+      ],
+      managedPrimarySourceReplacements: [],
+    })
+    expect(classified.report.ambiguous).toEqual({ count: 2, bytes: 100 })
+    expect(classified.privateEntries.every(entry => entry.disposition === 'exclude_ambiguous')).toBe(true)
+  })
+
+  it('fails closed when one capture mixes a legacy source and derivative', () => {
+    const source = identified('telegram-media/t/mixed-source', 59, 'telegram', 'plaintext')
+    const derivative = identified('telegram-media/t/mixed-derivative', 61, 'telegram', 'plaintext')
+    const rows = [
+      { key: source.key, legacy_role: 'source', eligible_legacy_source_count: 1 },
+      { key: derivative.key, legacy_role: 'derivative', eligible_legacy_source_count: 1 },
+    ].map(row => ({
+      ...row, tenant_id: 't', capture_id: 'mixed', legacy_artifact_count: 2,
+      managed_primary_source_count: 1,
+    }))
+    expect(exactManagedPrimarySourceReplacements(rows)).toEqual([])
+    const neonReferences = [
+      { key: source.key, tenantId: 't', captureId: 'mixed', role: 'source' },
+      { key: derivative.key, tenantId: 't', captureId: 'mixed', role: 'derivative' },
+    ]
+    const classified = classifyLegacyMediaInventory({
+      objects: [source, derivative], neonReferences, d1References: neonReferences,
+      managedPrimarySourceReplacements: [],
+    })
+    expect(classified.report.ambiguous).toEqual({ count: 2, bytes: 120 })
+    expect(classified.report.referencedTelegram).toEqual({ count: 0, bytes: 0 })
+    expect(classified.privateEntries.every(entry => entry.disposition === 'exclude_ambiguous')).toBe(true)
   })
 
   it('makes unknown unreferenced objects ambiguous and deletion-ineligible', () => {
@@ -235,12 +328,12 @@ describe('12.10 legacy media inventory classification', () => {
     const report = classifyLegacyMediaObjects({
       objects: [mismatch],
       neonReferences: [
-        { key: 'telegram-media/t/missing', tenantId: 't', captureId: 'missing' },
-        { key: mismatch.key, tenantId: 't', captureId: 'neon-capture' },
+        { key: 'telegram-media/t/missing', tenantId: 't', captureId: 'missing', role: 'source' },
+        { key: mismatch.key, tenantId: 't', captureId: 'neon-capture', role: 'source' },
       ],
       d1References: [
-        { key: 'telegram-media/t/missing', tenantId: 't', captureId: 'missing' },
-        { key: mismatch.key, tenantId: 'other', captureId: 'd1-capture' },
+        { key: 'telegram-media/t/missing', tenantId: 't', captureId: 'missing', role: 'source' },
+        { key: mismatch.key, tenantId: 'other', captureId: 'd1-capture', role: 'source' },
       ],
       managedPrimarySourceReplacements: [],
     })

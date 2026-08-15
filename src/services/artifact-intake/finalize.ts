@@ -36,6 +36,15 @@ interface FinalizationRow {
   updated_at: number
 }
 
+export interface FinalizeArtifactCaptureFence {
+  /**
+   * Runs after the idempotent reservation is visible and immediately before
+   * any artifact-operation mutation or canonical write. Channel callers use
+   * this to prove that their exact processing lease is still owned.
+   */
+  beforeCanonicalSideEffects?: () => void | Promise<void>
+}
+
 async function manifestFingerprint(input: FinalizeArtifactCaptureInput): Promise<string> {
   return sha256Text(JSON.stringify({
     contentSha256: await sha256Text(input.content),
@@ -214,6 +223,7 @@ export async function finalizeArtifactCapture(
   input: FinalizeArtifactCaptureInput,
   contentKey: CryptoKey,
   env: Env,
+  fence: FinalizeArtifactCaptureFence = {},
 ): Promise<FinalizeArtifactCaptureReceipt> {
   validateManifestContract(input)
   const finalization = await reserveFinalization(input, env)
@@ -226,10 +236,12 @@ export async function finalizeArtifactCapture(
   if (existingCapture) {
     const existingDocument = await store.getDocument(input.tenantId, finalization.canonical_document_id)
     if (!existingDocument) throw new ArtifactIntakeContractError(ARTIFACT_INTAKE_ERROR.INVALID_STATE)
+    await fence.beforeCanonicalSideEffects?.()
     await markFinalizationComplete(finalization, uploadIds, env)
     return receiptFor(finalization, manifest, input)
   }
 
+  await fence.beforeCanonicalSideEffects?.()
   await markArtifactOperationsForFinalize({
     tenantId: input.tenantId,
     uploadIds,

@@ -157,6 +157,49 @@ function claimRaceEnv(
   return { ...env, D1_US: d1 } as unknown as Env
 }
 
+function delayedFinalizationInsertEnv(): {
+  delayedEnv: Env
+  insertStarted: Promise<void>
+  releaseInsert: () => void
+} {
+  let signalStarted!: () => void
+  let signalRelease!: () => void
+  let delayed = false
+  const insertStarted = new Promise<void>(resolve => { signalStarted = resolve })
+  const release = new Promise<void>(resolve => { signalRelease = resolve })
+  const original = env.D1_US
+  const wrap = (statement: D1PreparedStatement, sql: string): D1PreparedStatement => new Proxy(statement, {
+    get(target, property) {
+      if (property === 'bind') return (...values: unknown[]) => wrap(target.bind(...values), sql)
+      if (
+        property === 'run' && !delayed &&
+        sql.includes('INSERT OR IGNORE INTO artifact_intake_finalizations')
+      ) {
+        return async () => {
+          delayed = true
+          signalStarted()
+          await release
+          return target.run()
+        }
+      }
+      const value = Reflect.get(target, property)
+      return typeof value === 'function' ? value.bind(target) : value
+    },
+  })
+  const d1 = new Proxy(original, {
+    get(target, property) {
+      if (property === 'prepare') return (sql: string) => wrap(target.prepare(sql), sql)
+      const value = Reflect.get(target, property)
+      return typeof value === 'function' ? value.bind(target) : value
+    },
+  })
+  return {
+    delayedEnv: { ...env, D1_US: d1 } as unknown as Env,
+    insertStarted,
+    releaseInsert: signalRelease,
+  }
+}
+
 beforeAll(async () => Promise.all([ensureTenant(TENANT_A), ensureTenant(TENANT_B)]))
 
 describe('12.8 governed common channel media intake', () => {
@@ -684,7 +727,7 @@ describe('12.8 governed common channel media intake', () => {
     })
   })
 
-  it('recovers canonical success before the reaper can fail an expired processing job', async () => {
+  it('recovers canonical success before the reaper cleans a failed pending-delivery job', async () => {
     const kek = await installTenantKek(TENANT_A)
     const tmk = await key()
     const job = await reserve(`reaper-canonical-${SUITE}`, kek)
@@ -706,15 +749,17 @@ describe('12.8 governed common channel media intake', () => {
     void processChannelMediaMessage(abandoned.message, tmk, env, dependencies)
     await canonicalCommitted
     await env.D1_US.prepare(
-      `UPDATE channel_media_jobs SET lease_expires_at = ?, expires_at = ?
+      `UPDATE channel_media_jobs SET status = 'failed', delivery_status = 'pending',
+       error_code = ?, lease_token = NULL, lease_expires_at = NULL, expires_at = ?
        WHERE tenant_id = ? AND id = ?`,
-    ).bind(Date.now() - 2, Date.now() - 1, TENANT_A, job.id).run()
+    ).bind(ARTIFACT_INTAKE_ERROR.LOCATOR_EXPIRED, Date.now() - 1, TENANT_A, job.id).run()
 
     expect((await reapExpiredChannelMediaJobs(env, Date.now())).reaped).toBeGreaterThanOrEqual(1)
     expect(await getChannelMediaJob(TENANT_A, job.id, env)).toMatchObject({
       status: 'finalized', deliveryStatus: 'pending', errorCode: null,
     })
     expect(await env.R2_ARTIFACTS.get(await channelMediaHandoffKey(TENANT_A, job.id))).not.toBeNull()
+    expect(await env.R2_ARTIFACTS.get(await channelMediaRecoveryKey(TENANT_A, job.id))).not.toBeNull()
     expect(acquire).toHaveBeenCalledTimes(1)
     expect(describe).toHaveBeenCalledTimes(1)
     expect(deliver).not.toHaveBeenCalled()
@@ -725,6 +770,104 @@ describe('12.8 governed common channel media intake', () => {
     expect(deliver).toHaveBeenCalledTimes(1)
     expect(await getChannelMediaJob(TENANT_A, job.id, env)).toMatchObject({
       status: 'delivered', deliveryStatus: 'delivered', errorCode: null,
+    })
+  })
+
+  it('fences a stale worker after its delayed finalization reservation loses the channel lease', async () => {
+    const kek = await key()
+    const tmk = await key()
+    const store = getCanonicalMemoryStore(env)
+    const beforeStats = await store.getStats(TENANT_A)
+    const beforeOperations = await env.D1_US.prepare(
+      'SELECT id FROM artifact_intake_operations WHERE tenant_id = ?',
+    ).bind(TENANT_A).all()
+    const beforeArtifacts = await env.R2_ARTIFACTS.list({ prefix: 'artifact-intake/v1/' })
+    const marker = `delayed-finalization-fence-${SUITE}`
+    const job = await reserve(marker, kek)
+    const descriptor = await readChannelMediaHandoff({
+      tenantId: TENANT_A, operationId: job.id, kek,
+    }, env)
+    const acquire = vi.fn(async () => ({ bytes: JPEG, detectedMimeType: 'image/jpeg' }))
+    const describe = vi.fn(async () => `delayed-finalization-description-${SUITE}`)
+    const providerMessages: string[] = []
+    let deliveryStarted!: () => void
+    let releaseDelivery!: () => void
+    const startedDelivery = new Promise<void>(resolve => { deliveryStarted = resolve })
+    const deliveryRelease = new Promise<void>(resolve => { releaseDelivery = resolve })
+    const deliver = vi.fn(async (_descriptor: ChannelMediaDescriptor, message: string) => {
+      providerMessages.push(message)
+      deliveryStarted()
+      await deliveryRelease
+      return 'delivered' as const
+    })
+    const delayed = delayedFinalizationInsertEnv()
+    const workerA = processChannelMediaJob({
+      tenantId: TENANT_A, operationId: job.id, tmk, kek, env: delayed.delayedEnv,
+      dependencies: { acquire, describe, deliver },
+    })
+    await delayed.insertStarted
+    expect(await env.D1_US.prepare(
+      'SELECT id FROM artifact_intake_finalizations WHERE tenant_id = ? AND idempotency_hash = ?',
+    ).bind(TENANT_A, await sha256Text(`channel-media-finalize:${job.id}`)).first()).toBeNull()
+
+    await env.D1_US.prepare(
+      `UPDATE channel_media_jobs SET lease_expires_at = ?
+       WHERE tenant_id = ? AND id = ? AND status = 'processing'`,
+    ).bind(Date.now() - 1, TENANT_A, job.id).run()
+    const workerB = await claimChannelMediaJob(TENANT_A, job.id, env)
+    expect(workerB).toMatchObject({ status: 'processing' })
+    await markChannelMediaFailed(
+      TENANT_A, job.id, workerB!.leaseToken!, ARTIFACT_INTAKE_ERROR.MIME_MISMATCH, env,
+    )
+    const failed = await getChannelMediaJob(TENANT_A, job.id, env)
+    expect(failed).toMatchObject({ status: 'failed', deliveryStatus: 'pending' })
+    const failureDelivery = deliverChannelMediaClaim({
+      job: failed!, descriptor,
+      message: 'I could not capture that photo. Please try sending it again.',
+      env, deliver,
+    })
+    await startedDelivery
+    expect(await getChannelMediaJob(TENANT_A, job.id, env)).toMatchObject({
+      status: 'failed', deliveryStatus: 'claimed',
+    })
+
+    delayed.releaseInsert()
+    await expect(workerA).resolves.toMatchObject({
+      status: 'deferred', reason: 'recovery_in_progress',
+    })
+    const whileClaimedStats = await store.getStats(TENANT_A)
+    expect(whileClaimedStats.captureCount).toBe(beforeStats.captureCount)
+    expect(whileClaimedStats.documentCount).toBe(beforeStats.documentCount)
+
+    releaseDelivery()
+    await expect(failureDelivery).resolves.toBe('done')
+    await expect(processChannelMediaJob({
+      tenantId: TENANT_A, operationId: job.id, tmk, kek, env,
+      dependencies: { acquire, describe, deliver },
+    })).resolves.toBe('ignored')
+
+    const finalStats = await store.getStats(TENANT_A)
+    const afterOperations = await env.D1_US.prepare(
+      'SELECT id FROM artifact_intake_operations WHERE tenant_id = ?',
+    ).bind(TENANT_A).all()
+    const afterArtifacts = await env.R2_ARTIFACTS.list({ prefix: 'artifact-intake/v1/' })
+    const finalizations = await env.D1_US.prepare(
+      'SELECT status FROM artifact_intake_finalizations WHERE tenant_id = ? AND idempotency_hash = ?',
+    ).bind(TENANT_A, await sha256Text(`channel-media-finalize:${job.id}`)).all<{ status: string }>()
+    const canonicalSucceeded = finalStats.captureCount > beforeStats.captureCount
+    const failureWasSent = providerMessages.some(message => message.includes('could not capture'))
+    expect(canonicalSucceeded && failureWasSent).toBe(false)
+    expect(finalStats.captureCount).toBe(beforeStats.captureCount)
+    expect(finalStats.documentCount).toBe(beforeStats.documentCount)
+    expect(afterOperations.results).toHaveLength(beforeOperations.results.length + 1)
+    expect(afterArtifacts.objects).toHaveLength(beforeArtifacts.objects.length + 1)
+    expect(finalizations.results).toHaveLength(1)
+    expect(acquire).toHaveBeenCalledTimes(1)
+    expect(describe).toHaveBeenCalledTimes(1)
+    expect(deliver).toHaveBeenCalledTimes(1)
+    expect(providerMessages).toEqual(['I could not capture that photo. Please try sending it again.'])
+    expect(await getChannelMediaJob(TENANT_A, job.id, env)).toMatchObject({
+      status: 'failed', deliveryStatus: 'delivered', errorCode: ARTIFACT_INTAKE_ERROR.MIME_MISMATCH,
     })
   })
 

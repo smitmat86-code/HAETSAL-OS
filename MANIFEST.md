@@ -68,8 +68,8 @@ Last updated: 2026-04-18 | Session: 7.1 (Hindsight Projection Adapter)
 | src\services\agents\automation-chat.ts | 77 | AutomationChatRoute | ✅ |
 | src\services\agents\delegation.ts | 71 | DelegationDecision, decideDelegation, DelegationRoute | ✅ |
 | src\services\agents\router.ts | 50 | — | ✅ |
-| src\services\artifact-intake\config.ts | 33 | ARTIFACT_MAX_BYTES, TELEGRAM_ARTIFACT_MAX_BYTES, ARTIFACT_DOWNLOAD_TIMEOUT_MS... | ✅ |
-| src\services\artifact-intake\contracts.ts | 134 | ARTIFACT_INTAKE_ERROR, ArtifactIntakeErrorCode, ArtifactIntakeContractError... | ✅ |
+| src\services\artifact-intake\config.ts | 45 | ARTIFACT_MAX_BYTES, TELEGRAM_ARTIFACT_MAX_BYTES, ARTIFACT_DOWNLOAD_TIMEOUT_MS... | ✅ |
+| src\services\artifact-intake\contracts.ts | 135 | ARTIFACT_INTAKE_ERROR, ArtifactIntakeErrorCode, ArtifactIntakeContractError... | ✅ |
 | src\services\artifact-intake\crypto.ts | 108 | SealedArtifactBytes, detectArtifactEnvelopeFamily | ✅ |
 | src\services\artifact-intake\download-body.ts | 57 | — | ✅ |
 | src\services\artifact-intake\download-network.ts | 80 | DEFAULT_ARTIFACT_DOWNLOAD_NETWORK | ✅ |
@@ -77,8 +77,10 @@ Last updated: 2026-04-18 | Session: 7.1 (Hindsight Projection Adapter)
 | src\services\artifact-intake\download-types.ts | 42 | HostedArtifactFileDescriptor, ArtifactDownloadResponse, ArtifactDownloadNetwork... | ✅ |
 | src\services\artifact-intake\download.ts | 150 | — | ✅ |
 | src\services\artifact-intake\finalize.ts | 292 | — | ⚠️ OVER LIMIT |
-| src\services\artifact-intake\legacy-inventory.ts | 80 | LegacyChannel, LegacyObjectInventoryInput, LegacyCanonicalReference... | ✅ |
-| src\services\artifact-intake\legacy-remediation.ts | 60 | LegacyRemediationPlan, requireLegacyRemediationApproval | ✅ |
+| src\services\artifact-intake\legacy-approval-manifest.ts | 52 | ExactTargetManifestEntry | ✅ |
+| src\services\artifact-intake\legacy-inventory-types.ts | 59 | LegacyChannel, LegacyEnvelopeFamily, LegacyInventoryDisposition... | ✅ |
+| src\services\artifact-intake\legacy-inventory.ts | 130 | classifyLegacyMediaInventory, classifyLegacyMediaObjects | ✅ |
+| src\services\artifact-intake\legacy-remediation.ts | 118 | LEGACY_INVENTORY_VERSION, LegacyRemediationPlan, requireLegacyRemediationApproval | ✅ |
 | src\services\artifact-intake\mime.ts | 41 | detectArtifactMimeType | ✅ |
 | src\services\artifact-intake\operations.ts | 296 | ArtifactIntakeOperationRow | ⚠️ OVER LIMIT |
 | src\services\artifact-intake\reaper.ts | 57 | ArtifactReaperResult | ✅ |
@@ -123,17 +125,22 @@ Last updated: 2026-04-18 | Session: 7.1 (Hindsight Projection Adapter)
 | src\services\canonical-projection-dispatch.ts | 51 | — | ✅ |
 | src\services\canonical-promotion.ts | 69 | PromoteClaimInput | ✅ |
 | src\services\canonical-source-attribution.ts | 64 | buildCanonicalSourceAttribution, applyCanonicalRoute | ✅ |
+| src\services\channel-media\canonical-recovery.ts | 69 | — | ✅ |
 | src\services\channel-media\delivery-state.ts | 45 | — | ✅ |
-| src\services\channel-media\delivery.ts | 58 | ChannelMediaDeliveryOutcome, ChannelMediaDeliver | ✅ |
-| src\services\channel-media\finalize-job.ts | 72 | channelMediaSearchableBody | ✅ |
+| src\services\channel-media\delivery.ts | 62 | ChannelMediaDeliveryOutcome, ChannelMediaDeliver | ✅ |
+| src\services\channel-media\descriptor.ts | 30 | validateChannelMediaDescriptor | ✅ |
+| src\services\channel-media\finalize-job.ts | 145 | channelMediaSearchableBody | ✅ |
 | src\services\channel-media\handoff.ts | 65 | — | ✅ |
 | src\services\channel-media\intake.ts | 27 | — | ✅ |
-| src\services\channel-media\jobs.ts | 150 | — | ✅ |
-| src\services\channel-media\orchestrator.ts | 128 | ChannelMediaOrchestratorDependencies | ✅ |
-| src\services\channel-media\providers-sendblue.ts | 74 | — | ✅ |
+| src\services\channel-media\job-transitions.ts | 64 | — | ✅ |
+| src\services\channel-media\jobs.ts | 132 | — | ✅ |
+| src\services\channel-media\orchestrator-support.ts | 82 | ChannelMediaOrchestratorDependencies, PERMANENT_CHANNEL_MEDIA_ERRORS, channelMediaErrorCode | ✅ |
+| src\services\channel-media\orchestrator.ts | 150 | — | ✅ |
+| src\services\channel-media\providers-sendblue.ts | 76 | — | ✅ |
 | src\services\channel-media\providers-telegram.ts | 79 | — | ✅ |
 | src\services\channel-media\providers.ts | 16 | — | ✅ |
-| src\services\channel-media\reaper.ts | 40 | — | ✅ |
+| src\services\channel-media\reaper.ts | 44 | — | ✅ |
+| src\services\channel-media\recovery.ts | 72 | — | ✅ |
 | src\services\chief-of-staff-compiled-context-bundle.ts | 127 | buildCompiledChiefOfStaffBundle | ✅ |
 | src\services\chief-of-staff-compiled-context-gaps.ts | 33 | addSkippedAssetGap, addReadErrorGap | ✅ |
 | src\services\chief-of-staff-compiled-context-provenance.ts | 43 | linkedSourceRefs, linkedSourceCount, compiledEvidenceBlock | ✅ |
@@ -218,7 +225,7 @@ Last updated: 2026-04-18 | Session: 7.1 (Hindsight Projection Adapter)
 | src\services\prompts\registry.ts | 101 | SystemPromptEntry, PERSONA_CHAT_DEFAULT, GROUNDED_REPLY_DEFAULT... | ✅ |
 | src\services\retrieval-modes.ts | 149 | resolveTemporalWindow | ✅ |
 | src\services\retrieval-support.ts | 122 | CANONICAL_EMBEDDING_MODEL, citationOf, toRetrievalItem... | ✅ |
-| src\services\sendblue-inbound.ts | 98 | SendblueInboundBody | ✅ |
+| src\services\sendblue-inbound.ts | 100 | SendblueInboundBody | ✅ |
 | src\services\session\client.ts | 54 | recordSessionExchange | ✅ |
 | src\services\session\close-summary.ts | 65 | — | ✅ |
 | src\services\session\working-session.ts | 119 | SessionSql, WorkingSessionMessage, SESSION_WINDOW_LIMIT... | ✅ |
@@ -261,10 +268,10 @@ Last updated: 2026-04-18 | Session: 7.1 (Hindsight Projection Adapter)
 | src\types\canonical-memory-broker.ts | 106 | CanonicalBrokerBranchStatus, CanonicalBrokerOverlap, CanonicalBrokerDetailStatus... | ✅ |
 | src\types\canonical-memory-query.ts | 128 | MemoryQueryMode, MemoryQueryModePreference, CanonicalRetrievalCitation... | ✅ |
 | src\types\canonical-memory.ts | 84 | CanonicalProjectionKind, CanonicalArtifactMode, CanonicalArtifactRef... | ✅ |
-| src\types\channel-media.ts | 41 | ChannelMediaProvider, ChannelMediaJobStatus, ChannelMediaDeliveryStatus... | ✅ |
+| src\types\channel-media.ts | 52 | ChannelMediaProvider, ChannelMediaJobStatus, ChannelMediaDeliveryStatus... | ✅ |
 | src\types\chief-of-staff-context.ts | 81 | ContextBundleIntent, ContextConfidenceLevel, PrepareContextForAgentInput... | ✅ |
-| src\types\cloudflare-env.generated.d.ts | 50 | — | ✅ |
-| src\types\env.ts | 33 | Env | ✅ |
+| src\types\cloudflare-env.generated.d.ts | 51 | — | ✅ |
+| src\types\env.ts | 34 | Env | ✅ |
 | src\types\external-brain.ts | 89 | BrainSurfaceId, BrainSurfaceStatus, BrainRiskLevel... | ✅ |
 | src\types\external-client-memory.ts | 73 | ExternalClientCaptureMode, BrainMemorySurfaceProfile, ExternalClientCaptureInput... | ✅ |
 | src\types\google-source-read.ts | 29 | GoogleSourceKind, GoogleSourceRef, GoogleSourceReadAttribution... | ✅ |
@@ -303,7 +310,7 @@ Last updated: 2026-04-18 | Session: 7.1 (Hindsight Projection Adapter)
 | src\workers\mcpagent\do\tenant-context.ts | 58 | ResolvedTenantContext, acceptSessionWebSocket, broadcastToSessions | ✅ |
 | src\workers\mcpagent\index.ts | 148 | — | ✅ |
 | src\workers\mcpagent\ops-alert-webhook.ts | 57 | registerOpsAlertWebhook | ✅ |
-| src\workers\mcpagent\public-webhooks.ts | 89 | registerPublicWebhooks | ✅ |
+| src\workers\mcpagent\public-webhooks.ts | 96 | registerPublicWebhooks | ✅ |
 | src\workers\mcpagent\routes\actions.ts | 79 | actions | ✅ |
 | src\workers\mcpagent\routes\agent-runs.ts | 84 | agentRuns, agentDashboard | ✅ |
 | src\workers\mcpagent\routes\approval.ts | 102 | approval | ✅ |

@@ -1989,3 +1989,57 @@
 **Next:** Session 4 only: implement and prove the ChatGPT hosted-attachment surface against this governed intake contract.
 
 ---
+
+## Session 4 - 2026-08-14
+
+**Plan:** Governed artifact intake — ChatGPT hosted-attachment flow
+
+**Commit and deployment evidence:**
+- Accepted Sessions 1–3 baseline: `fa7eb3a50ce72de5df866649a1c1439c07d89671`.
+- Deployed Session 4 implementation tree: `0edf67bc933a9bfb722dfceb1601d35e4b7f1334`.
+- Authoritative Cloudflare history reconciles the Session 3 discrepancy: version `214a968f-b997-4e69-b0a6-826be8f591b2` was created at `2026-08-14T17:46:20.328Z`; version `0a064cb3-589a-4ed8-843d-a29f9d01a247` was created and deployed 77.866 seconds later at `2026-08-14T17:47:38.194Z`. Therefore `0a064cb3-589a-4ed8-843d-a29f9d01a247`, not `214a968f-b997-4e69-b0a6-826be8f591b2`, was the actual production version immediately before Session 4.
+- Final production deployment: Worker version `73f51c3d-75ae-4aca-9805-2366ce477f12`, created `2026-08-15T01:32:40.616Z`, serving 100%.
+
+**Built:**
+- Added `capture_artifact_file` with the current OpenAI hosted-file descriptor (`download_url`, `file_id`, optional `mime_type` and `file_name`) and required `_meta["openai/fileParams"] = ["file"]`.
+- Added HTTPS-only download policy with URL/hostname/literal-IP checks, public DNS validation before and around the connection attempt, redirect-by-redirect revalidation, private/link-local/loopback/metadata-range blocking, bounded redirects, abortable timeout, streaming byte cap, declared/detected MIME validation, and content-free errors/logs.
+- Used the Workers-supported isolated `fetch` path for HTTPS after public DNS validation; injected transports still require an exact verified peer address. No VPC/private-network egress binding exists on the Worker.
+- Routed downloaded bytes through the existing reserve, TMK seal, R2 upload, canonical finalize, status, and search path with one exact source artifact and no undeclared derivatives.
+- Added an authenticated stateless fast path for this sensitive tool so the Agents SDK cannot copy hosted descriptors or model extraction into its internal `cf-mcp-message` request header. Malformed or mixed capture batches now fail closed before Durable Object forwarding.
+- Kept the direct private ChatGPT developer-mode tool as the supported surface. The fallback picker UI remains available but is not counted as completion because the current ChatGPT host rejects component-initiated continuation calls.
+
+**Live ChatGPT proof:**
+- Direct image attachment required vision extraction and produced searchable `SUNLIT-CANARY-8417; three amber circles`. Finalized upload `30aaaaa0-a094-4652-aa1c-1c6c54d82de8`, artifact `e3d231cb-a4c8-42eb-9b8b-ac8d87933d1f`, capture `8acc6519-10ce-49e3-a2bd-87d12ecb0e05`, document `a11ef056-2bb4-4f2f-ac92-f7b67080b042`.
+- Direct PDF attachment required text extraction and produced searchable `GOVERNED-ORBIT-2964` plus `the archive shelf is labeled NORTH-6`. Finalized upload `eb4eec68-f4bd-4a5d-80a1-d3a67ca65397`, artifact `5cfc33db-27e0-4424-8e6b-5bb0332e4fc3`, capture `4e3ffbfe-2196-4b91-8339-5531421bc5bf`, document `ab33d312-a859-40d0-a6ee-ccb36811bf41`.
+- Both `artifact_intake_status` receipts returned `finalized` with no error. `search_memory` returned the same canonical capture/document pairs, `source_system: file`, evidence trust, the requested scopes/titles, and the model-generated extraction.
+- Each receipt contained exactly one primary `source` artifact, `parentArtifactId: null`, and zero derivatives. No intentional derivative was created in this session.
+- After the final deploy, an idempotent ChatGPT PDF canary returned `finalized` for capture `c7342e48-7667-4637-8114-494de745d10a` and document `d6c2a8e0-3f35-4e91-9545-36a2ce918434`.
+
+**Downloader and security proof:**
+- Live no-attachment prompt: content-free `invalid_arguments`; live indirect path reference: `UNREGISTERED_FILE_REFERENCE`.
+- Live manually injected private, DNS-rebinding, redirect-to-private, and expired descriptors: ChatGPT rejected each as `invalid_arguments` at its registered-file boundary, before HAETSAL received a descriptor.
+- Live intentionally mislabeled image: ChatGPT returned `blocked_by_safety_checks` before the tool call; the HAETSAL integration suite independently confirms `mime_mismatch` when a mismatched declared descriptor reaches the downloader.
+- Live directly attached 26,214,401-byte ChatGPT-hosted fixture: `bulk_import_required`, proving the production size gate on the supported attachment surface.
+- Live tenant-scoped unknown upload: content-free `not_found`; unauthenticated external MCP POST: HTTP 401 with no request echo.
+- Contract tests additionally exercised redirect-hop revalidation, private DNS, DNS-rebinding set changes, peer mismatch, streaming overflow cancellation, timeout abort, expired 410/unauthorized hosted URLs, declared/detected MIME mismatch, and malformed/mixed sensitive MCP batches.
+
+**Metadata and ciphertext audit:**
+- Remote D1 rows for both primary proofs contain only operational IDs, MIME categories, byte length, hashes, encryption family, and canonical IDs; the targeted prohibited-value scan returned `0`.
+- Downloaded managed R2 objects begin with `TMK1:`; object SHA-256 values exactly match the receipts (`c9050666eefa9a3caddbbe1ab00a97610c38065aba60dd1dab1cc5600292097d` image, `734abf04329d61ef64853aa4c132db919fd97fd11471f2848d4e9d90078b2d7c` PDF). Neither ciphertext contains either extraction marker.
+- Queue/log/D1 instrumentation found no temporary URL, provider file ID, local path, filename, caption, body, or extraction. Final production tail decoding showed only ordinary handshake forwarding (`descriptor=False`, `extraction=False`); the capture call itself stayed on the stateless fast path.
+- Upload, status, validation, and authentication failures remained content-free. Canonical provenance retains only `source_system: file`, null source reference/filename, `chatgpt_hosted_attachment`, and the authenticated ChatGPT client/agent identity.
+
+**Verification:**
+- `npx vitest run tests/12.6-artifact-intake-local-transport.test.ts tests/12.7-artifact-intake-chatgpt-hosted.test.ts` — 18 passed.
+- Exact committed-tree `npm test -- --run` — 559 passed, 1 skipped across 91 files.
+- `npm run postflight` — passed.
+- `npx wrangler deploy --dry-run` — passed.
+- Independent code/security review: no critical or high Session 4 findings after mixed-batch fail-closed and DNS-timeout hardening. `npm audit` could not run because this repository has no lockfile; Session 4 added no package dependencies.
+
+**Remaining limitations:**
+- ChatGPT intentionally does not allow a model to inject arbitrary hosted descriptor objects; unsafe/redirect/expired literal probes therefore stop at the OpenAI file-parameter boundary. HAETSAL's downstream branches are covered by the integration/security suite, while the supported real attachment surface passed end to end.
+- One unrelated ChatGPT schema-discovery mistake invoked `capture_memory` with the literal word `invalid`; it carried no attachment metadata/content and did not affect either artifact capture.
+
+**Next:** Session 5 only: converge Telegram/Sendblue on the common governed intake service and perform the separately authorized legacy media remediation. Do not broaden into compiled-wiki or multi-user redesign work.
+
+---

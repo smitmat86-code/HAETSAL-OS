@@ -24,13 +24,18 @@ export function registerPublicWebhooks(
 ): void {
   // M4 ops-alert ingress — Law 1 exception, per-source token (spec M4).
   registerOpsAlertWebhook(app)
-  // Sendblue iMessage inbound (mission Phase 4). Law 1 exception path with a
-  // CF Access bypass app; Sendblue does NOT sign webhooks, so auth is the
-  // bearer path segment compared in constant time, plus a to_number check.
+  // Sendblue iMessage inbound. The provider signing-secret header is the
+  // primary verifier; the bearer path segment remains defense in depth.
   app.post('/webhooks/sendblue/:pathSecret', async (c) => {
     const provided = c.req.param('pathSecret')
     const expected = c.env.SENDBLUE_WEBHOOK_PATH_SECRET
-    if (!expected?.trim() || !timingSafeEqualStrings(provided, expected)) {
+    const providedSigningSecret = c.req.header('sb-signing-secret') ?? ''
+    const expectedSigningSecret = c.env.SENDBLUE_WEBHOOK_SIGNING_SECRET
+    if (
+      !expected?.trim() || !timingSafeEqualStrings(provided, expected) ||
+      !expectedSigningSecret?.trim() ||
+      !timingSafeEqualStrings(providedSigningSecret, expectedSigningSecret)
+    ) {
       return c.json({ error: 'not found' }, 404)
     }
     let body: SendblueInboundBody
@@ -42,7 +47,9 @@ export function registerPublicWebhooks(
     const lineNumber = body.to_number ?? body.number
     if (!lineNumber || lineNumber !== c.env.SENDBLUE_PHONE_NUMBER) {
       console.warn('SENDBLUE_WEBHOOK_WRONG_LINE')
-      return c.json({ status: 'ignored' }, 200)
+      return body.media_url
+        ? c.json({ status: 'retry' }, 503)
+        : c.json({ status: 'ignored' }, 200)
     }
     let ctx: Pick<ExecutionContext, 'waitUntil'>
     try {

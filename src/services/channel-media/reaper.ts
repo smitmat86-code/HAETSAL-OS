@@ -1,6 +1,7 @@
 import type { Env } from '../../types/env'
 import { ARTIFACT_INTAKE_ERROR } from '../artifact-intake/contracts'
 import { deleteChannelMediaHandoff } from './handoff'
+import { deleteChannelMediaRecovery } from './recovery'
 
 interface ExpiredRow { id: string; tenant_id: string; status: string; delivery_status: string }
 
@@ -16,7 +17,10 @@ export async function reapExpiredChannelMediaJobs(
   ).bind(now, limit).all<ExpiredRow>()
   let reaped = 0
   for (const row of rows.results) {
-    await deleteChannelMediaHandoff(row.tenant_id, row.id, env)
+    await Promise.all([
+      deleteChannelMediaHandoff(row.tenant_id, row.id, env),
+      deleteChannelMediaRecovery(row.tenant_id, row.id, env),
+    ])
     await env.D1_US.prepare(
       `UPDATE channel_media_jobs SET handoff_status = 'deleted', updated_at = ?
        WHERE tenant_id = ? AND id = ?`,

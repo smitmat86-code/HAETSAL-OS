@@ -1,7 +1,7 @@
 # ADR: governed artifact intake contract
 
 Date: 2026-08-14
-Status: accepted; Sessions 2-4 deployed, Session 5 channel convergence deployed pending fresh Telegram/Sendblue live proof
+Status: accepted; Sessions 2-4 deployed, Session 5 correction pass pending deployment and fresh Telegram/Sendblue live proof
 
 ## Context
 
@@ -31,6 +31,7 @@ Vendor blindness is explicitly not a goal and must not be claimed. Cloudflare an
 - Download timeout: 20 seconds. Maximum redirects: 3.
 - Pending upload expiry: 15 minutes. Expiry is not permission to delete arbitrary keys; the reaper must prove the exact tenant-scoped pending object first.
 - Errors are fixed-vocabulary and content-free. Rejected filenames, URLs, bodies, extraction, keys, and tokens must not appear in logs.
+- Channel provider handles are capped at 512 characters, hosted locators at 2,048, reply targets at 128, captions at 4,096, model descriptions at 8,192, KEK handoff plaintext at 8,192 bytes, and TMK recovery plaintext at 16,384 bytes.
 
 These values live only in `src/services/artifact-intake/config.ts`.
 
@@ -50,9 +51,17 @@ No Session 2 service registers an MCP tool, HTTP route, downloader, local helper
 
 Telegram and Sendblue now converge on one provider-neutral channel-media job. A verified webhook resolves the tenant, hashes a stable tenant/provider event identity into content-free D1 state, writes the provider locator, reply target, and optional caption only inside an expiring tenant-KEK envelope, and queues only the opaque operation ID. The queue consumer acquires and sniffs bounded bytes, performs adapter-side vision extraction, TMK-seals the exact original into the existing managed namespace, calls the existing canonical finalizer with one primary source manifest, verifies `artifact_intake_status`, and only then claims the provider acknowledgement.
 
-Telegram uses `file_id` only against fixed Bot API origins and refuses redirects. Sendblue preferentially re-fetches current attachment metadata through the authenticated `message_handle` endpoint; the documented 30-day `media_url` remains subject to the Session 4 SSRF, DNS, redirect, timeout, MIME, and streaming limits. A webhook lacking a stable handle may use the same encrypted ephemeral descriptor, but its URL never enters D1, a queue, a log, a receipt, or a client error.
+Telegram uses `file_id` only against fixed Bot API origins and refuses redirects. Sendblue accepts media only with a stable `message_handle`; authenticated re-fetch must return that exact handle, the expected sender, the configured receiving line, explicit inbound direction, and a media URL. Missing or mismatched binding fields fail closed. The current `sb-signing-secret` webhook header is required, while the path secret remains defense in depth. The temporary URL exists only in the authenticated provider response and is passed directly into the bounded Session 4 downloader; it is never persisted in D1, a queue, a log, a receipt, or a client error.
 
-Channel job leases, deterministic upload/finalize idempotency keys, and a separate delivery claim prevent duplicate artifacts, captures, documents, and acknowledgements under webhook and queue redelivery. An ambiguous provider-send result is recorded as `delivery_unknown` and is never automatically re-sent. Encrypted handoffs are deleted after a delivered or terminal result and independently reaped after expiry.
+Every processing transition requires the current lease token and a single-row compare-and-swap. Before provider fetch or vision, a retry checks the canonical finalization identity and repairs D1 from authoritative Neon when canonical capture already succeeded. Adapter extraction needed across a crash is kept only in a bounded TMK-encrypted recovery envelope in managed R2; D1 and the queue retain only opaque operation state. Stale workers cannot finalize, retry, or fail the job. An already canonical capture is recovered to delivery and can never be converted into a failed job or false failure reply.
+
+Channel job leases, deterministic upload/finalize idempotency keys, and a separate delivery claim prevent duplicate artifacts, captures, documents, and acknowledgements under webhook and queue redelivery. An ambiguous provider-send result is recorded as `delivery_unknown` and is never automatically re-sent. Encrypted handoff and recovery envelopes are deleted after a delivered or terminal result and independently reaped after expiry. If the Cron KEK is absent or expired, media webhook acceptance returns a retryable failure before creating a D1 job or queue message.
+
+### Session 5 legacy remediation approval contract
+
+Phase 1 inventories the union of legacy R2 keys, Neon references, and D1 compatibility references. Missing R2 objects, unknown or unreadable envelopes, incomplete object identity evidence, multi-owner references, and D1/Neon ownership disagreements are ambiguous and deletion-ineligible. The public approval packet contains aggregates only. Its digest commits to a sorted private exact-target manifest whose entries bind HMAC-obscured object and owner identities, bytes, object version, full object hash, ETag, channel, disposition, reconciliation state, inventory version/time, canonical-content fingerprint, and executor commit. Any same-count/same-byte target substitution changes the digest.
+
+Phase 2 remains separately approval-gated and is not implemented by this correction pass. For each approved referenced object, it must prepare and verify a TMK-managed replacement while legacy bytes remain intact, then open one Neon transaction, lock the capture/document/legacy source, snapshot the legacy source row and primary pointers, and atomically replace that single source row (or atomically insert/switch/delete it) so the committed capture has exactly one source artifact and valid capture/document primary pointers. D1 compatibility repair follows. Legacy bytes may be deleted only after status, canonical read, search, hashes, byte counts, exactly-one-source, and pointer checks pass. Rollback restores the snapshotted row and pointers; it must never create a second source artifact.
 
 ## Non-goals
 

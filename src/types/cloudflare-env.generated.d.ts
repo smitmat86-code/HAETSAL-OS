@@ -28,6 +28,7 @@ interface __BaseEnv_Env {
 	SENDBLUE_API_SECRET_KEY: string;
 	SENDBLUE_PHONE_NUMBER: string;
 	SENDBLUE_WEBHOOK_PATH_SECRET: string;
+	SENDBLUE_WEBHOOK_SIGNING_SECRET: string;
 	MCPAGENT: DurableObjectNamespace<import("../workers/mcpagent/index").McpAgentDO>;
 	BOOTSTRAP_WORKFLOW: Workflow<Parameters<import("../workers/mcpagent/index").BootstrapWorkflow['run']>[0]['payload']>;
 	DREAM_WORKFLOW: Workflow<Parameters<import("../workers/mcpagent/index").DreamCycleWorkflow['run']>[0]['payload']>;
@@ -45,5 +46,5 @@ type StringifyValues<EnvType extends Record<string, unknown>> = {
 	[Binding in keyof EnvType]: EnvType[Binding] extends string ? EnvType[Binding] : string;
 };
 declare namespace NodeJS {
-	interface ProcessEnv extends StringifyValues<Pick<Cloudflare.Env, "TELEGRAM_BOT_USERNAME" | "WORKER_DOMAIN" | "TELNYX_FROM_NUMBER" | "NEON_CONNECTION_STRING" | "CANONICAL_POSTGRES_CONNECTION_STRING" | "AI_GATEWAY_ID" | "AI_GATEWAY_ACCOUNT_ID" | "AI_GATEWAY_TOKEN" | "SENDBLUE_API_KEY_ID" | "SENDBLUE_API_SECRET_KEY" | "SENDBLUE_PHONE_NUMBER" | "SENDBLUE_WEBHOOK_PATH_SECRET">> {}
+	interface ProcessEnv extends StringifyValues<Pick<Cloudflare.Env, "TELEGRAM_BOT_USERNAME" | "WORKER_DOMAIN" | "TELNYX_FROM_NUMBER" | "NEON_CONNECTION_STRING" | "CANONICAL_POSTGRES_CONNECTION_STRING" | "AI_GATEWAY_ID" | "AI_GATEWAY_ACCOUNT_ID" | "AI_GATEWAY_TOKEN" | "SENDBLUE_API_KEY_ID" | "SENDBLUE_API_SECRET_KEY" | "SENDBLUE_PHONE_NUMBER" | "SENDBLUE_WEBHOOK_PATH_SECRET" | "SENDBLUE_WEBHOOK_SIGNING_SECRET">> {}
 }

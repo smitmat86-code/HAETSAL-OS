@@ -13,6 +13,7 @@ import { acceptChannelMedia } from './channel-media/intake'
 import { maybeDelegateExecutionTask } from './agents/delegation'
 import { maybeHandleAutomationChat } from './agents/automation-chat'
 import { fetchSessionBlock, recordSessionExchange } from './session/client'
+import { ArtifactIntakeContractError, ARTIFACT_INTAKE_ERROR } from './artifact-intake/contracts'
 
 export interface SendblueInboundBody {
   content?: string
@@ -48,18 +49,19 @@ export async function processSendblueInbound(
 
   if (body.media_url) {
     const stableHandle = body.message_handle?.trim()
-    const eventIdentity = stableHandle
-      ? `message:${stableHandle}`
-      : `fallback:${body.date_sent ?? occurredAt}:${body.media_url}`
+    if (
+      !stableHandle || body.is_outbound !== false ||
+      !body.to_number || body.to_number !== env.SENDBLUE_PHONE_NUMBER
+    ) throw new ArtifactIntakeContractError(ARTIFACT_INTAKE_ERROR.PROVIDER_LOCATOR_INVALID)
     await acceptChannelMedia({
       tenantId,
       provider: 'sendblue',
-      eventIdentity,
+      eventIdentity: `message:${stableHandle}`,
       descriptor: {
         version: 1,
         provider: 'sendblue',
-        locatorKind: stableHandle ? 'sendblue_message_handle' : 'sendblue_temporary_url',
-        locator: stableHandle ?? body.media_url,
+        locatorKind: 'sendblue_message_handle',
+        locator: stableHandle,
         replyTarget: body.from_number,
         caption: body.content ?? null,
         occurredAt,

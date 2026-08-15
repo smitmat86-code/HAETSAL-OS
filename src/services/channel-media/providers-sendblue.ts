@@ -9,7 +9,6 @@ export async function retrieveSendblueMediaUrl(
   descriptor: ChannelMediaDescriptor,
   env: Env,
 ): Promise<string> {
-  if (descriptor.locatorKind === 'sendblue_temporary_url') return descriptor.locator
   if (descriptor.locatorKind !== 'sendblue_message_handle') {
     throw new ArtifactIntakeContractError(ARTIFACT_INTAKE_ERROR.PROVIDER_LOCATOR_INVALID)
   }
@@ -31,8 +30,11 @@ export async function retrieveSendblueMediaUrl(
     if (message.message_handle !== descriptor.locator) {
       throw new ArtifactIntakeContractError(ARTIFACT_INTAKE_ERROR.PROVIDER_RESPONSE_MISMATCH)
     }
-    const sender = typeof message.from_number === 'string' ? message.from_number : null
-    if (sender && sender !== descriptor.replyTarget) {
+    if (
+      typeof message.from_number !== 'string' || message.from_number !== descriptor.replyTarget ||
+      typeof message.to_number !== 'string' || message.to_number !== env.SENDBLUE_PHONE_NUMBER ||
+      message.is_outbound !== false
+    ) {
       throw new ArtifactIntakeContractError(ARTIFACT_INTAKE_ERROR.PROVIDER_RESPONSE_MISMATCH)
     }
     if (typeof message.media_url !== 'string' || !message.media_url) {

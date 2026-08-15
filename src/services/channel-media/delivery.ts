@@ -3,6 +3,7 @@ import type { ChannelMediaDescriptor, ChannelMediaJob } from '../../types/channe
 import { sendTelegramReply } from '../delivery/telegram'
 import { sendSendblueMessage } from '../delivery/sendblue'
 import { deleteChannelMediaHandoff } from './handoff'
+import { deleteChannelMediaRecovery } from './recovery'
 import { claimChannelMediaDelivery, finishChannelMediaDelivery } from './delivery-state'
 
 export type ChannelMediaDeliveryOutcome = 'delivered' | 'rejected' | 'unknown'
@@ -29,7 +30,10 @@ export async function defaultChannelMediaDeliver(
 
 export async function cleanupChannelMediaHandoff(job: ChannelMediaJob, env: Env): Promise<void> {
   try {
-    await deleteChannelMediaHandoff(job.tenantId, job.id, env)
+    await Promise.all([
+      deleteChannelMediaHandoff(job.tenantId, job.id, env),
+      deleteChannelMediaRecovery(job.tenantId, job.id, env),
+    ])
     await env.D1_US.prepare(
       `UPDATE channel_media_jobs SET handoff_status = 'deleted', updated_at = ?
        WHERE tenant_id = ? AND id = ?`,

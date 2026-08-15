@@ -21,6 +21,7 @@ export interface ChannelMediaJob {
   status: ChannelMediaJobStatus
   errorCode: string | null
   attemptCount: number
+  leaseToken: string | null
   leaseExpiresAt: number | null
   deliveryStatus: ChannelMediaDeliveryStatus
   handoffStatus: 'pending' | 'deleted'
@@ -37,4 +38,14 @@ export interface AcquiredChannelMedia {
   bytes: Uint8Array
   detectedMimeType: string
   declaredMimeType?: string
+}
+
+export interface PreparedChannelMediaCapture {
+  version: 1
+  uploadId: string
+  description: string
+  detectedMimeType: string
+  declaredMimeType?: string
+  byteLength: number
+  plaintextSha256: string
 }

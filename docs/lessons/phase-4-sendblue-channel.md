@@ -2,7 +2,12 @@
 
 Date: 2026-07-03
 
-1. **Auth model is a bearer path segment, not a signature.** Sendblue does not
+Correction (Session 5, 2026-08-15): current Sendblue webhooks include the
+`sb-signing-secret` header. HAETSAL now requires it and retains the path secret
+as defense in depth. The original Phase 4 statement below is historical and
+must not be used as the current security contract.
+
+1. **Historical auth model was a bearer path segment, not a signature.** At the Phase 4 gate Sendblue was understood not to
    sign webhooks. `/webhooks/sendblue/:pathSecret` compares the segment against
    `SENDBLUE_WEBHOOK_PATH_SECRET` with `crypto.subtle.timingSafeEqual` (equal
    lengths pre-checked), then requires `to_number == SENDBLUE_PHONE_NUMBER`.

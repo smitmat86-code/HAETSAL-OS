@@ -28,6 +28,7 @@ const testEnv = {
   TELEGRAM_BOT_TOKEN: 'private-bot-token',
   SENDBLUE_API_KEY_ID: 'private-sendblue-key-id',
   SENDBLUE_API_SECRET_KEY: 'private-sendblue-secret',
+  SENDBLUE_PHONE_NUMBER: '+15550002222',
 } as Env
 
 afterEach(() => vi.unstubAllGlobals())
@@ -93,6 +94,8 @@ describe('12.9 channel provider acquisition boundaries', () => {
       return new Response(JSON.stringify({ data: {
         message_handle: sendblue.locator,
         from_number: sendblue.replyTarget,
+        to_number: testEnv.SENDBLUE_PHONE_NUMBER,
+        is_outbound: false,
         media_url: 'https://cdn.sendblue.example/temporary.jpg',
       } }), { status: 200 })
     }))
@@ -105,27 +108,37 @@ describe('12.9 channel provider acquisition boundaries', () => {
     expect(calls[0]!.init?.redirect).toBe('manual')
   })
 
-  it('rejects Sendblue cross-message and cross-sender substitution without exposing identifiers', async () => {
-    vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify({ data: {
-      message_handle: 'different-handle',
+  it('rejects missing or substituted Sendblue binding fields without exposing identifiers', async () => {
+    const base = {
+      message_handle: sendblue.locator,
       from_number: sendblue.replyTarget,
+      to_number: testEnv.SENDBLUE_PHONE_NUMBER,
+      is_outbound: false,
       media_url: 'https://cdn.sendblue.example/temporary.jpg',
-    } }))))
-    await expect(retrieveSendblueMediaUrl(sendblue, testEnv)).rejects.toMatchObject({
-      code: ARTIFACT_INTAKE_ERROR.PROVIDER_RESPONSE_MISMATCH,
-      message: ARTIFACT_INTAKE_ERROR.PROVIDER_RESPONSE_MISMATCH,
-    })
+    }
+    for (const mutation of [
+      { from_number: undefined },
+      { from_number: '+15559999999' },
+      { to_number: '+15558888888' },
+      { is_outbound: true },
+      { message_handle: 'different-handle' },
+    ]) {
+      vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify({ data: { ...base, ...mutation } }))))
+      await expect(retrieveSendblueMediaUrl(sendblue, testEnv)).rejects.toMatchObject({
+        code: ARTIFACT_INTAKE_ERROR.PROVIDER_RESPONSE_MISMATCH,
+        message: ARTIFACT_INTAKE_ERROR.PROVIDER_RESPONSE_MISMATCH,
+      })
+    }
   })
 
-  it('uses an encrypted-handoff temporary URL directly only when no stable handle exists', async () => {
+  it('rejects temporary URL locators even when encrypted in a handoff', async () => {
     const fallback: ChannelMediaDescriptor = {
       ...sendblue,
       locatorKind: 'sendblue_temporary_url',
       locator: 'https://cdn.sendblue.example/temporary.jpg',
     }
-    const fetchSpy = vi.fn()
-    vi.stubGlobal('fetch', fetchSpy)
-    expect(await retrieveSendblueMediaUrl(fallback, testEnv)).toBe(fallback.locator)
-    expect(fetchSpy).not.toHaveBeenCalled()
+    await expect(retrieveSendblueMediaUrl(fallback, testEnv)).rejects.toMatchObject({
+      code: ARTIFACT_INTAKE_ERROR.PROVIDER_LOCATOR_INVALID,
+    })
   })
 })

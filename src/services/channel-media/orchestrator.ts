@@ -1,46 +1,38 @@
 import type { Env } from '../../types/env'
-import type { AcquiredChannelMedia, ChannelMediaDescriptor } from '../../types/channel-media'
+import type { ChannelMediaDescriptor } from '../../types/channel-media'
 import { describeInboundPhoto } from '../messaging-helpers'
 import { CHANNEL_MEDIA_MAX_ATTEMPTS } from '../artifact-intake/config'
 import { ArtifactIntakeContractError, ARTIFACT_INTAKE_ERROR } from '../artifact-intake/contracts'
 import { acquireChannelMedia } from './providers'
 import { readChannelMediaHandoff } from './handoff'
-import { finalizeChannelMediaJob } from './finalize-job'
+import {
+  ensurePreparedChannelMediaUpload,
+  finalizePreparedChannelMediaJob,
+  prepareChannelMediaCapture,
+} from './finalize-job'
+import { recoverFinalizedChannelMediaJob } from './canonical-recovery'
 import {
   cleanupChannelMediaHandoff,
   defaultChannelMediaDeliver,
   deliverChannelMediaClaim,
-  type ChannelMediaDeliver,
 } from './delivery'
+import { claimChannelMediaJob, getChannelMediaJob } from './jobs'
 import {
-  claimChannelMediaJob,
   markChannelMediaFailed,
   markChannelMediaRetryable,
-} from './jobs'
+  renewChannelMediaLease,
+} from './job-transitions'
 import { markChannelMediaDeliveryUnknown } from './delivery-state'
+import { readChannelMediaRecovery } from './recovery'
+import {
+  channelMediaErrorCode as errorCode,
+  deliverChannelMediaSuccess as deliverSuccess,
+  handleTerminalChannelMediaJob,
+  PERMANENT_CHANNEL_MEDIA_ERRORS as PERMANENT_ERRORS,
+  type ChannelMediaOrchestratorDependencies,
+} from './orchestrator-support'
 
-export interface ChannelMediaOrchestratorDependencies {
-  acquire?: (descriptor: ChannelMediaDescriptor, env: Env) => Promise<AcquiredChannelMedia>
-  describe?: (env: Env, bytes: ArrayBuffer, mediaType: string) => Promise<string>
-  deliver?: ChannelMediaDeliver
-}
-
-const PERMANENT_ERRORS = new Set<string>([
-  ARTIFACT_INTAKE_ERROR.PROVIDER_LOCATOR_INVALID,
-  ARTIFACT_INTAKE_ERROR.PROVIDER_RESPONSE_MISMATCH,
-  ARTIFACT_INTAKE_ERROR.LOCATOR_EXPIRED,
-  ARTIFACT_INTAKE_ERROR.MIME_MISMATCH,
-  ARTIFACT_INTAKE_ERROR.BULK_IMPORT_REQUIRED,
-  ARTIFACT_INTAKE_ERROR.UNSUPPORTED_MEDIA,
-  ARTIFACT_INTAKE_ERROR.RAW_BYTES_UNAVAILABLE,
-])
-
-function errorCode(error: unknown): string {
-  return error instanceof ArtifactIntakeContractError
-    ? error.code
-    : ARTIFACT_INTAKE_ERROR.INVALID_STATE
-}
-
+export type { ChannelMediaOrchestratorDependencies } from './orchestrator-support'
 
 export async function processChannelMediaJob(args: {
   tenantId: string
@@ -52,71 +44,101 @@ export async function processChannelMediaJob(args: {
 }): Promise<'processed' | 'ignored' | 'terminal_failed'> {
   const job = await claimChannelMediaJob(args.tenantId, args.operationId, args.env)
   if (!job) return 'ignored'
+  const deliver = args.dependencies?.deliver ?? defaultChannelMediaDeliver
+
+  if (job.status === 'finalized' || job.status === 'failed') {
+    return handleTerminalChannelMediaJob({ job, kek: args.kek, env: args.env, deliver })
+  }
+
+  const leaseToken = job.leaseToken
+  if (!leaseToken) throw new ArtifactIntakeContractError(ARTIFACT_INTAKE_ERROR.LEASE_LOST)
+
+  // The canonical store is authoritative. Repair a completed capture before
+  // decrypting a locator, fetching provider bytes, or invoking vision.
+  if (await recoverFinalizedChannelMediaJob(job, leaseToken, args.env)) {
+    try {
+      const descriptor = await readChannelMediaHandoff({
+        tenantId: job.tenantId, operationId: job.id, kek: args.kek,
+      }, args.env)
+      return deliverSuccess({ tenantId: job.tenantId, operationId: job.id, descriptor, env: args.env, deliver })
+    } catch (error) {
+      if (errorCode(error) === ARTIFACT_INTAKE_ERROR.DELIVERY_REJECTED) throw error
+      await markChannelMediaDeliveryUnknown(job.tenantId, job.id, args.env)
+      return 'processed'
+    }
+  }
+
   let descriptor: ChannelMediaDescriptor
   try {
     descriptor = await readChannelMediaHandoff({
-      tenantId: args.tenantId, operationId: args.operationId, kek: args.kek,
+      tenantId: job.tenantId, operationId: job.id, kek: args.kek,
     }, args.env)
     if (descriptor.provider !== job.provider) {
       throw new ArtifactIntakeContractError(ARTIFACT_INTAKE_ERROR.PROVIDER_RESPONSE_MISMATCH)
     }
   } catch (error) {
     const code = errorCode(error)
-    if (job.status === 'finalized') {
-      await markChannelMediaDeliveryUnknown(job.tenantId, job.id, args.env)
-      return 'processed'
-    }
     const terminal = PERMANENT_ERRORS.has(code) || job.attemptCount >= CHANNEL_MEDIA_MAX_ATTEMPTS
     if (terminal) {
-      await markChannelMediaFailed(job.tenantId, job.id, code, args.env)
+      await markChannelMediaFailed(job.tenantId, job.id, leaseToken, code, args.env)
       await cleanupChannelMediaHandoff(job, args.env)
       return 'terminal_failed'
     }
-    await markChannelMediaRetryable(job.tenantId, job.id, code, args.env)
+    await markChannelMediaRetryable(job.tenantId, job.id, leaseToken, code, args.env)
     throw error
   }
-  const deliver = args.dependencies?.deliver ?? defaultChannelMediaDeliver
-  if (job.status === 'finalized') {
-    const outcome = await deliverChannelMediaClaim({
-      job, descriptor, message: 'Captured that photo.', env: args.env, deliver,
-    })
-    if (outcome === 'retry') throw new ArtifactIntakeContractError(ARTIFACT_INTAKE_ERROR.DELIVERY_REJECTED)
-    return 'processed'
-  }
-  if (job.status === 'failed') {
-    const outcome = await deliverChannelMediaClaim({
-      job, descriptor,
-      message: 'I could not capture that photo. Please try sending it again.',
-      env: args.env, deliver,
-    })
-    if (outcome === 'retry') throw new ArtifactIntakeContractError(ARTIFACT_INTAKE_ERROR.DELIVERY_REJECTED)
-    return 'terminal_failed'
-  }
+
   try {
     const acquire = args.dependencies?.acquire ?? acquireChannelMedia
     const describe = args.dependencies?.describe ?? describeInboundPhoto
-    const acquired = await acquire(descriptor, args.env)
-    const owned = acquired.bytes.slice().buffer as ArrayBuffer
-    const description = await describe(args.env, owned, acquired.detectedMimeType)
-    await finalizeChannelMediaJob({ job, descriptor, acquired, description, tmk: args.tmk, env: args.env })
-    const outcome = await deliverChannelMediaClaim({
-      job: { ...job, status: 'finalized' }, descriptor,
-      message: `Captured that photo: ${description}`, env: args.env, deliver,
+    let prepared = await readChannelMediaRecovery({
+      tenantId: job.tenantId, operationId: job.id, tmk: args.tmk,
+    }, args.env)
+    if (prepared) {
+      try {
+        await ensurePreparedChannelMediaUpload({ job, prepared, tmk: args.tmk, env: args.env })
+      } catch (error) {
+        if (errorCode(error) !== ARTIFACT_INTAKE_ERROR.RAW_BYTES_UNAVAILABLE) throw error
+        const acquired = await acquire(descriptor, args.env)
+        await renewChannelMediaLease(job.tenantId, job.id, leaseToken, args.env)
+        await ensurePreparedChannelMediaUpload({ job, prepared, acquired, tmk: args.tmk, env: args.env })
+      }
+    } else {
+      const acquired = await acquire(descriptor, args.env)
+      const owned = acquired.bytes.slice().buffer as ArrayBuffer
+      const description = await describe(args.env, owned, acquired.detectedMimeType)
+      await renewChannelMediaLease(job.tenantId, job.id, leaseToken, args.env)
+      prepared = await prepareChannelMediaCapture({
+        job, acquired, description, tmk: args.tmk, env: args.env,
+      })
+    }
+    await finalizePreparedChannelMediaJob({
+      job, descriptor, prepared, leaseToken, tmk: args.tmk, env: args.env,
+      afterCanonicalFinalization: args.dependencies?.afterCanonicalFinalization,
     })
-    if (outcome === 'retry') throw new ArtifactIntakeContractError(ARTIFACT_INTAKE_ERROR.DELIVERY_REJECTED)
-    return 'processed'
+    return deliverSuccess({ tenantId: job.tenantId, operationId: job.id, descriptor, env: args.env, deliver })
   } catch (error) {
     const code = errorCode(error)
     if (code === ARTIFACT_INTAKE_ERROR.DELIVERY_REJECTED) throw error
+    if (code === ARTIFACT_INTAKE_ERROR.LEASE_LOST) throw error
+
+    // A failure after canonical commit is success recovery, never a failed job
+    // and never a false failure response.
+    if (await recoverFinalizedChannelMediaJob(job, leaseToken, args.env)) {
+      return deliverSuccess({ tenantId: job.tenantId, operationId: job.id, descriptor, env: args.env, deliver })
+    }
+
     const terminal = PERMANENT_ERRORS.has(code) || job.attemptCount >= CHANNEL_MEDIA_MAX_ATTEMPTS
     if (!terminal) {
-      await markChannelMediaRetryable(job.tenantId, job.id, code, args.env)
+      await markChannelMediaRetryable(job.tenantId, job.id, leaseToken, code, args.env)
       console.warn('CHANNEL_MEDIA_RETRYABLE_FAILURE', { code })
       throw new ArtifactIntakeContractError(code as never)
     }
-    await markChannelMediaFailed(job.tenantId, job.id, code, args.env)
+    await markChannelMediaFailed(job.tenantId, job.id, leaseToken, code, args.env)
+    const failed = await getChannelMediaJob(job.tenantId, job.id, args.env)
+    if (!failed || failed.status !== 'failed') return 'ignored'
     const notice = await deliverChannelMediaClaim({
-      job: { ...job, status: 'failed' }, descriptor,
+      job: failed, descriptor,
       message: 'I could not capture that photo. Please try sending it again.',
       env: args.env, deliver,
     })

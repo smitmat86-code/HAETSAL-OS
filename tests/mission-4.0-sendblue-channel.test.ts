@@ -15,6 +15,7 @@ const TENANT_ID = `test-tenant-mission-40-${SUITE_ID}`
 const MATT_PHONE = '+15550001111'
 const LINE_NUMBER = '+16452067656'
 const PATH_SECRET = 'test-sendblue-path-secret'
+const SIGNING_SECRET = 'test-sendblue-signing-secret'
 
 installCanonicalMemoryTestStore(env)
 
@@ -27,6 +28,7 @@ function makeSendblueEnv(sent: SentRequest[], queue: unknown[]) {
     SENDBLUE_API_SECRET_KEY: 'test-secret-key',
     SENDBLUE_PHONE_NUMBER: LINE_NUMBER,
     SENDBLUE_WEBHOOK_PATH_SECRET: PATH_SECRET,
+    SENDBLUE_WEBHOOK_SIGNING_SECRET: SIGNING_SECRET,
     AI: {
       // Vision calls carry an image_url content part; replies are plain text.
       // Vision answers in the OpenAI shape, text in the legacy {response}
@@ -62,9 +64,9 @@ function makeApp(testEnv: Env) {
   const app = new Hono<{ Bindings: Env; Variables: { tenantId: string; jwtSub: string; traceId: string } }>()
   registerPublicWebhooks(app as never)
   return {
-    post: (path: string, body: unknown) => app.request(path, {
+    post: (path: string, body: unknown, signingSecret = SIGNING_SECRET) => app.request(path, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', 'sb-signing-secret': signingSecret },
       body: JSON.stringify(body),
     }, testEnv),
   }
@@ -114,6 +116,16 @@ describe('mission 4.0 — webhook authentication', () => {
     expect(response.status).toBe(404)
     expect(queue).toHaveLength(0)
     expect(sent.filter((request) => request.url.includes('sendblue'))).toHaveLength(0)
+  })
+
+  it('rejects a missing or wrong Sendblue signing-secret header', async () => {
+    const sent: SentRequest[] = []
+    const queue: unknown[] = []
+    stubFetch(sent)
+    const app = makeApp(makeSendblueEnv(sent, queue))
+    expect((await app.post(`/webhooks/sendblue/${PATH_SECRET}`, inbound(), '')).status).toBe(404)
+    expect((await app.post(`/webhooks/sendblue/${PATH_SECRET}`, inbound(), 'wrong')).status).toBe(404)
+    expect(queue).toHaveLength(0)
   })
 
   it('ignores messages addressed to a different line', async () => {
@@ -203,6 +215,58 @@ describe('mission 4.0 — photo flow', () => {
     expect(sent.some((request) => request.url.includes('media.example'))).toBe(false)
     expect(sent.some((request) => request.url.includes('/api/send-message'))).toBe(false)
     expect((await env.R2_ARTIFACTS.list({ prefix: `sendblue-media/${TENANT_ID}/` })).objects).toHaveLength(0)
+  })
+
+  it('returns retry without accepting work when the Cron KEK is unavailable', async () => {
+    const sent: SentRequest[] = []
+    const queue: unknown[] = []
+    stubFetch(sent)
+    const testEnv = makeSendblueEnv(sent, queue)
+    testEnv.KV_SESSION = { get: async () => null } as unknown as KVNamespace
+    const response = await makeApp(testEnv).post(`/webhooks/sendblue/${PATH_SECRET}`, inbound({
+      media_url: 'https://media.example/photo.jpg',
+      message_handle: 'kek-unavailable-handle',
+    }))
+    expect(response.status).toBe(503)
+    expect(await response.json()).toEqual({ status: 'retry' })
+    expect(queue).toHaveLength(0)
+  })
+
+  it('returns retry without accepting work when the Cron KEK is expired', async () => {
+    const sent: SentRequest[] = []
+    const queue: unknown[] = []
+    stubFetch(sent)
+    await env.D1_US.prepare('UPDATE tenants SET cron_kek_expires_at = ? WHERE id = ?')
+      .bind(Date.now() - 1, TENANT_ID).run()
+    try {
+      const response = await makeApp(makeSendblueEnv(sent, queue)).post(
+        `/webhooks/sendblue/${PATH_SECRET}`,
+        inbound({ media_url: 'https://media.example/photo.jpg', message_handle: 'expired-kek-handle' }),
+      )
+      expect(response.status).toBe(503)
+      expect(queue).toHaveLength(0)
+    } finally {
+      await env.D1_US.prepare('UPDATE tenants SET cron_kek_expires_at = ? WHERE id = ?')
+        .bind(Date.now() + 3_600_000, TENANT_ID).run()
+    }
+  })
+
+  it('rejects media without the authoritative handle or inbound binding fields', async () => {
+    const sent: SentRequest[] = []
+    const queue: unknown[] = []
+    stubFetch(sent)
+    const app = makeApp(makeSendblueEnv(sent, queue))
+    for (const override of [
+      { message_handle: undefined },
+      { message_handle: 'bound', is_outbound: undefined },
+      { message_handle: 'bound', to_number: undefined },
+    ]) {
+      const response = await app.post(`/webhooks/sendblue/${PATH_SECRET}`, inbound({
+        media_url: 'https://media.example/photo.jpg', ...override,
+      }))
+      expect(response.status).toBe(503)
+    }
+    expect(queue).toHaveLength(0)
   })
 })
 

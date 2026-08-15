@@ -3,13 +3,15 @@
 // never prints an object key, tenant ID, capture ID, URL, filename, or content.
 
 import { createHash } from 'node:crypto'
+import { execFileSync } from 'node:child_process'
 import { readFileSync } from 'node:fs'
 import pg from 'pg'
 import {
-  classifyLegacyMediaObjects,
+  classifyLegacyMediaInventory,
   type LegacyCanonicalReference,
   type LegacyObjectInventoryInput,
 } from '../src/services/artifact-intake/legacy-inventory'
+import { buildLegacyRemediationPlan } from '../src/services/artifact-intake/legacy-remediation'
 
 const ACCOUNT_ID = 'd3f0a1c579945862edc9c6f6e36e448a'
 const D1_DATABASE_ID = 'b934a2d4-c429-4eea-9153-42a2796a9c63'
@@ -40,8 +42,8 @@ async function cloudflare(path: string, init?: RequestInit): Promise<Record<stri
   return response.json() as Promise<Record<string, unknown>>
 }
 
-async function listPrefix(prefix: string): Promise<Array<{ key: string; size: number }>> {
-  const objects: Array<{ key: string; size: number }> = []
+async function listPrefix(prefix: string): Promise<Array<{ key: string; size: number; etag: string | null; version: string | null }>> {
+  const objects: Array<{ key: string; size: number; etag: string | null; version: string | null }> = []
   let cursor = ''
   do {
     const query = new URLSearchParams({ prefix, per_page: '1000' })
@@ -50,7 +52,12 @@ async function listPrefix(prefix: string): Promise<Array<{ key: string; size: nu
     const result = Array.isArray(page.result) ? page.result as Array<Record<string, unknown>> : []
     for (const item of result) {
       if (typeof item.key === 'string' && typeof item.size === 'number') {
-        objects.push({ key: item.key, size: item.size })
+        objects.push({
+          key: item.key,
+          size: item.size,
+          etag: typeof item.etag === 'string' ? item.etag : null,
+          version: typeof item.version === 'string' ? item.version : null,
+        })
       }
     }
     const info = page.result_info as Record<string, unknown> | undefined
@@ -63,15 +70,24 @@ function objectPath(key: string): string {
   return key.split('/').map(encodeURIComponent).join('/')
 }
 
-async function envelopeFamily(key: string): Promise<'tmk' | 'kek' | 'plaintext' | 'unknown'> {
+async function objectEvidence(key: string): Promise<{
+  envelopeFamily: 'tmk' | 'kek' | 'plaintext' | 'unknown'
+  objectSha256: string | null
+  responseEtag: string | null
+  responseVersion: string | null
+}> {
   const response = await fetch(`${API}/r2/buckets/${BUCKET}/objects/${objectPath(key)}`, {
-    headers: { Authorization: `Bearer ${token()}`, Range: 'bytes=0-4' },
+    headers: { Authorization: `Bearer ${token()}` },
   })
-  if (!response.ok && response.status !== 206) return 'unknown'
-  const prefix = new TextDecoder().decode(await response.arrayBuffer())
-  if (prefix.startsWith('TMK1:')) return 'tmk'
-  if (prefix.startsWith('KEK1:')) return 'kek'
-  return 'plaintext'
+  if (!response.ok) return { envelopeFamily: 'unknown', objectSha256: null, responseEtag: null, responseVersion: null }
+  const bytes = new Uint8Array(await response.arrayBuffer())
+  const prefix = new TextDecoder().decode(bytes.slice(0, 5))
+  return {
+    envelopeFamily: prefix.startsWith('TMK1:') ? 'tmk' : prefix.startsWith('KEK1:') ? 'kek' : 'plaintext',
+    objectSha256: createHash('sha256').update(bytes).digest('hex'),
+    responseEtag: response.headers.get('etag'),
+    responseVersion: response.headers.get('x-amz-version-id') ?? response.headers.get('cf-r2-version'),
+  }
 }
 
 async function d1References(): Promise<LegacyCanonicalReference[]> {
@@ -98,7 +114,16 @@ async function main(): Promise<void> {
   ]
   stage = 'r2_envelope_read'
   const objects: LegacyObjectInventoryInput[] = []
-  for (const item of rawObjects) objects.push({ ...item, envelopeFamily: await envelopeFamily(item.key) })
+  for (const item of rawObjects) {
+    const evidence = await objectEvidence(item.key)
+    objects.push({
+      ...item,
+      envelopeFamily: evidence.envelopeFamily,
+      objectSha256: evidence.objectSha256,
+      etag: evidence.responseEtag ?? item.etag,
+      version: evidence.responseVersion ?? item.version,
+    })
+  }
 
   stage = 'neon_connect'
   const client = new pg.Client({ connectionString: devVar('CANONICAL_POSTGRES_CONNECTION_STRING') })
@@ -122,7 +147,7 @@ async function main(): Promise<void> {
        ORDER BY d.id`,
     )
     stage = 'd1_query'
-    const report = classifyLegacyMediaObjects({
+    const classification = classifyLegacyMediaInventory({
       objects,
       neonReferences: legacy.rows.map(row => ({ key: row.r2_key, tenantId: row.tenant_id, captureId: row.capture_id })),
       d1References: await d1References(),
@@ -130,12 +155,22 @@ async function main(): Promise<void> {
     })
     const canonicalContentFingerprint = createHash('sha256')
       .update(JSON.stringify(documents.rows)).digest('hex')
+    const inventoryAt = new Date().toISOString()
+    const plan = await buildLegacyRemediationPlan({
+      report: classification.report,
+      privateEntries: classification.privateEntries,
+      canonicalContentFingerprintSha256: canonicalContentFingerprint,
+      inventoryAt,
+      executorCommit: execFileSync('git', ['rev-parse', 'HEAD'], { encoding: 'utf8' }).trim(),
+      approvalHmacSecret: devVar('HMAC_SECRET'),
+    })
     stage = 'report'
     console.log(JSON.stringify({
-      generatedAt: new Date().toISOString(),
+      generatedAt: inventoryAt,
       mode: 'read_only',
-      ...report,
+      ...classification.report,
       canonicalContent: { documentCount: documents.rowCount ?? documents.rows.length, fingerprintSha256: canonicalContentFingerprint },
+      remediationApproval: plan,
     }, null, 2))
     await client.query('ROLLBACK')
   } finally {

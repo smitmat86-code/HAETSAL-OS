@@ -1,33 +1,15 @@
-export type LegacyChannel = 'telegram' | 'sendblue'
+import type {
+  LegacyCanonicalReference,
+  LegacyChannel,
+  LegacyInventoryClassification,
+  LegacyInventoryDisposition,
+  LegacyInventoryReport,
+  LegacyInventoryTotal,
+  LegacyObjectInventoryInput,
+  LegacyPrivateInventoryEntry,
+} from './legacy-inventory-types'
 
-export interface LegacyObjectInventoryInput {
-  key: string
-  size: number
-  channel: LegacyChannel
-  envelopeFamily: 'tmk' | 'kek' | 'plaintext' | 'unknown'
-}
-
-export interface LegacyCanonicalReference {
-  key: string
-  tenantId: string
-  captureId: string
-}
-
-export interface LegacyInventoryTotal { count: number; bytes: number }
-
-export interface LegacyInventoryReport {
-  referencedTelegram: LegacyInventoryTotal
-  referencedSendblue: LegacyInventoryTotal
-  orphanTelegram: LegacyInventoryTotal
-  orphanSendblue: LegacyInventoryTotal
-  alreadyEncrypted: LegacyInventoryTotal
-  alreadyMigrated: LegacyInventoryTotal
-  ambiguous: LegacyInventoryTotal
-  reconciliation: {
-    neonReferencedMissingD1: LegacyInventoryTotal
-    d1ReferencedMissingNeon: LegacyInventoryTotal
-  }
-}
+export type * from './legacy-inventory-types'
 
 const zero = (): LegacyInventoryTotal => ({ count: 0, bytes: 0 })
 const add = (target: LegacyInventoryTotal, size: number): void => {
@@ -35,45 +17,113 @@ const add = (target: LegacyInventoryTotal, size: number): void => {
   target.bytes += size
 }
 
-export function classifyLegacyMediaObjects(args: {
+function groupReferences(references: LegacyCanonicalReference[]): Map<string, LegacyCanonicalReference[]> {
+  const grouped = new Map<string, LegacyCanonicalReference[]>()
+  for (const reference of references) {
+    grouped.set(reference.key, [...(grouped.get(reference.key) ?? []), reference])
+  }
+  return grouped
+}
+
+function referenceIdentity(reference: LegacyCanonicalReference): string {
+  return `${reference.tenantId}\0${reference.captureId}`
+}
+
+function inferredChannel(key: string): LegacyChannel {
+  return key.startsWith('sendblue-media/') ? 'sendblue' : 'telegram'
+}
+
+export function classifyLegacyMediaInventory(args: {
   objects: LegacyObjectInventoryInput[]
   neonReferences: LegacyCanonicalReference[]
   d1References: LegacyCanonicalReference[]
   capturesWithManagedArtifact: Set<string>
-}): LegacyInventoryReport {
+}): LegacyInventoryClassification {
   const report: LegacyInventoryReport = {
     referencedTelegram: zero(), referencedSendblue: zero(),
     orphanTelegram: zero(), orphanSendblue: zero(),
     alreadyEncrypted: zero(), alreadyMigrated: zero(), ambiguous: zero(),
-    reconciliation: { neonReferencedMissingD1: zero(), d1ReferencedMissingNeon: zero() },
+    reconciliation: {
+      neonReferencedMissingD1: zero(), d1ReferencedMissingNeon: zero(),
+      referencedMissingR2: zero(), ownershipMismatch: zero(),
+    },
   }
-  const neon = new Map<string, LegacyCanonicalReference[]>()
-  const d1 = new Map<string, LegacyCanonicalReference[]>()
-  for (const ref of args.neonReferences) neon.set(ref.key, [...(neon.get(ref.key) ?? []), ref])
-  for (const ref of args.d1References) d1.set(ref.key, [...(d1.get(ref.key) ?? []), ref])
+  const objects = new Map(args.objects.map(object => [object.key, object]))
+  const neon = groupReferences(args.neonReferences)
+  const d1 = groupReferences(args.d1References)
+  const keys = [...new Set([...objects.keys(), ...neon.keys(), ...d1.keys()])].sort()
+  const privateEntries: LegacyPrivateInventoryEntry[] = []
 
-  for (const object of args.objects) {
-    const authoritative = neon.get(object.key) ?? []
-    const compatibility = d1.get(object.key) ?? []
-    const tenantCount = new Set(authoritative.map(ref => ref.tenantId)).size
-    const captureCount = new Set(authoritative.map(ref => ref.captureId)).size
-    const isAmbiguous = (authoritative.length === 0 && compatibility.length > 0) || tenantCount > 1 || captureCount > 1
-    if (isAmbiguous) add(report.ambiguous, object.size)
-    else if (authoritative.some(ref => args.capturesWithManagedArtifact.has(ref.captureId))) {
-      add(report.alreadyMigrated, object.size)
-    } else if (object.envelopeFamily === 'tmk' || object.envelopeFamily === 'kek') {
-      add(report.alreadyEncrypted, object.size)
-    } else if (authoritative.length > 0) {
-      add(object.channel === 'telegram' ? report.referencedTelegram : report.referencedSendblue, object.size)
+  for (const key of keys) {
+    const object = objects.get(key)
+    const authoritative = neon.get(key) ?? []
+    const compatibility = d1.get(key) ?? []
+    const size = object?.size ?? 0
+    const channel = object?.channel ?? inferredChannel(key)
+    const neonIdentities = new Set(authoritative.map(referenceIdentity))
+    const d1Identities = new Set(compatibility.map(referenceIdentity))
+    const multiOwner = neonIdentities.size > 1 || d1Identities.size > 1
+    const ownershipMismatch = authoritative.length > 0 && compatibility.length > 0 && (
+      neonIdentities.size !== d1Identities.size ||
+      [...neonIdentities].some(identity => !d1Identities.has(identity))
+    )
+    const missingR2 = !object && (authoritative.length > 0 || compatibility.length > 0)
+    const neonMissingD1 = authoritative.length > 0 && compatibility.length === 0
+    const d1MissingNeon = compatibility.length > 0 && authoritative.length === 0
+    const incompleteObjectEvidence = Boolean(object) && (
+      !object?.etag || !object.objectSha256 || !/^[a-f0-9]{64}$/i.test(object.objectSha256)
+    )
+    const ambiguous = missingR2 || multiOwner || ownershipMismatch || d1MissingNeon ||
+      object?.envelopeFamily === 'unknown' || incompleteObjectEvidence
+    let disposition: LegacyInventoryDisposition
+    let reconciliationState = 'reconciled'
+    if (missingR2) reconciliationState = 'referenced_missing_r2'
+    else if (ownershipMismatch || multiOwner) reconciliationState = 'ownership_mismatch'
+    else if (d1MissingNeon) reconciliationState = 'd1_only_reference'
+    else if (neonMissingD1) reconciliationState = 'neon_reference_missing_d1'
+    else if (object?.envelopeFamily === 'unknown') reconciliationState = 'unreadable_or_unknown_envelope'
+    else if (incompleteObjectEvidence) reconciliationState = 'incomplete_object_identity'
+
+    if (ambiguous) {
+      disposition = 'exclude_ambiguous'
+      add(report.ambiguous, size)
+    } else if (authoritative.some(reference => args.capturesWithManagedArtifact.has(reference.captureId))) {
+      disposition = 'exclude_already_migrated'
+      add(report.alreadyMigrated, size)
+    } else if (object!.envelopeFamily === 'tmk' || object!.envelopeFamily === 'kek') {
+      disposition = 'exclude_already_encrypted'
+      add(report.alreadyEncrypted, size)
+    } else if (authoritative.length === 1) {
+      disposition = 'migrate_replace_delete'
+      add(channel === 'telegram' ? report.referencedTelegram : report.referencedSendblue, size)
     } else {
-      add(object.channel === 'telegram' ? report.orphanTelegram : report.orphanSendblue, object.size)
+      disposition = 'delete_confirmed_orphan'
+      add(channel === 'telegram' ? report.orphanTelegram : report.orphanSendblue, size)
     }
-    if (authoritative.length > 0 && compatibility.length === 0) {
-      add(report.reconciliation.neonReferencedMissingD1, object.size)
-    }
-    if (authoritative.length === 0 && compatibility.length > 0) {
-      add(report.reconciliation.d1ReferencedMissingNeon, object.size)
-    }
+
+    if (neonMissingD1) add(report.reconciliation.neonReferencedMissingD1, size)
+    if (d1MissingNeon) add(report.reconciliation.d1ReferencedMissingNeon, size)
+    if (missingR2) add(report.reconciliation.referencedMissingR2, size)
+    if (ownershipMismatch || multiOwner) add(report.reconciliation.ownershipMismatch, size)
+    const owner = authoritative.length === 1 ? authoritative[0] : null
+    privateEntries.push({
+      key, size, channel,
+      envelopeFamily: object?.envelopeFamily ?? 'unknown',
+      etag: object?.etag ?? null,
+      version: object?.version ?? null,
+      objectSha256: object?.objectSha256?.toLowerCase() ?? null,
+      r2Present: Boolean(object),
+      tenantId: owner?.tenantId ?? null,
+      captureId: owner?.captureId ?? null,
+      disposition,
+      reconciliationState,
+    })
   }
-  return report
+  return { report, privateEntries }
+}
+
+export function classifyLegacyMediaObjects(
+  args: Parameters<typeof classifyLegacyMediaInventory>[0],
+): LegacyInventoryReport {
+  return classifyLegacyMediaInventory(args).report
 }

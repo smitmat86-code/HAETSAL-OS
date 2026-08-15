@@ -2,6 +2,8 @@ import type { Env } from '../../types/env'
 import type { ChannelMediaDescriptor } from '../../types/channel-media'
 import { ArtifactIntakeContractError, ARTIFACT_INTAKE_ERROR } from '../artifact-intake/contracts'
 import { sealArtifactBytes, sha256Text, unsealArtifactBytes } from '../artifact-intake/crypto'
+import { CHANNEL_MEDIA_HANDOFF_MAX_BYTES } from '../artifact-intake/config'
+import { validateChannelMediaDescriptor } from './descriptor'
 
 const OPERATION_ID = /^[a-f0-9-]{36}$/i
 
@@ -19,13 +21,18 @@ export async function writeChannelMediaHandoff(args: {
   descriptor: ChannelMediaDescriptor
   kek: CryptoKey
 }, env: Env): Promise<void> {
+  const descriptor = validateChannelMediaDescriptor(args.descriptor)
   const key = await channelMediaHandoffKey(args.tenantId, args.operationId)
   const existing = await env.R2_ARTIFACTS.get(key)
   if (existing) {
-    await unsealArtifactBytes(new Uint8Array(await existing.arrayBuffer()), args.kek, 'kek')
+    const plaintext = await unsealArtifactBytes(new Uint8Array(await existing.arrayBuffer()), args.kek, 'kek')
+    validateChannelMediaDescriptor(JSON.parse(new TextDecoder().decode(plaintext)))
     return
   }
-  const plaintext = new TextEncoder().encode(JSON.stringify(args.descriptor))
+  const plaintext = new TextEncoder().encode(JSON.stringify(descriptor))
+  if (plaintext.byteLength > CHANNEL_MEDIA_HANDOFF_MAX_BYTES) {
+    throw new ArtifactIntakeContractError(ARTIFACT_INTAKE_ERROR.PROVIDER_LOCATOR_INVALID)
+  }
   const sealed = await sealArtifactBytes(plaintext, args.kek, 'kek')
   await env.R2_ARTIFACTS.put(key, sealed.envelope)
 }
@@ -40,15 +47,8 @@ export async function readChannelMediaHandoff(args: {
   if (!object) throw new ArtifactIntakeContractError(ARTIFACT_INTAKE_ERROR.RAW_BYTES_UNAVAILABLE)
   try {
     const plaintext = await unsealArtifactBytes(new Uint8Array(await object.arrayBuffer()), args.kek, 'kek')
-    const parsed = JSON.parse(new TextDecoder().decode(plaintext)) as Partial<ChannelMediaDescriptor>
-    if (
-      parsed.version !== 1 ||
-      (parsed.provider !== 'telegram' && parsed.provider !== 'sendblue') ||
-      typeof parsed.locator !== 'string' || !parsed.locator ||
-      typeof parsed.replyTarget !== 'string' || !parsed.replyTarget ||
-      typeof parsed.occurredAt !== 'number'
-    ) throw new Error('invalid')
-    return parsed as ChannelMediaDescriptor
+    if (plaintext.byteLength > CHANNEL_MEDIA_HANDOFF_MAX_BYTES) throw new Error('invalid')
+    return validateChannelMediaDescriptor(JSON.parse(new TextDecoder().decode(plaintext)))
   } catch (error) {
     if (error instanceof ArtifactIntakeContractError) throw error
     throw new ArtifactIntakeContractError(ARTIFACT_INTAKE_ERROR.PROVIDER_LOCATOR_INVALID)

@@ -3,9 +3,20 @@ import { env } from 'cloudflare:test'
 import { ArtifactIntakeContractError, ARTIFACT_INTAKE_ERROR } from '../src/services/artifact-intake/contracts'
 import { unsealArtifactBytes } from '../src/services/artifact-intake/crypto'
 import { channelMediaHandoffKey, readChannelMediaHandoff } from '../src/services/channel-media/handoff'
-import { getChannelMediaJob, reserveChannelMediaJob } from '../src/services/channel-media/jobs'
+import {
+  claimChannelMediaJob,
+  getChannelMediaJob,
+  reserveChannelMediaJob,
+} from '../src/services/channel-media/jobs'
+import {
+  markChannelMediaFailed,
+  markChannelMediaFinalized,
+  markChannelMediaRetryable,
+} from '../src/services/channel-media/job-transitions'
 import { processChannelMediaJob } from '../src/services/channel-media/orchestrator'
+import { prepareChannelMediaCapture } from '../src/services/channel-media/finalize-job'
 import { reapExpiredChannelMediaJobs } from '../src/services/channel-media/reaper'
+import { channelMediaRecoveryKey } from '../src/services/channel-media/recovery'
 import { getArtifactIntakeOperation } from '../src/services/artifact-intake/operations'
 import { getCanonicalMemoryStore, installCanonicalMemoryTestStore } from '../src/services/canonical-postgres'
 import { getCanonicalDocument } from '../src/services/canonical-memory-query'
@@ -82,6 +93,41 @@ describe('12.8 governed common channel media intake', () => {
     expect(JSON.parse(new TextDecoder().decode(plaintext))).toMatchObject({ provider: 'telegram' })
   })
 
+  it('rejects oversized provider locators, reply targets, captions, and encrypted descriptors', async () => {
+    const kek = await key()
+    for (const descriptor of [
+      { ...telegramDescriptor('limits'), locator: 'x'.repeat(513) },
+      { ...telegramDescriptor('limits'), replyTarget: 'x'.repeat(129) },
+      { ...telegramDescriptor('limits'), caption: 'x'.repeat(4097) },
+      { ...telegramDescriptor('limits'), caption: '😀'.repeat(2048) },
+    ]) {
+      await expect(reserveChannelMediaJob({
+        tenantId: TENANT_A, provider: 'telegram', eventIdentity: crypto.randomUUID(), descriptor, kek,
+      }, env)).rejects.toMatchObject({ code: ARTIFACT_INTAKE_ERROR.PROVIDER_LOCATOR_INVALID })
+    }
+  })
+
+  it('rejects oversized extraction before reserving an artifact upload', async () => {
+    const kek = await key()
+    const tmk = await key()
+    const reserved = await reserve(`description-limit-${SUITE}`, kek)
+    const job = await claimChannelMediaJob(TENANT_A, reserved.id, env)
+    const before = await env.D1_US.prepare(
+      'SELECT COUNT(*) AS count FROM artifact_intake_operations WHERE tenant_id = ?',
+    ).bind(TENANT_A).first<{ count: number }>()
+    await expect(prepareChannelMediaCapture({
+      job: job!, acquired: { bytes: JPEG, detectedMimeType: 'image/jpeg' },
+      description: 'x'.repeat(8193), tmk, env,
+    })).rejects.toMatchObject({ code: ARTIFACT_INTAKE_ERROR.INVALID_STATE })
+    const after = await env.D1_US.prepare(
+      'SELECT COUNT(*) AS count FROM artifact_intake_operations WHERE tenant_id = ?',
+    ).bind(TENANT_A).first<{ count: number }>()
+    expect(Number(after?.count)).toBe(Number(before?.count))
+    await markChannelMediaRetryable(
+      TENANT_A, reserved.id, job!.leaseToken!, ARTIFACT_INTAKE_ERROR.INVALID_STATE, env,
+    )
+  })
+
   it('TMK-seals one original, finalizes one Telegram capture, verifies it, and replies exactly once', async () => {
     const kek = await key()
     const tmk = await key()
@@ -100,10 +146,16 @@ describe('12.8 governed common channel media intake', () => {
       .toBe('processed')
     expect(await processChannelMediaJob({ tenantId: TENANT_A, operationId: job.id, tmk, kek, env, dependencies }))
       .toBe('ignored')
-    expect(deliveries).toEqual([`Captured that photo: searchable-description-${marker}`])
+    expect(deliveries).toEqual(['Captured that photo.'])
 
     const completed = await getChannelMediaJob(TENANT_A, job.id, env)
     expect(completed).toMatchObject({ status: 'delivered', deliveryStatus: 'delivered' })
+    await expect(markChannelMediaFailed(
+      TENANT_A, job.id, crypto.randomUUID(), 'invalid_state', env,
+    )).rejects.toMatchObject({ code: ARTIFACT_INTAKE_ERROR.LEASE_LOST })
+    expect(await getChannelMediaJob(TENANT_A, job.id, env)).toMatchObject({
+      status: 'delivered', deliveryStatus: 'delivered', errorCode: null,
+    })
     const operation = await getArtifactIntakeOperation(env, TENANT_A, completed!.artifactUploadId!)
     expect(operation?.status).toBe('finalized')
     expect(operation?.encryption_family).toBe('tmk')
@@ -159,6 +211,92 @@ describe('12.8 governed common channel media intake', () => {
       'SELECT id FROM artifact_intake_operations WHERE tenant_id = ? AND canonical_capture_id = ?',
     ).bind(TENANT_A, completed!.canonicalCaptureId).all()
     expect(artifacts.results).toHaveLength(1)
+  })
+
+  it('recovers immediately after canonical finalization without rerunning vision or changing the manifest', async () => {
+    const kek = await key()
+    const tmk = await key()
+    const job = await reserve(`post-canonical-${SUITE}`, kek)
+    const describe = vi.fn(async () => `stable-extraction-${SUITE}`)
+    const deliver = vi.fn(async () => 'delivered' as const)
+    let injected = false
+    let recoveryCiphertext = ''
+    const outcome = await processChannelMediaJob({
+      tenantId: TENANT_A, operationId: job.id, tmk, kek, env,
+      dependencies: {
+        acquire: async () => ({ bytes: JPEG, detectedMimeType: 'image/jpeg' }),
+        describe,
+        deliver,
+        afterCanonicalFinalization: async () => {
+          if (!injected) {
+            injected = true
+            const recovery = await env.R2_ARTIFACTS.get(await channelMediaRecoveryKey(TENANT_A, job.id))
+            recoveryCiphertext = new TextDecoder().decode(await recovery!.arrayBuffer())
+            throw new Error('injected_after_canonical_finalization')
+          }
+        },
+      },
+    })
+    expect(outcome).toBe('processed')
+    expect(describe).toHaveBeenCalledTimes(1)
+    expect(deliver).toHaveBeenCalledTimes(1)
+    expect(recoveryCiphertext.startsWith('TMK1:')).toBe(true)
+    expect(recoveryCiphertext).not.toContain(`stable-extraction-${SUITE}`)
+    const completed = await getChannelMediaJob(TENANT_A, job.id, env)
+    expect(completed).toMatchObject({ status: 'delivered', deliveryStatus: 'delivered' })
+    const finalizations = await env.D1_US.prepare(
+      `SELECT manifest_sha256, status FROM artifact_intake_finalizations
+       WHERE tenant_id = ? AND canonical_capture_id = ?`,
+    ).bind(TENANT_A, completed!.canonicalCaptureId).all<{ manifest_sha256: string; status: string }>()
+    expect(finalizations.results).toHaveLength(1)
+    expect(finalizations.results[0]).toMatchObject({ status: 'finalized' })
+    const d1State = await env.D1_US.prepare(
+      'SELECT * FROM channel_media_jobs WHERE tenant_id = ? AND id = ?',
+    ).bind(TENANT_A, job.id).all<Record<string, unknown>>()
+    expect(JSON.stringify(d1State.results)).not.toContain(`stable-extraction-${SUITE}`)
+    expect(await processChannelMediaJob({
+      tenantId: TENANT_A, operationId: job.id, tmk, kek, env,
+      dependencies: {
+        acquire: async () => { throw new Error('must_not_refetch') },
+        describe: async () => { throw new Error('must_not_redescribe') },
+        deliver,
+      },
+    })).toBe('ignored')
+    expect((await env.D1_US.prepare(
+      'SELECT manifest_sha256 FROM artifact_intake_finalizations WHERE tenant_id = ? AND canonical_capture_id = ?',
+    ).bind(TENANT_A, completed!.canonicalCaptureId).first<{ manifest_sha256: string }>())?.manifest_sha256)
+      .toBe(finalizations.results[0]!.manifest_sha256)
+  })
+
+  it('rejects every stale-worker processing transition with an exact lease CAS', async () => {
+    const kek = await key()
+    const job = await reserve(`stale-lease-${SUITE}`, kek)
+    const first = await claimChannelMediaJob(TENANT_A, job.id, env)
+    expect(first?.leaseToken).toBeTruthy()
+    await env.D1_US.prepare(
+      'UPDATE channel_media_jobs SET lease_expires_at = ? WHERE tenant_id = ? AND id = ?',
+    ).bind(Date.now() - 1, TENANT_A, job.id).run()
+    const second = await claimChannelMediaJob(TENANT_A, job.id, env)
+    expect(second?.leaseToken).toBeTruthy()
+    expect(second!.leaseToken).not.toBe(first!.leaseToken)
+
+    await expect(markChannelMediaRetryable(
+      TENANT_A, job.id, first!.leaseToken!, 'download_unavailable', env,
+    )).rejects.toMatchObject({ code: ARTIFACT_INTAKE_ERROR.LEASE_LOST })
+    await expect(markChannelMediaFailed(
+      TENANT_A, job.id, first!.leaseToken!, 'invalid_state', env,
+    )).rejects.toMatchObject({ code: ARTIFACT_INTAKE_ERROR.LEASE_LOST })
+    await expect(markChannelMediaFinalized({
+      tenantId: TENANT_A, operationId: job.id, leaseToken: first!.leaseToken!,
+      uploadId: crypto.randomUUID(), captureId: crypto.randomUUID(),
+      documentId: crypto.randomUUID(), canonicalOperationId: crypto.randomUUID(),
+    }, env)).rejects.toMatchObject({ code: ARTIFACT_INTAKE_ERROR.LEASE_LOST })
+    expect(await getChannelMediaJob(TENANT_A, job.id, env)).toMatchObject({
+      status: 'processing', leaseToken: second!.leaseToken,
+    })
+    await markChannelMediaRetryable(
+      TENANT_A, job.id, second!.leaseToken!, 'download_unavailable', env,
+    )
   })
 
   it('never repeats an acknowledgement after an ambiguous provider delivery result', async () => {

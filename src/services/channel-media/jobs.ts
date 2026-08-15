@@ -9,10 +9,12 @@ import { CHANNEL_MEDIA_HANDOFF_EXPIRY_MS, CHANNEL_MEDIA_JOB_LEASE_MS } from '../
 import { ArtifactIntakeContractError, ARTIFACT_INTAKE_ERROR } from '../artifact-intake/contracts'
 import { sha256Text } from '../artifact-intake/crypto'
 import { writeChannelMediaHandoff } from './handoff'
+import { markChannelMediaFailed } from './job-transitions'
 
 interface JobRow {
   id: string; tenant_id: string; provider: ChannelMediaProvider; status: ChannelMediaJobStatus
-  error_code: string | null; attempt_count: number; lease_expires_at: number | null
+  error_code: string | null; attempt_count: number; lease_token: string | null
+  lease_expires_at: number | null
   delivery_status: ChannelMediaJob['deliveryStatus']; artifact_upload_id: string | null
   handoff_status: ChannelMediaJob['handoffStatus']
   canonical_capture_id: string | null; canonical_document_id: string | null
@@ -23,6 +25,7 @@ function toJob(row: JobRow): ChannelMediaJob {
   return {
     id: row.id, tenantId: row.tenant_id, provider: row.provider, status: row.status,
     errorCode: row.error_code, attemptCount: Number(row.attempt_count),
+    leaseToken: row.lease_token,
     leaseExpiresAt: row.lease_expires_at === null ? null : Number(row.lease_expires_at),
     deliveryStatus: row.delivery_status, handoffStatus: row.handoff_status,
     artifactUploadId: row.artifact_upload_id,
@@ -31,6 +34,11 @@ function toJob(row: JobRow): ChannelMediaJob {
     updatedAt: Number(row.updated_at), expiresAt: Number(row.expires_at),
   }
 }
+
+function changedExactlyOnce(result: D1Result): boolean {
+  return Number(result.meta.changes ?? 0) === 1
+}
+
 export async function getChannelMediaJob(
   tenantId: string,
   operationId: string,
@@ -99,51 +107,25 @@ export async function claimChannelMediaJob(
     return null
   }
   if (existing.status === 'delivered' || existing.status === 'failed' || existing.status === 'delivery_unknown') return null
-  if (existing.expiresAt <= Date.now()) {
-    await markChannelMediaFailed(tenantId, operationId, ARTIFACT_INTAKE_ERROR.LOCATOR_EXPIRED, env)
-    return null
-  }
   const now = Date.now()
   const token = crypto.randomUUID()
-  await env.D1_US.prepare(
+  const claimed = await env.D1_US.prepare(
     `UPDATE channel_media_jobs
      SET status = 'processing', error_code = NULL, attempt_count = attempt_count + 1,
          lease_token = ?, lease_expires_at = ?, updated_at = ?
      WHERE tenant_id = ? AND id = ? AND
        (status IN ('accepted', 'retryable') OR (status = 'processing' AND lease_expires_at < ?))`,
   ).bind(token, now + CHANNEL_MEDIA_JOB_LEASE_MS, now, tenantId, operationId, now).run()
+  if (!changedExactlyOnce(claimed)) return null
   const row = await env.D1_US.prepare(
     'SELECT * FROM channel_media_jobs WHERE tenant_id = ? AND id = ? AND lease_token = ? LIMIT 1',
   ).bind(tenantId, operationId, token).first<JobRow>()
-  return row ? toJob(row) : null
-}
-export async function markChannelMediaRetryable(
-  tenantId: string, operationId: string, errorCode: string, env: Env,
-): Promise<void> {
-  await env.D1_US.prepare(
-    `UPDATE channel_media_jobs SET status = 'retryable', error_code = ?, lease_token = NULL,
-     lease_expires_at = NULL, updated_at = ? WHERE tenant_id = ? AND id = ? AND status = 'processing'`,
-  ).bind(errorCode, Date.now(), tenantId, operationId).run()
-}
-export async function markChannelMediaFinalized(args: {
-  tenantId: string; operationId: string; uploadId: string
-  captureId: string; documentId: string; canonicalOperationId: string
-}, env: Env): Promise<void> {
-  await env.D1_US.prepare(
-    `UPDATE channel_media_jobs SET status = 'finalized', error_code = NULL,
-     artifact_upload_id = ?, canonical_capture_id = ?, canonical_document_id = ?,
-     canonical_operation_id = ?, lease_token = NULL, lease_expires_at = NULL, updated_at = ?
-     WHERE tenant_id = ? AND id = ? AND status IN ('processing', 'finalized')`,
-  ).bind(
-    args.uploadId, args.captureId, args.documentId, args.canonicalOperationId,
-    Date.now(), args.tenantId, args.operationId,
-  ).run()
-}
-export async function markChannelMediaFailed(
-  tenantId: string, operationId: string, errorCode: string, env: Env,
-): Promise<void> {
-  await env.D1_US.prepare(
-    `UPDATE channel_media_jobs SET status = 'failed', error_code = ?, lease_token = NULL,
-     lease_expires_at = NULL, updated_at = ? WHERE tenant_id = ? AND id = ? AND status != 'delivered'`,
-  ).bind(errorCode, Date.now(), tenantId, operationId).run()
+  if (!row) throw new ArtifactIntakeContractError(ARTIFACT_INTAKE_ERROR.LEASE_LOST)
+  if (existing.expiresAt <= now) {
+    await markChannelMediaFailed(
+      tenantId, operationId, token, ARTIFACT_INTAKE_ERROR.LOCATOR_EXPIRED, env,
+    )
+    return await getChannelMediaJob(tenantId, operationId, env)
+  }
+  return toJob(row)
 }

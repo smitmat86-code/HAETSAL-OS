@@ -4,16 +4,19 @@
 import { createHash } from 'node:crypto'
 import { Client } from 'pg'
 import {
-  classifyLegacyMediaObjects,
+  classifyLegacyMediaInventory,
   type LegacyCanonicalReference,
   type LegacyObjectInventoryInput,
 } from '../src/services/artifact-intake/legacy-inventory'
+import { buildLegacyRemediationPlan } from '../src/services/artifact-intake/legacy-remediation'
 
 interface InventoryEnv {
   R2_ARTIFACTS: R2Bucket
   D1_US: D1Database
   HYPERDRIVE_CANONICAL: Hyperdrive
   PROOF_TOKEN: string
+  HMAC_SECRET: string
+  EXECUTOR_COMMIT: string
 }
 
 async function listObjects(env: InventoryEnv): Promise<LegacyObjectInventoryInput[]> {
@@ -23,12 +26,18 @@ async function listObjects(env: InventoryEnv): Promise<LegacyObjectInventoryInpu
     do {
       const page = await env.R2_ARTIFACTS.list({ prefix, cursor, limit: 1000 })
       for (const object of page.objects) {
-        const body = await env.R2_ARTIFACTS.get(object.key, { range: { offset: 0, length: 5 } })
-        const first = body ? new TextDecoder().decode(await body.arrayBuffer()) : ''
+        const body = await env.R2_ARTIFACTS.get(object.key)
+        const bytes = body ? new Uint8Array(await body.arrayBuffer()) : null
+        const first = bytes ? new TextDecoder().decode(bytes.slice(0, 5)) : ''
         const envelopeFamily = first.startsWith('TMK1:') ? 'tmk'
           : first.startsWith('KEK1:') ? 'kek'
             : body ? 'plaintext' : 'unknown'
-        output.push({ key: object.key, size: object.size, channel, envelopeFamily })
+        output.push({
+          key: object.key, size: object.size, channel, envelopeFamily,
+          etag: body?.etag ?? object.etag ?? null,
+          version: body?.version ?? object.version ?? null,
+          objectSha256: bytes ? createHash('sha256').update(bytes).digest('hex') : null,
+        })
       }
       cursor = page.truncated ? page.cursor : undefined
     } while (cursor)
@@ -72,17 +81,27 @@ export default {
            ORDER BY d.id`,
         ),
       ])
-      const report = classifyLegacyMediaObjects({
+      const classification = classifyLegacyMediaInventory({
         objects,
         d1References: d1,
         neonReferences: legacy.rows.map(row => ({ key: row.r2_key, tenantId: row.tenant_id, captureId: row.capture_id })),
         capturesWithManagedArtifact: new Set(managed.rows.map(row => row.capture_id)),
       })
       const fingerprint = createHash('sha256').update(JSON.stringify(documents.rows)).digest('hex')
+      const inventoryAt = new Date().toISOString()
+      const plan = await buildLegacyRemediationPlan({
+        report: classification.report,
+        privateEntries: classification.privateEntries,
+        canonicalContentFingerprintSha256: fingerprint,
+        inventoryAt,
+        executorCommit: env.EXECUTOR_COMMIT,
+        approvalHmacSecret: env.HMAC_SECRET,
+      })
       await client.query('ROLLBACK')
       return Response.json({
-        mode: 'read_only', ...report,
+        mode: 'read_only', generatedAt: inventoryAt, ...classification.report,
         canonicalContent: { documentCount: documents.rowCount ?? documents.rows.length, fingerprintSha256: fingerprint },
+        remediationApproval: plan,
       })
     } catch {
       await client.query('ROLLBACK').catch(() => undefined)

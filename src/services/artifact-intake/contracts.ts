@@ -25,6 +25,7 @@ export const ARTIFACT_INTAKE_ERROR = Object.freeze({
   UNSUPPORTED_MEDIA: 'unsupported_media',
   DELIVERY_REJECTED: 'delivery_rejected',
   DELIVERY_UNKNOWN: 'delivery_unknown',
+  LEASE_LOST: 'lease_lost',
 } as const)
 
 export type ArtifactIntakeErrorCode = typeof ARTIFACT_INTAKE_ERROR[keyof typeof ARTIFACT_INTAKE_ERROR]

@@ -2044,3 +2044,44 @@
 **Next:** Session 5 only: converge Telegram/Sendblue on the common governed intake service and perform the separately authorized legacy media remediation. Do not broaden into compiled-wiki or multi-user redesign work.
 
 ---
+
+## Session 5 - 2026-08-15
+
+**Status:** Deployed and committed-tree green; not complete. Fresh real Telegram and Sendblue image proofs are still required, and legacy remediation is stopped at the explicit approval boundary.
+
+**Commit and deployment evidence:**
+- Accepted Session 4 closeout HEAD: `48f6c5c375cb9ba3cc6131c5e1dafc65a961f208`.
+- Channel convergence implementation: `9d59e4728282986cea9d0de91238220cee24e206`.
+- Queue-consumer line-limit refactor: `ed22f82`.
+- Exact clean deployed tree: `25fda7d594680a718d8515943e39de0451384ec5`.
+- Production Worker version: `9f0d6768-dc99-4542-a25d-c15e920a2253`.
+- Remote D1 migration `1031_channel_media_intake.sql` applied successfully before deployment.
+
+**Implemented:**
+- Replaced both direct `telegram-media/*` and `sendblue-media/*` plaintext writes with one provider-neutral channel-media lifecycle.
+- Verified webhooks now create tenant/provider-scoped hashed idempotency jobs, KEK-seal locators/reply metadata into expiring managed handoffs, and queue only an opaque operation ID.
+- Queue consumers acquire bounded provider bytes, sniff MIME, perform adapter-side vision extraction, TMK-seal the exact original, finalize one primary source through the existing canonical Neon contract, verify artifact status, and only then claim a completion response.
+- Telegram uses fixed Bot API origins with redirect refusal. Sendblue re-fetches current attachment metadata by authenticated `message_handle`; its encrypted fallback URL uses the Session 4 SSRF/DNS/redirect/timeout/streaming controls.
+- Durable leases, deterministic upload/finalize identities, delivery claims, ambiguous-send suppression, and expiry reaping cover webhook/queue redelivery and partial failures without duplicate captures or replies.
+
+**Validation:**
+- Focused Session 5 contract lane: 66 passed; post-refactor focused lane: 36 passed.
+- Exact committed-tree `npm test`: 573 passed, 1 skipped across 95 files.
+- `npm run postflight`: passed.
+- `npx wrangler deploy --dry-run`: passed on the exact deployed tree.
+- Current production status reads for the Session 4 image/PDF canaries remain finalized and TMK-sealed, and the live canonical search surface still returns the Session 3 Codex/Claude proof record. No Session 3 or Session 4 control was weakened.
+
+**Read-only legacy inventory:**
+- Referenced Telegram: 2 objects / 136,114 bytes; referenced Sendblue: 0 / 0.
+- Orphan Telegram: 3 / 204,045; orphan Sendblue: 4 / 142,352.
+- Already encrypted: 0; already migrated: 0; ambiguous/unclassifiable: 0.
+- Two Neon-authoritative references are absent from stale D1 compatibility metadata; there are no D1-only references.
+- Canonical-content fingerprint: `284778f38937b3d25e7e3f9284775eaa638ad70374695efa782fe37c15cfeb6c`.
+- Frozen full-scope approval digest: `62a3ad605be33091628eecd0cb607396c96ea1030a4d3f8da692969518089559`.
+- Phase 2 has not run. No legacy object was migrated, overwritten, or deleted.
+
+**Open gates:**
+- Production `channel_media_jobs` was empty immediately after deploy. Matt must send one fresh non-sensitive image through Telegram and one through Sendblue so envelope/hash/manifest/status/search, redelivery, one-reply, and prohibited-value scans can be reconciled.
+- Matt must separately approve the exact remediation categories and frozen digest before any referenced original or orphan is touched. Ambiguous or changed items remain excluded even after approval.
+
+---

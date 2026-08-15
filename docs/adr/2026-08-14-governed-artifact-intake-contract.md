@@ -1,7 +1,7 @@
 # ADR: governed artifact intake contract
 
 Date: 2026-08-14
-Status: accepted; Sessions 2-4 deployed, Session 5 channel convergence implemented pending deployment and live proof
+Status: accepted; Sessions 2-4 deployed, Session 5 channel convergence deployed pending fresh Telegram/Sendblue live proof
 
 ## Context
 

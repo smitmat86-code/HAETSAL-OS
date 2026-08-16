@@ -107,6 +107,7 @@ export async function processChannelMediaJob(args: ProcessChannelMediaJobArgs): 
     }
     await finalizePreparedChannelMediaJob({
       job, descriptor, prepared, leaseToken, tmk: args.tmk, env: args.env,
+      afterOperationsProtected: args.dependencies?.afterOperationsProtected,
       afterCanonicalFinalization: args.dependencies?.afterCanonicalFinalization,
     })
     return deliverSuccess({ tenantId: job.tenantId, operationId: job.id, descriptor, env: args.env, deliver })

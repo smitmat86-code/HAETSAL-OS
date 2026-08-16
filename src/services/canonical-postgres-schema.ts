@@ -180,6 +180,7 @@ export interface CanonicalArtifactManifestRow {
   role: 'source' | 'derivative'
   parent_artifact_id: string | null
   storage_kind: string
+  r2_key: string | null
   media_type: string | null
   filename: string | null
   byte_length: number | null

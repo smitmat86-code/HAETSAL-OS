@@ -55,9 +55,19 @@ export async function resolveChannelMediaRecovery(args: {
   }
   if (recovery.status === 'failed' || recovery.status === 'inconsistent') {
     if (!args.leaseToken) throw new ArtifactIntakeContractError(ARTIFACT_INTAKE_ERROR.LEASE_LOST)
-    await markChannelMediaFailed(
-      job.tenantId, job.id, args.leaseToken, recovery.errorCode, args.env,
-    )
+    try {
+      await markChannelMediaFailed(
+        job.tenantId, job.id, args.leaseToken, recovery.errorCode, args.env,
+      )
+    } catch (error) {
+      if (!(error instanceof ArtifactIntakeContractError) || error.code !== ARTIFACT_INTAKE_ERROR.LEASE_LOST) {
+        throw error
+      }
+      return {
+        status: 'result',
+        result: { status: 'deferred', reason: 'recovery_in_progress', retryAfterSeconds: 1 },
+      }
+    }
     const failed = await getChannelMediaJob(job.tenantId, job.id, args.env)
     return {
       status: 'result',

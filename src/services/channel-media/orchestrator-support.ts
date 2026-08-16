@@ -11,6 +11,7 @@ export interface ChannelMediaOrchestratorDependencies {
   acquire?: (descriptor: ChannelMediaDescriptor, env: Env) => Promise<AcquiredChannelMedia>
   describe?: (env: Env, bytes: ArrayBuffer, mediaType: string) => Promise<string>
   deliver?: ChannelMediaDeliver
+  afterOperationsProtected?: () => void | Promise<void>
   afterCanonicalFinalization?: () => void | Promise<void>
 }
 

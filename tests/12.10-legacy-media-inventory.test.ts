@@ -1,4 +1,5 @@
-import { describe, expect, it } from 'vitest'
+import { env } from 'cloudflare:test'
+import { describe, expect, inject, it } from 'vitest'
 import {
   classifyLegacyMediaInventory,
   classifyLegacyMediaObjects,
@@ -9,6 +10,67 @@ import {
 
 const identified = (key: string, size: number, channel: 'telegram' | 'sendblue', envelopeFamily: 'tmk' | 'kek' | 'plaintext' | 'unknown') => ({
   key, size, channel, envelopeFamily, etag: `etag-${key}`, objectSha256: 'a'.repeat(64), version: 'v1',
+})
+
+describe('12.10 executable legacy SQL query boundaries', () => {
+  it('executes the D1 compatibility query and fails closed on every pointer ambiguity', async () => {
+    await env.D1_US.exec(String.raw`
+      INSERT INTO tenants (id, created_at, updated_at, hindsight_tenant_id, ai_cost_reset_at)
+        VALUES ('legacy-sql-tenant', 1, 1, 'legacy-sql-hindsight', 1);
+      INSERT INTO canonical_captures
+        (id, tenant_id, source_system, scope, body_r2_key, body_sha256, artifact_id, captured_at, created_at) VALUES
+        ('d1-exact', 'legacy-sql-tenant', 'test', 'general', 'body/exact', 'hash', 'd1-artifact-exact', 1, 1),
+        ('d1-derivative', 'legacy-sql-tenant', 'test', 'general', 'body/derivative', 'hash', 'd1-artifact-primary', 1, 1),
+        ('d1-missing', 'legacy-sql-tenant', 'test', 'general', 'body/missing', 'hash', NULL, 1, 1),
+        ('d1-conflicting', 'legacy-sql-tenant', 'test', 'general', 'body/conflicting', 'hash', 'd1-artifact-conflicting', 1, 1);
+      INSERT INTO canonical_artifacts
+        (id, tenant_id, capture_id, storage_kind, r2_key, created_at) VALUES
+        ('d1-artifact-exact', 'legacy-sql-tenant', 'd1-exact', 'legacy_r2', 'telegram-media/legacy-sql-tenant/exact', 1),
+        ('d1-artifact-primary', 'legacy-sql-tenant', 'd1-derivative', 'managed_r2', 'artifact-intake/v1/d1-primary', 1),
+        ('d1-artifact-derivative', 'legacy-sql-tenant', 'd1-derivative', 'legacy_r2', 'telegram-media/legacy-sql-tenant/derivative', 1),
+        ('d1-artifact-missing', 'legacy-sql-tenant', 'd1-missing', 'legacy_r2', 'telegram-media/legacy-sql-tenant/missing', 1),
+        ('d1-artifact-conflicting', 'legacy-sql-tenant', 'd1-conflicting', 'legacy_r2', 'sendblue-media/legacy-sql-tenant/conflicting', 1),
+        ('d1-artifact-other', 'legacy-sql-tenant', 'd1-conflicting', 'managed_r2', 'artifact-intake/v1/d1-other', 1);
+      INSERT INTO canonical_documents
+        (id, tenant_id, capture_id, artifact_id, body_r2_key, body_sha256, chunk_count, created_at) VALUES
+        ('d1-doc-exact', 'legacy-sql-tenant', 'd1-exact', 'd1-artifact-exact', 'doc/exact', 'hash', 0, 1),
+        ('d1-doc-primary', 'legacy-sql-tenant', 'd1-derivative', 'd1-artifact-primary', 'doc/primary', 'hash', 0, 1),
+        ('d1-doc-conflicting-match', 'legacy-sql-tenant', 'd1-conflicting', 'd1-artifact-conflicting', 'doc/conflicting-match', 'hash', 0, 1),
+        ('d1-doc-conflicting-other', 'legacy-sql-tenant', 'd1-conflicting', 'd1-artifact-other', 'doc/conflicting-other', 'hash', 0, 1);
+    `.replace(/\s+/g, ' '))
+
+    const result = await env.D1_US.prepare(LEGACY_D1_CANONICAL_REFERENCES_SQL).all<{
+      r2_key: string; tenant_id: string; capture_id: string; role: string | null
+    }>()
+    const roles = new Map(result.results.map(row => [row.r2_key, row.role]))
+    expect(roles.get('telegram-media/legacy-sql-tenant/exact')).toBe('source')
+    expect(roles.get('telegram-media/legacy-sql-tenant/derivative')).toBeNull()
+    expect(roles.get('telegram-media/legacy-sql-tenant/missing')).toBeNull()
+    expect(roles.get('sendblue-media/legacy-sql-tenant/conflicting')).toBeNull()
+  })
+
+  it('executes and explains the production PostgreSQL candidate query in PGlite', () => {
+    const proof = inject('legacyPostgresBoundary')
+    expect(proof.explain.length).toBeGreaterThan(0)
+    const replacements = exactManagedPrimarySourceReplacements(proof.rows)
+    expect(replacements).toEqual([{
+      key: 'telegram-media/tenant/valid', tenantId: 'tenant', captureId: 'valid', role: 'source',
+    }])
+
+    const returnedKeys = proof.rows.map(row => row.key)
+    expect(returnedKeys).toContain('telegram-media/tenant/derivative')
+    expect(returnedKeys).toContain('telegram-media/tenant/mixed-source')
+    expect(returnedKeys).toContain('telegram-media/tenant/multiple-a')
+    expect(returnedKeys).not.toContain('telegram-media/tenant/missing')
+    expect(returnedKeys).not.toContain('telegram-media/tenant/mismatch')
+    expect(proof.rows.find(row => row.key === 'telegram-media/tenant/derivative')?.legacy_role).toBe('derivative')
+    expect(proof.rows.find(row => row.key === 'telegram-media/tenant/mixed-source')?.legacy_artifact_count).toBe('2')
+    expect(proof.rows.find(row => row.key === 'telegram-media/tenant/multiple-a')?.eligible_legacy_source_count).toBe('2')
+    expect(returnedKeys).not.toContain('telegram-media/tenant/conflicting')
+    expect(exactManagedPrimarySourceReplacements(
+      proof.rows.filter(row => row.key !== 'telegram-media/tenant/valid'),
+    )).toEqual([])
+  })
 })
 
 describe('12.10 legacy media inventory classification', () => {

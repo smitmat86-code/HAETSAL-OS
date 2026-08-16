@@ -79,6 +79,7 @@ export default defineConfig(async () => {
         'Second-Brain/**',
       ],
       setupFiles: ['./tests/apply-migrations.ts'],
+      globalSetup: ['./tests/legacy-postgres-global-setup.ts'],
       fileParallelism: false,
       maxWorkers: 1,
       minWorkers: 1,

@@ -2,7 +2,11 @@ import { beforeAll, describe, expect, it, vi } from 'vitest'
 import { env } from 'cloudflare:test'
 import { ArtifactIntakeContractError, ARTIFACT_INTAKE_ERROR } from '../src/services/artifact-intake/contracts'
 import { sha256Text, unsealArtifactBytes } from '../src/services/artifact-intake/crypto'
-import { CHANNEL_MEDIA_FINALIZATION_STALE_MS } from '../src/services/artifact-intake/config'
+import {
+  ARTIFACT_UPLOAD_EXPIRY_MS,
+  CHANNEL_MEDIA_FINALIZATION_STALE_MS,
+} from '../src/services/artifact-intake/config'
+import { reapExpiredArtifactUploads } from '../src/services/artifact-intake/reaper'
 import { channelMediaHandoffKey, readChannelMediaHandoff } from '../src/services/channel-media/handoff'
 import {
   claimChannelMediaJob,
@@ -15,6 +19,7 @@ import {
   markChannelMediaRetryable,
 } from '../src/services/channel-media/job-transitions'
 import { processChannelMediaJob } from '../src/services/channel-media/orchestrator'
+import { recoverFinalizedChannelMediaJob } from '../src/services/channel-media/canonical-recovery'
 import { claimChannelMediaJobForProcessing } from '../src/services/channel-media/claim-outcome'
 import { claimChannelMediaDelivery } from '../src/services/channel-media/delivery-state'
 import { deliverChannelMediaClaim } from '../src/services/channel-media/delivery'
@@ -773,6 +778,113 @@ describe('12.8 governed common channel media intake', () => {
     })
   })
 
+  it('survives process death after protection, outlives the original upload TTL, and resumes once', async () => {
+    const kek = await installTenantKek(TENANT_A)
+    const tmk = await key()
+    const store = getCanonicalMemoryStore(env)
+    const before = await store.getStats(TENANT_A)
+    const job = await reserve(`protected-process-death-${SUITE}`, kek)
+    const acquire = vi.fn(async () => ({ bytes: JPEG, detectedMimeType: 'image/jpeg' }))
+    const describe = vi.fn(async () => `protected-process-death-description-${SUITE}`)
+    const delivered: string[] = []
+    const deliver = vi.fn(async (_descriptor: ChannelMediaDescriptor, message: string) => {
+      delivered.push(message)
+      return 'delivered' as const
+    })
+    let protectionReached!: () => void
+    const reached = new Promise<void>(resolve => { protectionReached = resolve })
+    let hookCalls = 0
+    const dependencies = {
+      acquire, describe, deliver,
+      afterOperationsProtected: async () => {
+        hookCalls += 1
+        if (hookCalls === 1) {
+          protectionReached()
+          await new Promise<void>(() => undefined)
+        }
+      },
+    }
+    void processChannelMediaJob({
+      tenantId: TENANT_A, operationId: job.id, tmk, kek, env, dependencies,
+    })
+    await reached
+
+    const operation = await env.D1_US.prepare(
+      `SELECT * FROM artifact_intake_operations
+       WHERE tenant_id = ? AND finalization_id IS NOT NULL ORDER BY created_at DESC LIMIT 1`,
+    ).bind(TENANT_A).first<{ upload_id: string; r2_key: string }>()
+    const finalization = await env.D1_US.prepare(
+      `SELECT id, recovery_expires_at FROM artifact_intake_finalizations
+       WHERE tenant_id = ? AND status = 'reserved' ORDER BY created_at DESC LIMIT 1`,
+    ).bind(TENANT_A).first<{ id: string; recovery_expires_at: number }>()
+    expect(operation).not.toBeNull()
+    expect(finalization?.recovery_expires_at).toBeGreaterThan(Date.now() + ARTIFACT_UPLOAD_EXPIRY_MS)
+
+    await env.D1_US.batch([
+      env.D1_US.prepare(
+        `UPDATE channel_media_jobs SET lease_expires_at = 1 WHERE tenant_id = ? AND id = ?`,
+      ).bind(TENANT_A, job.id),
+      env.D1_US.prepare(
+        `UPDATE artifact_intake_finalizations SET lease_expires_at = 1 WHERE tenant_id = ? AND id = ?`,
+      ).bind(TENANT_A, finalization!.id),
+    ])
+    const afterOriginalTtl = Date.now() + ARTIFACT_UPLOAD_EXPIRY_MS + 1
+    expect((await reapExpiredArtifactUploads(env, afterOriginalTtl, 100)).reaped).toBe(0)
+    expect(await env.R2_ARTIFACTS.head(operation!.r2_key)).not.toBeNull()
+
+    await expect(processChannelMediaJob({
+      tenantId: TENANT_A, operationId: job.id, tmk, kek, env, dependencies,
+    })).resolves.toBe('processed')
+    expect(acquire).toHaveBeenCalledTimes(1)
+    expect(describe).toHaveBeenCalledTimes(1)
+    expect(deliver).toHaveBeenCalledTimes(1)
+    expect(delivered).toEqual(['Captured that photo.'])
+    expect(hookCalls).toBe(2)
+    expect(await env.R2_ARTIFACTS.head(operation!.r2_key)).not.toBeNull()
+    expect(await env.D1_US.prepare(
+      `SELECT status FROM artifact_intake_finalizations WHERE tenant_id = ? AND id = ?`,
+    ).bind(TENANT_A, finalization!.id).first<{ status: string }>()).toMatchObject({ status: 'finalized' })
+    const after = await store.getStats(TENANT_A)
+    expect(after.captureCount).toBe(before.captureCount + 1)
+    expect(after.documentCount).toBe(before.documentCount + 1)
+  })
+
+  it.each(['missing', 'tampered'] as const)(
+    'fails closed when managed ciphertext is %s during canonical recovery',
+    async (mode) => {
+      const kek = await installTenantKek(TENANT_A)
+      const tmk = await key()
+      const job = await reserve(`raw-proof-${mode}-${SUITE}`, kek)
+      const messages: string[] = []
+      const outcome = await processChannelMediaJob({
+        tenantId: TENANT_A, operationId: job.id, tmk, kek, env,
+        dependencies: {
+          acquire: async () => ({ bytes: JPEG, detectedMimeType: 'image/jpeg' }),
+          describe: async () => `raw-proof-${mode}-description-${SUITE}`,
+          deliver: async (_descriptor, message) => { messages.push(message); return 'delivered' },
+          afterCanonicalFinalization: async () => {
+            const operation = await env.D1_US.prepare(
+              `SELECT r2_key, ciphertext_byte_length FROM artifact_intake_operations
+               WHERE tenant_id = ? AND status = 'finalized' ORDER BY created_at DESC LIMIT 1`,
+            ).bind(TENANT_A).first<{ r2_key: string; ciphertext_byte_length: number }>()
+            if (!operation) throw new Error('missing test operation')
+            if (mode === 'missing') await env.R2_ARTIFACTS.delete(operation.r2_key)
+            else await env.R2_ARTIFACTS.put(
+              operation.r2_key, crypto.getRandomValues(new Uint8Array(operation.ciphertext_byte_length)),
+            )
+            throw new Error(`injected_${mode}_raw_artifact`)
+          },
+        },
+      })
+      expect(outcome).toBe('terminal_failed')
+      expect(messages).toEqual(['I could not capture that photo. Please try sending it again.'])
+      expect(messages).not.toContain('Captured that photo.')
+      expect(await getChannelMediaJob(TENANT_A, job.id, env)).toMatchObject({
+        status: 'failed', deliveryStatus: 'delivered', errorCode: ARTIFACT_INTAKE_ERROR.INVALID_STATE,
+      })
+    },
+  )
+
   it('fences a stale worker after its delayed finalization reservation loses the channel lease', async () => {
     const kek = await key()
     const tmk = await key()
@@ -861,7 +973,11 @@ describe('12.8 governed common channel media intake', () => {
     expect(finalStats.documentCount).toBe(beforeStats.documentCount)
     expect(afterOperations.results).toHaveLength(beforeOperations.results.length + 1)
     expect(afterArtifacts.objects).toHaveLength(beforeArtifacts.objects.length + 1)
-    expect(finalizations.results).toHaveLength(1)
+    expect(finalizations.results).toEqual([{ status: 'failed' }])
+    expect(await env.D1_US.prepare(
+      `SELECT finalization_id FROM artifact_intake_operations
+       WHERE tenant_id = ? ORDER BY created_at DESC LIMIT 1`,
+    ).bind(TENANT_A).first<{ finalization_id: string | null }>()).toMatchObject({ finalization_id: null })
     expect(acquire).toHaveBeenCalledTimes(1)
     expect(describe).toHaveBeenCalledTimes(1)
     expect(deliver).toHaveBeenCalledTimes(1)
@@ -945,6 +1061,53 @@ describe('12.8 governed common channel media intake', () => {
     expect(acquire).toHaveBeenCalledTimes(1)
     expect(describe).toHaveBeenCalledTimes(1)
     expect(deliver).toHaveBeenCalledTimes(1)
+  })
+
+  it('repairs proof-backed canonical success after the finalization recovery deadline', async () => {
+    const kek = await installTenantKek(TENANT_A)
+    const tmk = await key()
+    const job = await reserve(`proof-backed-stale-repair-${SUITE}`, kek)
+    await expect(processChannelMediaJob({
+      tenantId: TENANT_A, operationId: job.id, tmk, kek, env,
+      dependencies: {
+        acquire: async () => ({ bytes: JPEG, detectedMimeType: 'image/jpeg' }),
+        describe: async () => `proof-backed-stale-repair-${SUITE}`,
+        deliver: async () => 'delivered',
+      },
+    })).resolves.toBe('processed')
+    const finalization = await env.D1_US.prepare(
+      `SELECT id, canonical_capture_id FROM artifact_intake_finalizations
+       WHERE tenant_id = ? AND idempotency_hash = ?`,
+    ).bind(TENANT_A, await sha256Text(`channel-media-finalize:${job.id}`))
+      .first<{ id: string; canonical_capture_id: string }>()
+    const operation = await env.D1_US.prepare(
+      `SELECT upload_id, r2_key FROM artifact_intake_operations
+       WHERE tenant_id = ? AND canonical_capture_id = ?`,
+    ).bind(TENANT_A, finalization!.canonical_capture_id)
+      .first<{ upload_id: string; r2_key: string }>()
+    await env.D1_US.batch([
+      env.D1_US.prepare(
+        `UPDATE artifact_intake_finalizations
+         SET status = 'reserved', recovery_expires_at = 1, lease_owner = NULL, lease_expires_at = 1
+         WHERE tenant_id = ? AND id = ?`,
+      ).bind(TENANT_A, finalization!.id),
+      env.D1_US.prepare(
+        `UPDATE artifact_intake_operations
+         SET status = 'sealed', expires_at = 1, finalization_protected_until = 1
+         WHERE tenant_id = ? AND upload_id = ?`,
+      ).bind(TENANT_A, operation!.upload_id),
+      env.D1_US.prepare(
+        `UPDATE channel_media_jobs
+         SET status = 'processing', delivery_status = 'pending', lease_token = NULL, lease_expires_at = NULL
+         WHERE tenant_id = ? AND id = ?`,
+      ).bind(TENANT_A, job.id),
+    ])
+    const staleJob = await getChannelMediaJob(TENANT_A, job.id, env)
+    await expect(recoverFinalizedChannelMediaJob(staleJob!, env)).resolves.toEqual({ status: 'recovered' })
+    expect(await env.D1_US.prepare(
+      `SELECT status FROM artifact_intake_finalizations WHERE tenant_id = ? AND id = ?`,
+    ).bind(TENANT_A, finalization!.id).first<{ status: string }>()).toMatchObject({ status: 'finalized' })
+    expect(await env.R2_ARTIFACTS.head(operation!.r2_key)).not.toBeNull()
   })
 
   it('fails a genuinely abandoned stale finalization reservation instead of retrying forever', async () => {

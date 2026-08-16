@@ -377,6 +377,7 @@ export class InMemoryCanonicalMemoryStore implements CanonicalMemoryStore {
         role: row.role,
         parent_artifact_id: row.parent_artifact_id,
         storage_kind: row.storage_kind,
+        r2_key: row.r2_key,
         media_type: row.media_type,
         filename: row.filename,
         byte_length: row.byte_length,
@@ -831,7 +832,7 @@ export class PostgresCanonicalMemoryStore implements CanonicalMemoryStore {
     `)
     if (!row) return null
     const manifest = await this.rows<CanonicalDocumentLookupRow['artifact_manifest'][number]>(this.sql`
-      SELECT a.id AS artifact_id, a.role, a.parent_artifact_id, a.storage_kind, a.media_type, a.filename,
+      SELECT a.id AS artifact_id, a.role, a.parent_artifact_id, a.storage_kind, a.r2_key, a.media_type, a.filename,
              a.byte_length, a.sha256, a.cipher_sha256, a.encryption_family, a.ordinal,
              (a.id = c.artifact_id) AS primary
       FROM haetsal_canonical.canonical_artifacts a

@@ -17,7 +17,6 @@ import {
 } from '../artifact-intake/operations'
 import { markChannelMediaFinalized, renewChannelMediaLease } from './job-transitions'
 import { writeChannelMediaRecovery } from './recovery'
-
 export function channelMediaSearchableBody(
   descriptor: ChannelMediaDescriptor,
   description: string,
@@ -100,6 +99,7 @@ export async function finalizePreparedChannelMediaJob(args: {
   leaseToken: string
   tmk: CryptoKey
   env: Env
+  afterOperationsProtected?: () => void | Promise<void>
   afterCanonicalFinalization?: () => void | Promise<void>
 }): Promise<void> {
   const operation = await getArtifactIntakeOperation(args.env, args.job.tenantId, args.prepared.uploadId)
@@ -129,6 +129,7 @@ export async function finalizePreparedChannelMediaJob(args: {
     beforeCanonicalSideEffects: () => renewChannelMediaLease(
       args.job.tenantId, args.job.id, args.leaseToken, args.env,
     ),
+    afterOperationsProtected: args.afterOperationsProtected,
   })
   await args.afterCanonicalFinalization?.()
   const verified = await getArtifactIntakeStatus({

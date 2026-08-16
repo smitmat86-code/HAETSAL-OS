@@ -29,6 +29,38 @@ export async function managedArtifactExists(env: Env, key: string): Promise<bool
   return Boolean(await env.R2_ARTIFACTS.head(key))
 }
 
+export interface ManagedArtifactCiphertextProof {
+  key: string
+  byteLength: number
+  ciphertextSha256: string
+}
+
+/** Proves the exact managed object, not merely that some object exists at a recorded key. */
+export async function proveManagedArtifactCiphertext(args: {
+  env: Env
+  tenantId: string
+  uploadId: string
+  recordedKey: string
+  expectedCiphertextByteLength: number
+  expectedCiphertextSha256: string
+}): Promise<ManagedArtifactCiphertextProof> {
+  const expectedKey = await managedArtifactR2Key(args.tenantId, args.uploadId)
+  if (args.recordedKey !== expectedKey) {
+    throw new ArtifactIntakeContractError(ARTIFACT_INTAKE_ERROR.INVALID_STATE)
+  }
+  const object = await args.env.R2_ARTIFACTS.get(expectedKey)
+  if (!object) throw new ArtifactIntakeContractError(ARTIFACT_INTAKE_ERROR.INVALID_STATE)
+  const bytes = new Uint8Array(await object.arrayBuffer())
+  if (bytes.byteLength !== args.expectedCiphertextByteLength) {
+    throw new ArtifactIntakeContractError(ARTIFACT_INTAKE_ERROR.HASH_MISMATCH)
+  }
+  const ciphertextSha256 = await sha256Bytes(bytes)
+  if (ciphertextSha256 !== args.expectedCiphertextSha256) {
+    throw new ArtifactIntakeContractError(ARTIFACT_INTAKE_ERROR.HASH_MISMATCH)
+  }
+  return { key: expectedKey, byteLength: bytes.byteLength, ciphertextSha256 }
+}
+
 export async function deleteProvenManagedArtifact(args: {
   env: Env
   tenantId: string

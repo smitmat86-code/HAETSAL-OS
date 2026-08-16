@@ -8,11 +8,15 @@ import type {
 // NULL and is classified ambiguous.
 export const LEGACY_D1_CANONICAL_REFERENCES_SQL = `
   SELECT artifact.r2_key, artifact.tenant_id, artifact.capture_id,
-         CASE WHEN artifact.id = capture.artifact_id AND EXISTS (
-           SELECT 1 FROM canonical_documents document
+         CASE WHEN artifact.id = capture.artifact_id AND 1 = (
+           SELECT COUNT(*) FROM canonical_documents document
            WHERE document.tenant_id = artifact.tenant_id
              AND document.capture_id = artifact.capture_id
              AND document.artifact_id = artifact.id
+         ) AND 1 = (
+           SELECT COUNT(*) FROM canonical_documents document
+           WHERE document.tenant_id = artifact.tenant_id
+             AND document.capture_id = artifact.capture_id
          ) THEN 'source' ELSE NULL END AS role
   FROM canonical_artifacts artifact
   LEFT JOIN canonical_captures capture
@@ -37,9 +41,15 @@ export const LEGACY_MANAGED_REPLACEMENT_CANDIDATES_SQL = `
     JOIN haetsal_canonical.canonical_artifacts managed
       ON managed.id = capture.artifact_id AND managed.id = document.artifact_id
      AND managed.tenant_id = capture.tenant_id
+     AND managed.capture_id = capture.id
     WHERE managed.storage_kind = 'managed_r2'
       AND managed.r2_key LIKE 'artifact-intake/v1/%'
       AND managed.role = 'source'
+      AND 1 = (
+        SELECT COUNT(*) FROM haetsal_canonical.canonical_documents pointer
+        WHERE pointer.tenant_id = capture.tenant_id
+          AND pointer.capture_id = capture.id
+      )
   )
   SELECT legacy.key, legacy.tenant_id, legacy.capture_id, legacy.legacy_role,
          legacy.legacy_artifact_count, legacy.eligible_legacy_source_count,

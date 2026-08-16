@@ -15,23 +15,33 @@ import {
 } from './contracts'
 import { sha256Text } from './crypto'
 import {
+  acquireArtifactFinalizationLease,
+  failArtifactFinalizationAndReleaseOperations,
   getArtifactIntakeOperation,
+  loadArtifactOperationsForFinalization,
   markArtifactOperationsFinalized,
   markArtifactOperationsForFinalize,
   type ArtifactIntakeOperationRow,
 } from './operations'
+import { proveManagedArtifactCiphertext } from './storage'
+import { artifactManifestIdentitySha256 } from './manifest-identity'
 import { finalizeArtifactCaptureSchema } from './schemas'
 
-interface FinalizationRow {
+export interface ArtifactFinalizationRow {
   id: string
   tenant_id: string
   idempotency_hash: string
   manifest_sha256: string
+  artifact_manifest_sha256: string | null
   status: 'reserved' | 'finalized' | 'failed'
   error_code: string | null
   canonical_capture_id: string
   canonical_document_id: string
   canonical_operation_id: string
+  expected_operation_count: number
+  lease_owner: string | null
+  lease_expires_at: number | null
+  recovery_expires_at: number | null
   created_at: number
   updated_at: number
 }
@@ -43,6 +53,8 @@ export interface FinalizeArtifactCaptureFence {
    * this to prove that their exact processing lease is still owned.
    */
   beforeCanonicalSideEffects?: () => void | Promise<void>
+  /** Deterministic crash/race hook used after all operations are protected. */
+  afterOperationsProtected?: () => void | Promise<void>
 }
 
 async function manifestFingerprint(input: FinalizeArtifactCaptureInput): Promise<string> {
@@ -71,15 +83,27 @@ async function manifestFingerprint(input: FinalizeArtifactCaptureInput): Promise
 async function reserveFinalization(
   input: FinalizeArtifactCaptureInput,
   env: Env,
-): Promise<FinalizationRow> {
+): Promise<{ row: ArtifactFinalizationRow; created: boolean }> {
   const now = Date.now()
   const idempotencyHash = await sha256Text(input.idempotencyKey)
   const fingerprint = await manifestFingerprint(input)
-  await env.D1_US.prepare(
+  const artifactManifestSha256 = await artifactManifestIdentitySha256(input.artifacts.map(artifact => ({
+    uploadId: artifact.uploadId, role: artifact.role,
+    parentUploadId: artifact.parentUploadId ?? null, primary: artifact.primary,
+    mediaType: resolveArtifactMimeType({
+      declaredMimeType: artifact.declaredMimeType,
+      detectedMimeType: artifact.detectedMimeType,
+    }),
+    byteLength: artifact.byteLength,
+    plaintextSha256: artifact.plaintextSha256,
+  })))
+  const inserted = await env.D1_US.prepare(
     `INSERT OR IGNORE INTO artifact_intake_finalizations
      (id, tenant_id, idempotency_hash, manifest_sha256, status, error_code,
-      canonical_capture_id, canonical_document_id, canonical_operation_id, created_at, updated_at)
-     VALUES (?, ?, ?, ?, 'reserved', NULL, ?, ?, ?, ?, ?)`,
+      canonical_capture_id, canonical_document_id, canonical_operation_id, created_at, updated_at,
+      expected_operation_count, artifact_manifest_sha256,
+      lease_owner, lease_expires_at, recovery_expires_at)
+     VALUES (?, ?, ?, ?, 'reserved', NULL, ?, ?, ?, ?, ?, ?, ?, NULL, NULL, NULL)`,
   ).bind(
     crypto.randomUUID(),
     input.tenantId,
@@ -90,15 +114,39 @@ async function reserveFinalization(
     crypto.randomUUID(),
     now,
     now,
+    input.artifacts.length,
+    artifactManifestSha256,
   ).run()
   const row = await env.D1_US.prepare(
     `SELECT * FROM artifact_intake_finalizations WHERE tenant_id = ? AND idempotency_hash = ? LIMIT 1`,
-  ).bind(input.tenantId, idempotencyHash).first<FinalizationRow>()
+  ).bind(input.tenantId, idempotencyHash).first<ArtifactFinalizationRow>()
   if (!row) throw new ArtifactIntakeContractError(ARTIFACT_INTAKE_ERROR.INVALID_STATE)
   if (row.manifest_sha256 !== fingerprint) {
     throw new ArtifactIntakeContractError(ARTIFACT_INTAKE_ERROR.INVALID_MANIFEST)
   }
-  return row
+  if (Number(row.expected_operation_count) !== input.artifacts.length) {
+    throw new ArtifactIntakeContractError(ARTIFACT_INTAKE_ERROR.INVALID_MANIFEST)
+  }
+  if (row.artifact_manifest_sha256 === null) {
+    const upgraded = await env.D1_US.prepare(
+      `UPDATE artifact_intake_finalizations SET artifact_manifest_sha256 = ?, updated_at = ?
+       WHERE tenant_id = ? AND id = ? AND artifact_manifest_sha256 IS NULL AND manifest_sha256 = ?`,
+    ).bind(artifactManifestSha256, now, input.tenantId, row.id, fingerprint).run()
+    const persisted = Number(upgraded.meta.changes ?? 0) === 1
+      ? artifactManifestSha256
+      : await env.D1_US.prepare(
+        `SELECT artifact_manifest_sha256 FROM artifact_intake_finalizations
+         WHERE tenant_id = ? AND id = ? LIMIT 1`,
+      ).bind(input.tenantId, row.id).first<string>('artifact_manifest_sha256')
+    if (persisted !== artifactManifestSha256) {
+      throw new ArtifactIntakeContractError(ARTIFACT_INTAKE_ERROR.INVALID_STATE)
+    }
+    row.artifact_manifest_sha256 = persisted
+  }
+  if (row.artifact_manifest_sha256 !== artifactManifestSha256) {
+    throw new ArtifactIntakeContractError(ARTIFACT_INTAKE_ERROR.INVALID_MANIFEST)
+  }
+  return { row, created: Number(inserted.meta.changes ?? 0) === 1 }
 }
 
 function validateManifestContract(input: FinalizeArtifactCaptureInput): void {
@@ -123,7 +171,7 @@ function validateManifestContract(input: FinalizeArtifactCaptureInput): void {
 
 async function loadSealedOperations(
   input: FinalizeArtifactCaptureInput,
-  finalization: FinalizationRow,
+  finalization: ArtifactFinalizationRow,
   env: Env,
 ): Promise<Map<string, ArtifactIntakeOperationRow>> {
   const rows = new Map<string, ArtifactIntakeOperationRow>()
@@ -134,13 +182,22 @@ async function loadSealedOperations(
     if (row.status !== 'sealed' && row.status !== 'finalized') {
       throw new ArtifactIntakeContractError(ARTIFACT_INTAKE_ERROR.INVALID_STATE)
     }
-    if (row.status === 'finalized' && row.canonical_capture_id !== finalization.canonical_capture_id) {
+    if (row.finalization_id && row.finalization_id !== finalization.id) {
+      throw new ArtifactIntakeContractError(ARTIFACT_INTAKE_ERROR.INVALID_STATE)
+    }
+    if (row.status === 'finalized' && (
+      row.finalization_id !== finalization.id ||
+      row.canonical_capture_id !== finalization.canonical_capture_id ||
+      row.canonical_document_id !== finalization.canonical_document_id ||
+      row.canonical_operation_id !== finalization.canonical_operation_id
+    )) {
       throw new ArtifactIntakeContractError(ARTIFACT_INTAKE_ERROR.INVALID_STATE)
     }
     if (
       Number(row.byte_length) !== artifact.byteLength ||
       row.plaintext_sha256 !== artifact.plaintextSha256.toLowerCase() ||
       !row.ciphertext_sha256 ||
+      !Number.isInteger(Number(row.ciphertext_byte_length)) || Number(row.ciphertext_byte_length) <= 0 ||
       !row.encryption_family
     ) {
       throw new ArtifactIntakeContractError(ARTIFACT_INTAKE_ERROR.INVALID_MANIFEST)
@@ -182,7 +239,7 @@ function buildManifest(
 }
 
 function receiptFor(
-  finalization: FinalizationRow,
+  finalization: ArtifactFinalizationRow,
   manifest: ArtifactManifestReceipt[],
   input: FinalizeArtifactCaptureInput,
 ): FinalizeArtifactCaptureReceipt {
@@ -199,13 +256,16 @@ function receiptFor(
 }
 
 async function markFinalizationComplete(
-  row: FinalizationRow,
+  row: ArtifactFinalizationRow,
   uploadIds: string[],
+  leaseOwner: string,
   env: Env,
 ): Promise<void> {
   const now = Date.now()
   await markArtifactOperationsFinalized({
     tenantId: row.tenant_id,
+    finalizationId: row.id,
+    leaseOwner,
     uploadIds,
     captureId: row.canonical_capture_id,
     documentId: row.canonical_document_id,
@@ -214,9 +274,88 @@ async function markFinalizationComplete(
   }, env)
   await env.D1_US.prepare(
     `UPDATE artifact_intake_finalizations
-     SET status = 'finalized', error_code = NULL, updated_at = ?
-     WHERE tenant_id = ? AND id = ?`,
-  ).bind(now, row.tenant_id, row.id).run()
+     SET status = 'finalized', error_code = NULL, lease_owner = NULL,
+         lease_expires_at = NULL, recovery_expires_at = NULL, updated_at = ?
+     WHERE tenant_id = ? AND id = ? AND status = 'reserved'
+       AND lease_owner = ? AND lease_expires_at > ?`,
+  ).bind(now, row.tenant_id, row.id, leaseOwner, now).run().then(result => {
+    if (Number(result.meta.changes ?? 0) !== 1) {
+      throw new ArtifactIntakeContractError(ARTIFACT_INTAKE_ERROR.LEASE_LOST)
+    }
+  })
+}
+
+async function assertFinalizationLease(
+  row: ArtifactFinalizationRow,
+  leaseOwner: string,
+  env: Env,
+): Promise<void> {
+  const owned = await env.D1_US.prepare(
+    `SELECT id FROM artifact_intake_finalizations
+     WHERE tenant_id = ? AND id = ? AND status = 'reserved'
+       AND lease_owner = ? AND lease_expires_at > ? LIMIT 1`,
+  ).bind(row.tenant_id, row.id, leaseOwner, Date.now()).first<{ id: string }>()
+  if (!owned) throw new ArtifactIntakeContractError(ARTIFACT_INTAKE_ERROR.LEASE_LOST)
+}
+
+async function proveRawOperations(
+  rows: Map<string, ArtifactIntakeOperationRow>,
+  env: Env,
+): Promise<void> {
+  await Promise.all([...rows.values()].map(row => {
+    if (!row.ciphertext_sha256 || !row.ciphertext_byte_length || !row.encryption_family) {
+      throw new ArtifactIntakeContractError(ARTIFACT_INTAKE_ERROR.INVALID_STATE)
+    }
+    if (row.expiry_claim_token) {
+      throw new ArtifactIntakeContractError(ARTIFACT_INTAKE_ERROR.INVALID_STATE)
+    }
+    return proveManagedArtifactCiphertext({
+      env,
+      tenantId: row.tenant_id,
+      uploadId: row.upload_id,
+      recordedKey: row.r2_key,
+      expectedCiphertextByteLength: Number(row.ciphertext_byte_length),
+      expectedCiphertextSha256: row.ciphertext_sha256,
+    })
+  }))
+}
+
+async function assertCanonicalProof(args: {
+  input: FinalizeArtifactCaptureInput
+  finalization: ArtifactFinalizationRow
+  manifest: ArtifactManifestReceipt[]
+  operations: Map<string, ArtifactIntakeOperationRow>
+  env: Env
+}): Promise<void> {
+  const store = getCanonicalMemoryStore(args.env)
+  const capture = await store.getCapture(args.input.tenantId, args.finalization.canonical_capture_id)
+  const document = await store.getDocument(args.input.tenantId, args.finalization.canonical_document_id)
+  const operation = await store.getOperationById(args.input.tenantId, args.finalization.canonical_operation_id)
+  const primary = args.manifest.filter(item => item.primary)
+  if (
+    !capture || !document || !operation || primary.length !== 1 ||
+    capture.source_system !== (args.input.sourceSystem ?? 'file') ||
+    capture.source_ref !== (args.input.sourceRef ?? null) ||
+    capture.artifact_id !== primary[0]!.artifactId ||
+    document.capture_id !== capture.id || document.artifact_id !== primary[0]!.artifactId ||
+    document.body_r2_key !== capture.body_r2_key ||
+    operation.capture_id !== capture.id || operation.status !== 'accepted' ||
+    document.artifact_manifest.length !== args.manifest.length
+  ) throw new ArtifactIntakeContractError(ARTIFACT_INTAKE_ERROR.INVALID_STATE)
+
+  for (let index = 0; index < args.manifest.length; index += 1) {
+    const expected = args.manifest[index]!
+    const actual = document.artifact_manifest[index]
+    if (
+      !actual || actual.ordinal !== index || actual.artifact_id !== expected.artifactId ||
+      actual.role !== expected.role || actual.parent_artifact_id !== expected.parentArtifactId ||
+      actual.primary !== expected.primary || actual.storage_kind !== 'managed_r2' ||
+      actual.r2_key !== args.operations.get(expected.uploadId)?.r2_key ||
+      actual.media_type !== expected.mediaType || Number(actual.byte_length) !== expected.byteLength ||
+      actual.sha256 !== expected.plaintextSha256 || actual.cipher_sha256 !== expected.ciphertextSha256 ||
+      actual.encryption_family !== expected.encryptionFamily
+    ) throw new ArtifactIntakeContractError(ARTIFACT_INTAKE_ERROR.INVALID_STATE)
+  }
 }
 
 export async function finalizeArtifactCapture(
@@ -226,78 +365,145 @@ export async function finalizeArtifactCapture(
   fence: FinalizeArtifactCaptureFence = {},
 ): Promise<FinalizeArtifactCaptureReceipt> {
   validateManifestContract(input)
-  const finalization = await reserveFinalization(input, env)
-  const operations = await loadSealedOperations(input, finalization, env)
-  const manifest = buildManifest(input, operations)
+  const reservation = await reserveFinalization(input, env)
+  const finalization = reservation.row
   const uploadIds = input.artifacts.map(artifact => artifact.uploadId)
-
   const store = getCanonicalMemoryStore(env)
-  const existingCapture = await store.getCapture(input.tenantId, finalization.canonical_capture_id)
-  if (existingCapture) {
-    const existingDocument = await store.getDocument(input.tenantId, finalization.canonical_document_id)
-    if (!existingDocument) throw new ArtifactIntakeContractError(ARTIFACT_INTAKE_ERROR.INVALID_STATE)
-    await fence.beforeCanonicalSideEffects?.()
-    await markFinalizationComplete(finalization, uploadIds, env)
+
+  if (finalization.status === 'failed') {
+    throw new ArtifactIntakeContractError(ARTIFACT_INTAKE_ERROR.INVALID_STATE)
+  }
+  if (finalization.status === 'finalized') {
+    const operations = await loadSealedOperations(input, finalization, env)
+    const manifest = buildManifest(input, operations)
+    await proveRawOperations(operations, env)
+    await assertCanonicalProof({ input, finalization, manifest, operations, env })
     return receiptFor(finalization, manifest, input)
   }
 
-  await fence.beforeCanonicalSideEffects?.()
-  await markArtifactOperationsForFinalize({
-    tenantId: input.tenantId,
-    uploadIds,
-    captureId: finalization.canonical_capture_id,
-    documentId: finalization.canonical_document_id,
-    operationId: finalization.canonical_operation_id,
-    now: Date.now(),
-  }, env)
-
-  const refs: CanonicalArtifactRef[] = manifest.map((artifact, index) => ({
-    artifactId: artifact.artifactId,
-    mode: 'stored_r2',
-    storageKind: 'managed_r2',
-    storageKey: operations.get(artifact.uploadId)!.r2_key,
-    filename: input.artifacts[index]!.filename ?? null,
-    mediaType: artifact.mediaType,
-    byteLength: artifact.byteLength,
-    sha256: artifact.plaintextSha256,
-    cipherSha256: artifact.ciphertextSha256,
-    encryptionFamily: artifact.encryptionFamily,
-    role: artifact.role,
-    parentArtifactId: artifact.parentArtifactId,
-    primary: artifact.primary,
-  }))
-
   try {
-    await captureCanonicalMemory({
-      tenantId: input.tenantId,
+    await fence.beforeCanonicalSideEffects?.()
+  } catch (error) {
+    if (reservation.created) {
+      await failArtifactFinalizationAndReleaseOperations({
+        tenantId: input.tenantId, finalizationId: finalization.id,
+        errorCode: error instanceof ArtifactIntakeContractError
+          ? error.code : ARTIFACT_INTAKE_ERROR.LEASE_LOST,
+        now: Date.now(),
+      }, env).catch(() => undefined)
+    }
+    throw error
+  }
+
+  const leaseOwner = crypto.randomUUID()
+  let operations: Map<string, ArtifactIntakeOperationRow> | null = null
+  try {
+    const ownership = await acquireArtifactFinalizationLease({
+      tenantId: input.tenantId, finalizationId: finalization.id, leaseOwner,
+      expectedOperationCount: input.artifacts.length,
       captureId: finalization.canonical_capture_id,
       documentId: finalization.canonical_document_id,
       operationId: finalization.canonical_operation_id,
-      sourceSystem: input.sourceSystem ?? 'file',
-      sourceRef: input.sourceRef ?? null,
-      scope: input.scope,
-      title: input.title ?? null,
-      body: input.content,
-      bodyEncrypted: await encryptContentForArchive(input.content, contentKey),
-      artifactRefs: refs,
-      governance: {
-        authorKind: input.authorKind ?? 'external_client',
-        agentIdentity: input.agentIdentity ?? input.clientName,
-        modelRuntime: input.modelRuntime ?? null,
-        provenanceNote: input.provenance ?? null,
-        memoryClass: 'episode',
-        trustState: 'evidence',
-        usePolicy: 'can_use_as_evidence',
-      },
-    }, env, input.tenantId)
-  } catch {
-    await env.D1_US.prepare(
-      `UPDATE artifact_intake_finalizations SET status = 'failed', error_code = ?, updated_at = ?
-       WHERE tenant_id = ? AND id = ? AND status != 'finalized'`,
-    ).bind(ARTIFACT_INTAKE_ERROR.CANONICAL_WRITE_FAILED, Date.now(), input.tenantId, finalization.id).run().catch(() => undefined)
+      now: Date.now(),
+    }, env)
+
+    const eligible = await loadSealedOperations(input, finalization, env)
+    await markArtifactOperationsForFinalize({
+      tenantId: input.tenantId, finalizationId: finalization.id, leaseOwner, uploadIds,
+      captureId: finalization.canonical_capture_id,
+      documentId: finalization.canonical_document_id,
+      operationId: finalization.canonical_operation_id,
+      now: Date.now(), protectedUntil: ownership.recoveryExpiresAt,
+    }, env)
+    const bound = await loadArtifactOperationsForFinalization({
+      tenantId: input.tenantId, finalizationId: finalization.id,
+      expectedOperationCount: input.artifacts.length,
+    }, env)
+    operations = new Map(bound.map(row => [row.upload_id, row]))
+    if (operations.size !== eligible.size || uploadIds.some(uploadId => !operations!.has(uploadId))) {
+      throw new ArtifactIntakeContractError(ARTIFACT_INTAKE_ERROR.INVALID_STATE)
+    }
+    await proveRawOperations(operations, env)
+    await fence.afterOperationsProtected?.()
+    await assertFinalizationLease(finalization, leaseOwner, env)
+
+    const manifest = buildManifest(input, operations)
+    const existingCapture = await store.getCapture(input.tenantId, finalization.canonical_capture_id)
+    if (!existingCapture) {
+      const refs: CanonicalArtifactRef[] = manifest.map((artifact, index) => ({
+        artifactId: artifact.artifactId,
+        mode: 'stored_r2',
+        storageKind: 'managed_r2',
+        storageKey: operations!.get(artifact.uploadId)!.r2_key,
+        filename: input.artifacts[index]!.filename ?? null,
+        mediaType: artifact.mediaType,
+        byteLength: artifact.byteLength,
+        sha256: artifact.plaintextSha256,
+        cipherSha256: artifact.ciphertextSha256,
+        encryptionFamily: artifact.encryptionFamily,
+        role: artifact.role,
+        parentArtifactId: artifact.parentArtifactId,
+        primary: artifact.primary,
+      }))
+      await captureCanonicalMemory({
+        tenantId: input.tenantId,
+        captureId: finalization.canonical_capture_id,
+        documentId: finalization.canonical_document_id,
+        operationId: finalization.canonical_operation_id,
+        sourceSystem: input.sourceSystem ?? 'file',
+        sourceRef: input.sourceRef ?? null,
+        scope: input.scope,
+        title: input.title ?? null,
+        body: input.content,
+        bodyEncrypted: await encryptContentForArchive(input.content, contentKey),
+        artifactRefs: refs,
+        governance: {
+          authorKind: input.authorKind ?? 'external_client',
+          agentIdentity: input.agentIdentity ?? input.clientName,
+          modelRuntime: input.modelRuntime ?? null,
+          provenanceNote: input.provenance ?? null,
+          memoryClass: 'episode',
+          trustState: 'evidence',
+          usePolicy: 'can_use_as_evidence',
+        },
+      }, env, input.tenantId)
+    }
+
+    await assertFinalizationLease(finalization, leaseOwner, env)
+    await proveRawOperations(operations, env)
+    await assertCanonicalProof({ input, finalization, manifest, operations, env })
+    await markFinalizationComplete(finalization, uploadIds, leaseOwner, env)
+    return receiptFor(finalization, manifest, input)
+  } catch (error) {
+    const code = error instanceof ArtifactIntakeContractError
+      ? error.code : ARTIFACT_INTAKE_ERROR.CANONICAL_WRITE_FAILED
+    let safeCanonicalProof = false
+    if (operations) {
+      try {
+        const manifest = buildManifest(input, operations)
+        await proveRawOperations(operations, env)
+        await assertCanonicalProof({ input, finalization, manifest, operations, env })
+        safeCanonicalProof = true
+      } catch {
+        safeCanonicalProof = false
+      }
+    }
+    const canonicalExists = Boolean(await store.getCapture(
+      input.tenantId, finalization.canonical_capture_id,
+    ).catch(() => null))
+    if (code === ARTIFACT_INTAKE_ERROR.CANONICAL_WRITE_FAILED && !canonicalExists) {
+      await env.D1_US.prepare(
+        `UPDATE artifact_intake_finalizations
+         SET lease_owner = NULL, lease_expires_at = NULL, updated_at = ?
+         WHERE tenant_id = ? AND id = ? AND status = 'reserved' AND lease_owner = ?`,
+      ).bind(Date.now(), input.tenantId, finalization.id, leaseOwner).run().catch(() => undefined)
+    } else if (!safeCanonicalProof) {
+      await failArtifactFinalizationAndReleaseOperations({
+        tenantId: input.tenantId, finalizationId: finalization.id,
+        expectedLeaseOwner: leaseOwner, errorCode: code, now: Date.now(),
+      }, env).catch(() => undefined)
+    }
+    if (error instanceof ArtifactIntakeContractError) throw error
     throw new ArtifactIntakeContractError(ARTIFACT_INTAKE_ERROR.CANONICAL_WRITE_FAILED)
   }
-
-  await markFinalizationComplete(finalization, uploadIds, env)
-  return receiptFor(finalization, manifest, input)
 }

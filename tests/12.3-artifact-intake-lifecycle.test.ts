@@ -8,6 +8,7 @@ import {
   uploadArtifactBytes,
 } from '../src/services/artifact-intake/operations'
 import { reapExpiredArtifactUploads } from '../src/services/artifact-intake/reaper'
+import { ARTIFACT_FINALIZATION_RECOVERY_MS } from '../src/services/artifact-intake/config'
 import { sha256Bytes, unsealArtifactBytes } from '../src/services/artifact-intake/crypto'
 import { getCanonicalDocument } from '../src/services/canonical-memory-query'
 import {
@@ -152,7 +153,8 @@ describe('12.3 managed artifact intake lifecycle', () => {
       artifacts: [
         {
           uploadId: source.sealed.uploadId,
-          role: 'source', primary: true, filename: 'private-source-name.txt', detectedMimeType: 'text/plain',
+          role: 'source', primary: true, filename: 'private-source-name.txt',
+          detectedMimeType: 'text/plain; charset=utf-8',
           byteLength: source.bytes.byteLength, plaintextSha256: source.plaintextSha256,
         },
         {
@@ -250,7 +252,117 @@ describe('12.3 managed artifact intake lifecycle', () => {
       `SELECT status FROM artifact_intake_operations WHERE tenant_id = ? AND canonical_capture_id = ?`,
     ).bind(TENANT_A, receipt.captureId).all<{ status: string }>()
     expect(repaired.results.every((row: { status: string }) => row.status === 'finalized')).toBe(true)
+
+    // A process can also die after canonical commit and remain absent beyond the
+    // recovery window. The artifact reaper must prove and repair that success,
+    // never delete the raw sources or leave the reservation stuck forever.
+    await env.D1_US.batch([
+      env.D1_US.prepare(
+        `UPDATE artifact_intake_finalizations
+         SET status = 'reserved', recovery_expires_at = 1, lease_owner = NULL, lease_expires_at = 1
+         WHERE tenant_id = ? AND canonical_capture_id = ?`,
+      ).bind(TENANT_A, receipt.captureId),
+      env.D1_US.prepare(
+        `UPDATE artifact_intake_operations
+         SET status = 'sealed', expires_at = 1, finalization_protected_until = 1
+         WHERE tenant_id = ? AND canonical_capture_id = ?`,
+      ).bind(TENANT_A, receipt.captureId),
+    ])
+    const staleRepair = await reapExpiredArtifactUploads(env, Date.now(), 100)
+    expect(staleRepair.repairedFinalized).toBeGreaterThanOrEqual(1)
+    expect(staleRepair.reaped).toBe(0)
+    expect(await env.D1_US.prepare(
+      `SELECT status FROM artifact_intake_finalizations
+       WHERE tenant_id = ? AND canonical_capture_id = ?`,
+    ).bind(TENANT_A, receipt.captureId).first<{ status: string }>()).toMatchObject({ status: 'finalized' })
+    for (const row of rows.results) {
+      expect(await env.R2_ARTIFACTS.head(String(row.r2_key))).not.toBeNull()
+    }
+
+    // Capture presence alone is not proof. If one raw source disappears, the
+    // same stale boundary fails/releases the reservation and cleans every
+    // remaining managed object instead of protecting it forever.
+    await env.R2_ARTIFACTS.delete(String(rows.results[0]!.r2_key))
+    await env.D1_US.batch([
+      env.D1_US.prepare(
+        `UPDATE artifact_intake_finalizations
+         SET status = 'reserved', recovery_expires_at = 1, lease_owner = NULL, lease_expires_at = 1
+         WHERE tenant_id = ? AND canonical_capture_id = ?`,
+      ).bind(TENANT_A, receipt.captureId),
+      env.D1_US.prepare(
+        `UPDATE artifact_intake_operations
+         SET status = 'sealed', expires_at = 1, finalization_protected_until = 1
+         WHERE tenant_id = ? AND canonical_capture_id = ?`,
+      ).bind(TENANT_A, receipt.captureId),
+    ])
+    const failedProof = await reapExpiredArtifactUploads(env, Date.now(), 100)
+    expect(failedProof.reaped).toBeGreaterThanOrEqual(3)
+    expect(await env.D1_US.prepare(
+      `SELECT status FROM artifact_intake_finalizations
+       WHERE tenant_id = ? AND canonical_capture_id = ?`,
+    ).bind(TENANT_A, receipt.captureId).first<{ status: string }>()).toMatchObject({ status: 'failed' })
+    for (const row of rows.results) {
+      expect(await env.R2_ARTIFACTS.head(String(row.r2_key))).toBeNull()
+    }
   })
+
+  it.each(['role', 'parent', 'media'] as const)(
+    'fails and cleans a stale canonical reservation with mismatched manifest %s identity',
+    async (tamper) => {
+      const upload = await reserveAndUpload({
+        idempotencyKey: `stale-manifest-${tamper}-${SUITE_ID}`,
+        text: `stale-manifest-${tamper}`,
+      })
+      const receipt = await finalizeArtifactCapture({
+        tenantId: TENANT_A, content: `stale manifest ${tamper}`, scope: 'research', clientName: 'Codex',
+        idempotencyKey: `stale-manifest-finalize-${tamper}-${SUITE_ID}`,
+        artifacts: [{
+          uploadId: upload.sealed.uploadId, role: 'source', primary: true,
+          detectedMimeType: 'text/plain', byteLength: upload.bytes.byteLength,
+          plaintextSha256: upload.plaintextSha256,
+        }],
+      }, await testKey(), env)
+      const operation = await getArtifactIntakeOperation(env, TENANT_A, upload.sealed.uploadId)
+      await env.D1_US.batch([
+        env.D1_US.prepare(
+          `UPDATE artifact_intake_finalizations
+           SET status = 'reserved', recovery_expires_at = 1, lease_owner = NULL, lease_expires_at = 1
+           WHERE tenant_id = ? AND canonical_capture_id = ?`,
+        ).bind(TENANT_A, receipt.captureId),
+        env.D1_US.prepare(
+          `UPDATE artifact_intake_operations SET status = 'sealed', expires_at = 1
+           WHERE tenant_id = ? AND upload_id = ?`,
+        ).bind(TENANT_A, upload.sealed.uploadId),
+      ])
+      const originalStore = getCanonicalMemoryStore(env)
+      const tamperedStore = new Proxy(originalStore, {
+        get(target, property) {
+          if (property === 'getDocument') return async (...args: [string, string]) => {
+            const document = await target.getDocument(...args)
+            if (!document || args[1] !== receipt.documentId) return document
+            const artifact = { ...document.artifact_manifest[0]! }
+            if (tamper === 'role') artifact.role = 'derivative'
+            if (tamper === 'parent') artifact.parent_artifact_id = artifact.artifact_id
+            if (tamper === 'media') artifact.media_type = 'application/pdf'
+            return { ...document, artifact_manifest: [artifact] }
+          }
+          const value = Reflect.get(target, property)
+          return typeof value === 'function' ? value.bind(target) : value
+        },
+      })
+      installCanonicalMemoryStore(env, tamperedStore)
+      try {
+        await reapExpiredArtifactUploads(env, Date.now(), 100)
+      } finally {
+        installCanonicalMemoryStore(env, originalStore)
+      }
+      expect(await env.D1_US.prepare(
+        `SELECT status FROM artifact_intake_finalizations
+         WHERE tenant_id = ? AND canonical_capture_id = ?`,
+      ).bind(TENANT_A, receipt.captureId).first<{ status: string }>()).toMatchObject({ status: 'failed' })
+      expect(await env.R2_ARTIFACTS.head(operation!.r2_key)).toBeNull()
+    },
+  )
 
   it('reaps only the exact expired tenant-scoped orphan', async () => {
     const expired = await reserveAndUpload({
@@ -307,9 +419,129 @@ describe('12.3 managed artifact intake lifecycle', () => {
     await env.D1_US.prepare(
       `UPDATE artifact_intake_operations SET expires_at = 1 WHERE tenant_id = ? AND upload_id = ?`,
     ).bind(TENANT_A, orphan.sealed.uploadId).run()
-    const reaped = await reapExpiredArtifactUploads(env, Date.now(), 100)
+    const finalization = await env.D1_US.prepare(
+      `SELECT id, recovery_expires_at FROM artifact_intake_finalizations
+       WHERE tenant_id = ? AND canonical_capture_id = ?`,
+    ).bind(TENANT_A, operation!.canonical_capture_id)
+      .first<{ id: string; recovery_expires_at: number | null }>()
+    expect(finalization?.recovery_expires_at).toBeGreaterThan(Date.now())
+    expect((await reapExpiredArtifactUploads(env, Date.now(), 100)).reaped).toBe(0)
+    expect(await env.R2_ARTIFACTS.head(operation!.r2_key)).not.toBeNull()
+
+    const staleBoundary = Number(finalization!.recovery_expires_at ??
+      (Date.now() + ARTIFACT_FINALIZATION_RECOVERY_MS)) + 1
+    const reaped = await reapExpiredArtifactUploads(env, staleBoundary, 100)
     expect(reaped.reaped).toBeGreaterThanOrEqual(1)
+    expect(await env.D1_US.prepare(
+      `SELECT status FROM artifact_intake_finalizations WHERE tenant_id = ? AND id = ?`,
+    ).bind(TENANT_A, finalization!.id).first<{ status: string }>()).toMatchObject({ status: 'failed' })
     expect(await env.R2_ARTIFACTS.head(operation!.r2_key)).toBeNull()
     expect(await env.R2_ARTIFACTS.head(canonicalBodyKey)).toBeNull()
+  })
+
+  it('gives expiry ownership the race and aborts finalization before canonical write', async () => {
+    const expired = await reserveAndUpload({
+      idempotencyKey: `expiry-wins-${SUITE_ID}`,
+      text: 'expiry-wins-secret',
+    })
+    const row = await getArtifactIntakeOperation(env, TENANT_A, expired.sealed.uploadId)
+    const store = getCanonicalMemoryStore(env)
+    const before = await store.getStats(TENANT_A)
+    await env.D1_US.prepare(
+      `UPDATE artifact_intake_operations SET expires_at = 1 WHERE tenant_id = ? AND upload_id = ?`,
+    ).bind(TENANT_A, expired.sealed.uploadId).run()
+    expect((await reapExpiredArtifactUploads(env, Date.now(), 100)).reaped).toBeGreaterThanOrEqual(1)
+    expect(await env.R2_ARTIFACTS.head(row!.r2_key)).toBeNull()
+
+    await expect(finalizeArtifactCapture({
+      tenantId: TENANT_A, content: 'must not be captured', scope: 'research', clientName: 'Codex',
+      idempotencyKey: `expiry-wins-finalize-${SUITE_ID}`,
+      artifacts: [{
+        uploadId: expired.sealed.uploadId, role: 'source', primary: true,
+        detectedMimeType: 'text/plain', byteLength: expired.bytes.byteLength,
+        plaintextSha256: expired.plaintextSha256,
+      }],
+    }, await testKey(), env)).rejects.toMatchObject({ code: 'invalid_state' })
+    expect(await store.getStats(TENANT_A)).toMatchObject({
+      captureCount: before.captureCount, documentCount: before.documentCount,
+    })
+  })
+
+  it('protects a finalization-owned object while the reaper races canonical write', async () => {
+    const protectedUpload = await reserveAndUpload({
+      idempotencyKey: `finalization-wins-${SUITE_ID}`,
+      text: 'finalization-wins-secret',
+    })
+    const row = await getArtifactIntakeOperation(env, TENANT_A, protectedUpload.sealed.uploadId)
+    let reached!: () => void
+    let release!: () => void
+    const protectedReached = new Promise<void>(resolve => { reached = resolve })
+    const releaseCanonical = new Promise<void>(resolve => { release = resolve })
+    const finalizing = finalizeArtifactCapture({
+      tenantId: TENANT_A, content: 'protected canonical extraction', scope: 'research', clientName: 'Codex',
+      idempotencyKey: `finalization-wins-finalize-${SUITE_ID}`,
+      artifacts: [{
+        uploadId: protectedUpload.sealed.uploadId, role: 'source', primary: true,
+        detectedMimeType: 'text/plain', byteLength: protectedUpload.bytes.byteLength,
+        plaintextSha256: protectedUpload.plaintextSha256,
+      }],
+    }, await testKey(), env, {
+      afterOperationsProtected: async () => {
+        reached()
+        await releaseCanonical
+      },
+    })
+    await protectedReached
+    await env.D1_US.prepare(
+      `UPDATE artifact_intake_operations SET expires_at = 1 WHERE tenant_id = ? AND upload_id = ?`,
+    ).bind(TENANT_A, protectedUpload.sealed.uploadId).run()
+    expect((await reapExpiredArtifactUploads(
+      env, Date.now() + Math.floor(ARTIFACT_FINALIZATION_RECOVERY_MS / 2), 100,
+    )).reaped).toBe(0)
+    expect(await env.R2_ARTIFACTS.head(row!.r2_key)).not.toBeNull()
+    release()
+    const receipt = await finalizing
+    expect(receipt.status).toBe('finalized')
+    expect(await env.R2_ARTIFACTS.head(row!.r2_key)).not.toBeNull()
+  })
+
+  it('makes a multi-artifact eligibility failure all-or-none with no canonical write', async () => {
+    const source = await reserveAndUpload({ idempotencyKey: `cas-source-${SUITE_ID}`, text: 'cas-source' })
+    const derivative = await reserveAndUpload({ idempotencyKey: `cas-derivative-${SUITE_ID}`, text: 'cas-derivative' })
+    await env.D1_US.prepare(
+      `UPDATE artifact_intake_operations
+       SET expiry_claim_token = 'reaper-race-winner', expiry_claim_expires_at = ?
+       WHERE tenant_id = ? AND upload_id = ?`,
+    ).bind(Date.now() + 60_000, TENANT_A, derivative.sealed.uploadId).run()
+    const store = getCanonicalMemoryStore(env)
+    const before = await store.getStats(TENANT_A)
+    await expect(finalizeArtifactCapture({
+      tenantId: TENANT_A, content: 'must not partially capture', scope: 'research', clientName: 'Codex',
+      idempotencyKey: `cas-finalize-${SUITE_ID}`,
+      declaredDerivativeUploadIds: [derivative.sealed.uploadId],
+      artifacts: [
+        {
+          uploadId: source.sealed.uploadId, role: 'source', primary: true,
+          detectedMimeType: 'text/plain', byteLength: source.bytes.byteLength,
+          plaintextSha256: source.plaintextSha256,
+        },
+        {
+          uploadId: derivative.sealed.uploadId, role: 'derivative', primary: false,
+          parentUploadId: source.sealed.uploadId, detectedMimeType: 'text/plain',
+          byteLength: derivative.bytes.byteLength, plaintextSha256: derivative.plaintextSha256,
+        },
+      ],
+    }, await testKey(), env)).rejects.toMatchObject({ code: 'invalid_state' })
+    const rows = await env.D1_US.prepare(
+      `SELECT finalization_id, canonical_capture_id FROM artifact_intake_operations
+       WHERE tenant_id = ? AND upload_id IN (?, ?) ORDER BY upload_id`,
+    ).bind(TENANT_A, source.sealed.uploadId, derivative.sealed.uploadId).all<{
+      finalization_id: string | null; canonical_capture_id: string | null
+    }>()
+    expect(rows.results).toHaveLength(2)
+    expect(rows.results.every(item => item.finalization_id === null && item.canonical_capture_id === null)).toBe(true)
+    expect(await store.getStats(TENANT_A)).toMatchObject({
+      captureCount: before.captureCount, documentCount: before.documentCount,
+    })
   })
 })

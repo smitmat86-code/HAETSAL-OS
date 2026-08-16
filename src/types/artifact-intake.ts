@@ -2,6 +2,15 @@ export type ArtifactRole = 'source' | 'derivative'
 export type ArtifactStorageKind = 'managed_r2' | 'external_reference'
 export type ArtifactEncryptionFamily = 'tmk' | 'kek' | 'legacy_unsealed'
 export type ArtifactUploadState = 'reserved' | 'sealed' | 'finalized' | 'failed' | 'expired'
+export type ArtifactFinalizationState = 'reserved' | 'finalized' | 'failed'
+
+export interface ArtifactFinalizationLease {
+  finalizationId: string
+  owner: string
+  leaseExpiresAt: number
+  recoveryExpiresAt: number
+  expectedOperationCount: number
+}
 
 export interface ArtifactManifestEntry {
   uploadId: string

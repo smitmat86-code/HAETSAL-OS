@@ -4,7 +4,12 @@ import type {
   ArtifactUploadReceipt,
   ArtifactUploadState,
 } from '../../types/artifact-intake'
-import { ARTIFACT_MAX_BYTES, ARTIFACT_UPLOAD_EXPIRY_MS } from './config'
+import {
+  ARTIFACT_FINALIZATION_LEASE_MS,
+  ARTIFACT_FINALIZATION_RECOVERY_MS,
+  ARTIFACT_MAX_BYTES,
+  ARTIFACT_UPLOAD_EXPIRY_MS,
+} from './config'
 import {
   ArtifactIntakeContractError,
   ARTIFACT_INTAKE_ERROR,
@@ -32,7 +37,12 @@ export interface ArtifactIntakeOperationRow {
   byte_length: number
   plaintext_sha256: string
   ciphertext_sha256: string | null
+  ciphertext_byte_length: number | null
   encryption_family: Exclude<ArtifactEncryptionFamily, 'legacy_unsealed'> | null
+  finalization_id: string | null
+  finalization_protected_until: number | null
+  expiry_claim_token: string | null
+  expiry_claim_expires_at: number | null
   canonical_capture_id: string | null
   canonical_document_id: string | null
   canonical_operation_id: string | null
@@ -184,11 +194,13 @@ async function recoverExistingCiphertext(args: {
     await args.env.D1_US.prepare(
       `UPDATE artifact_intake_operations
        SET status = 'sealed', error_code = NULL, detected_mime_category = ?, ciphertext_sha256 = ?,
+           ciphertext_byte_length = ?,
            encryption_family = ?, updated_at = ?
        WHERE tenant_id = ? AND upload_id = ? AND status != 'finalized'`,
     ).bind(
       mimeCategory(args.detectedMimeType),
       ciphertextHash,
+      existing.byteLength,
       args.family,
       now,
       args.row.tenant_id,
@@ -250,11 +262,13 @@ export async function uploadArtifactBytes(args: {
   await env.D1_US.prepare(
     `UPDATE artifact_intake_operations
      SET status = 'sealed', error_code = NULL, detected_mime_category = ?, ciphertext_sha256 = ?,
+         ciphertext_byte_length = ?,
          encryption_family = ?, updated_at = ?
      WHERE tenant_id = ? AND upload_id = ? AND status != 'finalized'`,
   ).bind(
     mimeCategory(args.detectedMimeType),
     sealed.ciphertextSha256,
+    sealed.envelope.byteLength,
     args.encryptionFamily,
     Date.now(),
     args.tenantId,
@@ -263,33 +277,213 @@ export async function uploadArtifactBytes(args: {
   return getArtifactIntakeStatus({ tenantId: args.tenantId, uploadId: args.uploadId }, env)
 }
 
+function uniqueUploadIds(uploadIds: string[]): string[] {
+  const unique = [...new Set(uploadIds)]
+  if (unique.length === 0 || unique.length !== uploadIds.length) {
+    throw new ArtifactIntakeContractError(ARTIFACT_INTAKE_ERROR.INVALID_MANIFEST)
+  }
+  return unique
+}
+
+function changed(result: D1Result<unknown>): number {
+  return Number(result.meta.changes ?? 0)
+}
+
+export async function loadArtifactOperationsForFinalization(args: {
+  tenantId: string
+  finalizationId: string
+  expectedOperationCount: number
+}, env: Env): Promise<ArtifactIntakeOperationRow[]> {
+  const rows = await env.D1_US.prepare(
+    `SELECT * FROM artifact_intake_operations
+     WHERE tenant_id = ? AND finalization_id = ? ORDER BY upload_id ASC`,
+  ).bind(args.tenantId, args.finalizationId).all<ArtifactIntakeOperationRow>()
+  if (rows.results.length !== args.expectedOperationCount) {
+    throw new ArtifactIntakeContractError(ARTIFACT_INTAKE_ERROR.INVALID_STATE)
+  }
+  return rows.results
+}
+
+export async function acquireArtifactFinalizationLease(args: {
+  tenantId: string
+  finalizationId: string
+  leaseOwner: string
+  expectedOperationCount: number
+  captureId: string
+  documentId: string
+  operationId: string
+  now: number
+  leaseMs?: number
+  recoveryMs?: number
+  allowExpiredRecoveryProof?: boolean
+}, env: Env): Promise<{ leaseExpiresAt: number; recoveryExpiresAt: number }> {
+  const leaseExpiresAt = args.now + (args.leaseMs ?? ARTIFACT_FINALIZATION_LEASE_MS)
+  const initialRecoveryExpiresAt = args.now + (args.recoveryMs ?? ARTIFACT_FINALIZATION_RECOVERY_MS)
+  const activeLease = env.D1_US.prepare(
+    `UPDATE artifact_intake_finalizations
+     SET lease_owner = ?, lease_expires_at = ?, recovery_expires_at = COALESCE(recovery_expires_at, ?), updated_at = ?
+     WHERE tenant_id = ? AND id = ? AND status = 'reserved'
+       AND expected_operation_count = ?
+       AND canonical_capture_id = ? AND canonical_document_id = ? AND canonical_operation_id = ?
+       AND (lease_owner = ? OR lease_owner IS NULL OR lease_expires_at IS NULL OR lease_expires_at <= ?)
+       AND (recovery_expires_at IS NULL OR recovery_expires_at > ?)`,
+  )
+  const proofBackedStaleLease = env.D1_US.prepare(
+    `UPDATE artifact_intake_finalizations
+     SET lease_owner = ?, lease_expires_at = ?, recovery_expires_at = ?, updated_at = ?
+     WHERE tenant_id = ? AND id = ? AND status = 'reserved'
+       AND expected_operation_count = ?
+       AND canonical_capture_id = ? AND canonical_document_id = ? AND canonical_operation_id = ?
+       AND (lease_owner IS NULL OR lease_expires_at IS NULL OR lease_expires_at <= ?)
+       AND recovery_expires_at IS NOT NULL AND recovery_expires_at <= ?`,
+  )
+  const result = await (args.allowExpiredRecoveryProof ? proofBackedStaleLease : activeLease).bind(
+    args.leaseOwner, leaseExpiresAt, initialRecoveryExpiresAt, args.now,
+    args.tenantId, args.finalizationId, args.expectedOperationCount,
+    args.captureId, args.documentId, args.operationId,
+    ...(args.allowExpiredRecoveryProof ? [args.now, args.now] : [args.leaseOwner, args.now, args.now]),
+  ).run()
+  if (changed(result) !== 1) {
+    throw new ArtifactIntakeContractError(ARTIFACT_INTAKE_ERROR.INVALID_STATE)
+  }
+  const leased = await env.D1_US.prepare(
+    `SELECT recovery_expires_at FROM artifact_intake_finalizations
+     WHERE tenant_id = ? AND id = ? AND lease_owner = ? LIMIT 1`,
+  ).bind(args.tenantId, args.finalizationId, args.leaseOwner)
+    .first<{ recovery_expires_at: number }>()
+  if (!leased) throw new ArtifactIntakeContractError(ARTIFACT_INTAKE_ERROR.INVALID_STATE)
+  return { leaseExpiresAt, recoveryExpiresAt: Number(leased.recovery_expires_at) }
+}
+
 export async function markArtifactOperationsForFinalize(args: {
   tenantId: string
+  finalizationId: string
+  leaseOwner: string
   uploadIds: string[]
   captureId: string
   documentId: string
   operationId: string
   now: number
+  protectedUntil: number
 }, env: Env): Promise<void> {
-  await env.D1_US.batch(args.uploadIds.map(uploadId => env.D1_US.prepare(
-    `UPDATE artifact_intake_operations
-     SET canonical_capture_id = ?, canonical_document_id = ?, canonical_operation_id = ?, updated_at = ?
-     WHERE tenant_id = ? AND upload_id = ? AND status IN ('sealed', 'finalized')`,
-  ).bind(args.captureId, args.documentId, args.operationId, args.now, args.tenantId, uploadId)))
+  const uploadIds = uniqueUploadIds(args.uploadIds)
+  const placeholders = uploadIds.map(() => '?').join(', ')
+  const exactPointers = `(canonical_capture_id = ? AND canonical_document_id = ? AND canonical_operation_id = ?)`
+  const eligible = `tenant_id = ? AND upload_id IN (${placeholders})
+    AND status IN ('sealed', 'finalized') AND (status = 'finalized' OR expires_at > ?)
+    AND expiry_claim_token IS NULL
+    AND (finalization_id IS NULL OR finalization_id = ?)
+    AND ((canonical_capture_id IS NULL AND canonical_document_id IS NULL AND canonical_operation_id IS NULL)
+      OR ${exactPointers})
+    AND (status != 'finalized' OR ${exactPointers})`
+  const eligibleBindings = [
+    args.tenantId, ...uploadIds, args.now + ARTIFACT_FINALIZATION_LEASE_MS,
+    args.finalizationId,
+    args.captureId, args.documentId, args.operationId,
+    args.captureId, args.documentId, args.operationId,
+  ]
+  const finalizationGuard = `EXISTS (
+    SELECT 1 FROM artifact_intake_finalizations f
+    WHERE f.tenant_id = ? AND f.id = ? AND f.status = 'reserved'
+      AND f.expected_operation_count = ? AND f.lease_owner = ? AND f.lease_expires_at > ?
+      AND f.recovery_expires_at >= ?
+      AND f.canonical_capture_id = ? AND f.canonical_document_id = ? AND f.canonical_operation_id = ?
+  )`
+  const finalizationBindings = [
+    args.tenantId, args.finalizationId, uploadIds.length, args.leaseOwner, args.now,
+    args.protectedUntil, args.captureId, args.documentId, args.operationId,
+  ]
+  const bindSql = `UPDATE artifact_intake_operations
+     SET finalization_id = ?, finalization_protected_until = ?, expires_at = MAX(expires_at, ?),
+         canonical_capture_id = ?, canonical_document_id = ?, canonical_operation_id = ?, updated_at = ?
+     WHERE tenant_id = ? AND upload_id IN (${placeholders})
+       AND (SELECT COUNT(*) FROM artifact_intake_operations WHERE ${eligible}) = ?
+       AND ${finalizationGuard}
+       AND status IN ('sealed', 'finalized') AND (status = 'finalized' OR expires_at > ?) AND expiry_claim_token IS NULL
+       AND (finalization_id IS NULL OR finalization_id = ?)`
+  const result = await env.D1_US.prepare(bindSql).bind(
+    args.finalizationId, args.protectedUntil, args.protectedUntil,
+    args.captureId, args.documentId, args.operationId, args.now,
+    args.tenantId, ...uploadIds,
+    ...eligibleBindings, uploadIds.length,
+    ...finalizationBindings,
+    args.now + ARTIFACT_FINALIZATION_LEASE_MS, args.finalizationId,
+  ).run()
+  if (changed(result) !== uploadIds.length) {
+    throw new ArtifactIntakeContractError(ARTIFACT_INTAKE_ERROR.INVALID_STATE)
+  }
 }
 
 export async function markArtifactOperationsFinalized(args: {
   tenantId: string
+  finalizationId: string
+  leaseOwner: string
   uploadIds: string[]
   captureId: string
   documentId: string
   operationId: string
   now: number
 }, env: Env): Promise<void> {
-  await env.D1_US.batch(args.uploadIds.map(uploadId => env.D1_US.prepare(
-    `UPDATE artifact_intake_operations
-     SET status = 'finalized', error_code = NULL, canonical_capture_id = ?, canonical_document_id = ?,
-         canonical_operation_id = ?, updated_at = ?
-     WHERE tenant_id = ? AND upload_id = ? AND status != 'expired'`,
-  ).bind(args.captureId, args.documentId, args.operationId, args.now, args.tenantId, uploadId)))
+  const uploadIds = uniqueUploadIds(args.uploadIds)
+  const placeholders = uploadIds.map(() => '?').join(', ')
+  const ownership = `tenant_id = ? AND upload_id IN (${placeholders})
+    AND status IN ('sealed', 'finalized') AND finalization_id = ? AND expiry_claim_token IS NULL
+    AND canonical_capture_id = ? AND canonical_document_id = ? AND canonical_operation_id = ?`
+  const ownershipBindings = [
+    args.tenantId, ...uploadIds, args.finalizationId,
+    args.captureId, args.documentId, args.operationId,
+  ]
+  const finalizeSql = `UPDATE artifact_intake_operations
+     SET status = 'finalized', error_code = NULL, finalization_protected_until = NULL,
+         expiry_claim_token = NULL, expiry_claim_expires_at = NULL, updated_at = ?
+     WHERE tenant_id = ? AND upload_id IN (${placeholders})
+       AND (SELECT COUNT(*) FROM artifact_intake_operations WHERE ${ownership}) = ?
+       AND finalization_id = ? AND expiry_claim_token IS NULL
+       AND canonical_capture_id = ? AND canonical_document_id = ? AND canonical_operation_id = ?
+       AND EXISTS (
+         SELECT 1 FROM artifact_intake_finalizations f
+         WHERE f.tenant_id = ? AND f.id = ? AND f.status = 'reserved'
+           AND f.expected_operation_count = ? AND f.lease_owner = ? AND f.lease_expires_at > ?
+       )`
+  const result = await env.D1_US.prepare(finalizeSql).bind(
+    args.now, args.tenantId, ...uploadIds,
+    ...ownershipBindings, uploadIds.length,
+    args.finalizationId, args.captureId, args.documentId, args.operationId,
+    args.tenantId, args.finalizationId, uploadIds.length, args.leaseOwner, args.now,
+  ).run()
+  if (changed(result) !== uploadIds.length) {
+    throw new ArtifactIntakeContractError(ARTIFACT_INTAKE_ERROR.INVALID_STATE)
+  }
+}
+
+export async function failArtifactFinalizationAndReleaseOperations(args: {
+  tenantId: string
+  finalizationId: string
+  errorCode: string
+  now: number
+  expectedLeaseOwner?: string
+}, env: Env): Promise<boolean> {
+  const failFinalization = args.expectedLeaseOwner
+    ? env.D1_US.prepare(
+      `UPDATE artifact_intake_finalizations
+       SET status = 'failed', error_code = ?, lease_owner = NULL, lease_expires_at = NULL, updated_at = ?
+       WHERE tenant_id = ? AND id = ? AND status = 'reserved' AND lease_owner = ?`,
+    ).bind(args.errorCode, args.now, args.tenantId, args.finalizationId, args.expectedLeaseOwner)
+    : env.D1_US.prepare(
+      `UPDATE artifact_intake_finalizations
+       SET status = 'failed', error_code = ?, lease_owner = NULL, lease_expires_at = NULL, updated_at = ?
+       WHERE tenant_id = ? AND id = ? AND status = 'reserved'`,
+    ).bind(args.errorCode, args.now, args.tenantId, args.finalizationId)
+  const results = await env.D1_US.batch([
+    failFinalization,
+    env.D1_US.prepare(
+      `UPDATE artifact_intake_operations
+       SET finalization_id = NULL, finalization_protected_until = NULL,
+           expires_at = MIN(expires_at, ?), updated_at = ?
+       WHERE tenant_id = ? AND finalization_id = ? AND status != 'finalized'
+         AND EXISTS (SELECT 1 FROM artifact_intake_finalizations f
+           WHERE f.tenant_id = ? AND f.id = ? AND f.status = 'failed')`,
+    ).bind(args.now, args.now, args.tenantId, args.finalizationId, args.tenantId, args.finalizationId),
+  ])
+  return changed(results[0]!) === 1
 }

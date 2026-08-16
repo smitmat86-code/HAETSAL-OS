@@ -2196,3 +2196,35 @@
 **Stop boundary:** No Telegram or Sendblue live gate ran. No live legacy inventory, remediation, or approval workflow ran. No legacy object was read for remediation, migrated, overwritten, or deleted. `codex/artifact-intake-session-1` was not merged or advanced.
 
 ---
+
+### Session 5 final artifact-lifecycle correction — 2026-08-15
+
+**Status:** The artifact-finalization/reaper lifecycle blocker is corrected, independently approved, migrated, deployed, and exact-tree green. Fresh Telegram/Sendblue live proof and all legacy remediation remain outside this pass.
+
+**Commit and deployment evidence:**
+- Starting HEAD: `051ef2062cfd7f0244d2798df4201e6d125e9c89`; reviewed implementation: `6e9d4abf2444a3fef67997303a87ddfeef1f8be3`.
+- Artifact lifecycle and executable SQL correction: `f43ef97`.
+- Remote D1 migration `1032_artifact_finalization_lifecycle.sql` applied successfully to `D1_US` / `brain-us` before Worker deployment.
+- Production deployment `32ae3fa1-cc53-458a-a623-37d0f07c66b4`; Worker version `bc5b4e08-6344-4df7-b7ae-a451371486a2`, created `2026-08-16T02:30:17.650738Z`, serving 100%.
+
+**Final lifecycle invariants:**
+- Finalization uses a 2-minute owner lease and one 30-minute recovery/protection window. Taking ownership atomically binds the exact expected operation set, records the exact ordered manifest identity, and extends every declared source/derivative beyond the original 15-minute upload TTL.
+- Before canonical write, after canonical write, during recovery, and before success repair, the service verifies exact operation membership/ownership, canonical capture/document/operation and primary pointers, ordered role/parent/MIME manifest identity, deterministic managed R2 key, ciphertext byte length, ciphertext SHA-256, and encryption family.
+- Expiry reaping first wins an independent 2-minute CAS claim and deletes only after ownership succeeds. A reserved finalization blocks that claim. At the stale boundary, full raw/canonical proof permits one proof-backed takeover; missing or mismatched proof fails/releases the reservation and normal cleanup removes the managed object. Capture presence alone never repairs success.
+- Pre-migration sealed/finalized rows receive deterministic ciphertext-length, finalization ownership, and expected-count backfills. An idempotent replay safely upgrades the new manifest proof from the already-matching original reservation fingerprint.
+
+**Adversarial and query-boundary proof:**
+- Process death after operation protection survives beyond the 15-minute upload TTL and resumes after the bounded lease with one acquisition, vision extraction, managed artifact, canonical capture/document, and success response.
+- Tests cover expiry-versus-finalization ownership, expiry during canonical write, multi-artifact zero-partial CAS, proof-backed repair beyond the recovery deadline, capture-with-missing-raw cleanup, missing/tampered R2 recovery, abandoned reservation cleanup, and role/parent/MIME manifest corruption.
+- The exported D1 compatibility query executes against the migrated local D1 schema. The exported PostgreSQL replacement query executes and `EXPLAIN`s under ephemeral PGlite; singleton legitimate source/primary qualifies and derivative, mixed, missing, conflicting, duplicate, and foreign-capture cases fail closed.
+
+**Validation:**
+- Focused artifact-finalization, channel-media, provider, reaper, and legacy-inventory lane: 76 passed across 6 files.
+- Exact full suite: 618 passed, 1 skipped across 95 files (619 total).
+- `npm.cmd run postflight`, `npx.cmd wrangler deploy --dry-run`, and `git diff --check`: passed. Dry-run upload was 3,723.10 KiB / gzip 713.59 KiB.
+- Independent architecture, security, and quality reviews: approved with no remaining blocking findings.
+- The first remote migration attempt inherited a known-invalid API token and was rejected before state change; migration and deployment then used the existing verified local Wrangler OAuth profile.
+
+**Stop boundary:** No Telegram or Sendblue live gate ran. No legacy inventory, approval, or remediation command ran. No legacy object was read, migrated, overwritten, or deleted. Neither the primary branch nor `codex/artifact-intake-session-1` was merged or advanced.
+
+---

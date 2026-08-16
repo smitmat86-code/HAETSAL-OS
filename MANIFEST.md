@@ -12,7 +12,7 @@ Last updated: 2026-04-18 | Session: 7.1 (Hindsight Projection Adapter)
 
 <!-- AUTO-GENERATED MODULE REGISTRY - DO NOT EDIT -->
 
-*Auto-generated: 2026-08-15*
+*Auto-generated: 2026-08-16*
 
 ### src/
 
@@ -68,7 +68,7 @@ Last updated: 2026-04-18 | Session: 7.1 (Hindsight Projection Adapter)
 | src\services\agents\automation-chat.ts | 77 | AutomationChatRoute | ✅ |
 | src\services\agents\delegation.ts | 71 | DelegationDecision, decideDelegation, DelegationRoute | ✅ |
 | src\services\agents\router.ts | 50 | — | ✅ |
-| src\services\artifact-intake\config.ts | 54 | ARTIFACT_MAX_BYTES, TELEGRAM_ARTIFACT_MAX_BYTES, ARTIFACT_DOWNLOAD_TIMEOUT_MS... | ✅ |
+| src\services\artifact-intake\config.ts | 62 | ARTIFACT_MAX_BYTES, TELEGRAM_ARTIFACT_MAX_BYTES, ARTIFACT_DOWNLOAD_TIMEOUT_MS... | ✅ |
 | src\services\artifact-intake\contracts.ts | 135 | ARTIFACT_INTAKE_ERROR, ArtifactIntakeErrorCode, ArtifactIntakeContractError... | ✅ |
 | src\services\artifact-intake\crypto.ts | 108 | SealedArtifactBytes, detectArtifactEnvelopeFamily | ✅ |
 | src\services\artifact-intake\download-body.ts | 57 | — | ✅ |
@@ -76,18 +76,21 @@ Last updated: 2026-04-18 | Session: 7.1 (Hindsight Projection Adapter)
 | src\services\artifact-intake\download-policy.ts | 117 | normalizeArtifactIpAddress, isBlockedArtifactAddress, assertArtifactResolvedAddressAllowed... | ✅ |
 | src\services\artifact-intake\download-types.ts | 42 | HostedArtifactFileDescriptor, ArtifactDownloadResponse, ArtifactDownloadNetwork... | ✅ |
 | src\services\artifact-intake\download.ts | 150 | — | ✅ |
-| src\services\artifact-intake\finalize.ts | 304 | FinalizeArtifactCaptureFence | ⚠️ OVER LIMIT |
+| src\services\artifact-intake\finalization-proof.ts | 90 | — | ✅ |
+| src\services\artifact-intake\finalize.ts | 510 | ArtifactFinalizationRow, FinalizeArtifactCaptureFence | ⚠️ OVER LIMIT |
 | src\services\artifact-intake\legacy-approval-manifest.ts | 52 | ExactTargetManifestEntry | ✅ |
 | src\services\artifact-intake\legacy-inventory-types.ts | 75 | LegacyChannel, LegacyEnvelopeFamily, LegacyInventoryDisposition... | ✅ |
 | src\services\artifact-intake\legacy-inventory.ts | 147 | classifyLegacyMediaInventory, classifyLegacyMediaObjects | ✅ |
-| src\services\artifact-intake\legacy-managed-replacements.ts | 61 | LEGACY_D1_CANONICAL_REFERENCES_SQL, LEGACY_MANAGED_REPLACEMENT_CANDIDATES_SQL, exactManagedPrimarySourceReplacements | ✅ |
+| src\services\artifact-intake\legacy-managed-replacements.ts | 71 | LEGACY_D1_CANONICAL_REFERENCES_SQL, LEGACY_MANAGED_REPLACEMENT_CANDIDATES_SQL, exactManagedPrimarySourceReplacements | ✅ |
 | src\services\artifact-intake\legacy-reference-evidence.ts | 35 | groupLegacyReferences, legacyReferenceIdentity, canonicalRoleEvidence | ✅ |
 | src\services\artifact-intake\legacy-remediation.ts | 139 | LEGACY_INVENTORY_VERSION, LegacyRemediationCategory, LegacyRemediationPlan... | ✅ |
+| src\services\artifact-intake\manifest-identity.ts | 26 | ArtifactManifestIdentityItem | ✅ |
 | src\services\artifact-intake\mime.ts | 41 | detectArtifactMimeType | ✅ |
-| src\services\artifact-intake\operations.ts | 296 | ArtifactIntakeOperationRow | ⚠️ OVER LIMIT |
-| src\services\artifact-intake\reaper.ts | 57 | ArtifactReaperResult | ✅ |
+| src\services\artifact-intake\operations.ts | 490 | ArtifactIntakeOperationRow | ⚠️ OVER LIMIT |
+| src\services\artifact-intake\reaper.ts | 86 | ArtifactReaperResult | ✅ |
 | src\services\artifact-intake\schemas.ts | 148 | reserveArtifactUploadSchema, openAIFileDescriptorSchema, telegramArtifactFileDescriptorSchema... | ✅ |
-| src\services\artifact-intake\storage.ts | 54 | — | ✅ |
+| src\services\artifact-intake\stale-finalization-recovery.ts | 85 | — | ✅ |
+| src\services\artifact-intake\storage.ts | 86 | ManagedArtifactCiphertextProof | ✅ |
 | src\services\automations\nl-parse.ts | 88 | ParsedAutomation, parseAutomationIntent, AutomationCommand... | ✅ |
 | src\services\automations\recurrence.ts | 84 | RecurrenceKind, RecurrenceSpec, DEFAULT_TZ... | ✅ |
 | src\services\bootstrap\historical-import.ts | 140 | historicalSalienceMultiplier | ✅ |
@@ -121,25 +124,26 @@ Last updated: 2026-04-18 | Session: 7.1 (Hindsight Projection Adapter)
 | src\services\canonical-memory-types.ts | 79 | CanonicalChunkPlan, CanonicalArtifactPlan, NormalizedCanonicalCapture... | ✅ |
 | src\services\canonical-memory.ts | 231 | — | ⚠️ OVER LIMIT |
 | src\services\canonical-postgres-base-ddl.ts | 133 | CANONICAL_BASE_DDL | ✅ |
-| src\services\canonical-postgres-repository.ts | 1064 | CanonicalMemoryStore, InMemoryCanonicalMemoryStore, PostgresCanonicalMemoryStore | ⚠️ OVER LIMIT |
-| src\services\canonical-postgres-schema.ts | 298 | CanonicalGraphIdentityKind, CanonicalGraphIdentityMapping, CANONICAL_POSTGRES_SCHEMA... | ⚠️ OVER LIMIT |
+| src\services\canonical-postgres-repository.ts | 1065 | CanonicalMemoryStore, InMemoryCanonicalMemoryStore, PostgresCanonicalMemoryStore | ⚠️ OVER LIMIT |
+| src\services\canonical-postgres-schema.ts | 299 | CanonicalGraphIdentityKind, CanonicalGraphIdentityMapping, CANONICAL_POSTGRES_SCHEMA... | ⚠️ OVER LIMIT |
 | src\services\canonical-postgres.ts | 34 | installCanonicalMemoryStore, installCanonicalMemoryTestStore, getCanonicalMemoryStore | ✅ |
 | src\services\canonical-projection-dispatch.ts | 51 | — | ✅ |
 | src\services\canonical-promotion.ts | 69 | PromoteClaimInput | ✅ |
 | src\services\canonical-source-attribution.ts | 64 | buildCanonicalSourceAttribution, applyCanonicalRoute | ✅ |
-| src\services\channel-media\canonical-recovery.ts | 109 | ChannelMediaCanonicalRecoveryResult | ✅ |
+| src\services\channel-media\canonical-proof.ts | 80 | — | ✅ |
+| src\services\channel-media\canonical-recovery.ts | 150 | ChannelMediaCanonicalRecoveryResult | ✅ |
 | src\services\channel-media\claim-outcome.ts | 97 | ChannelMediaJobClaimOutcome, channelMediaRetrySeconds | ✅ |
 | src\services\channel-media\delivery-state.ts | 127 | ChannelMediaDeliveryClaim | ✅ |
 | src\services\channel-media\delivery.ts | 76 | ChannelMediaDeliveryOutcome, ChannelMediaDeliver | ✅ |
 | src\services\channel-media\descriptor.ts | 31 | validateChannelMediaDescriptor | ✅ |
-| src\services\channel-media\finalize-job.ts | 149 | channelMediaSearchableBody | ✅ |
+| src\services\channel-media\finalize-job.ts | 150 | channelMediaSearchableBody | ✅ |
 | src\services\channel-media\handoff.ts | 65 | — | ✅ |
 | src\services\channel-media\intake.ts | 32 | — | ✅ |
 | src\services\channel-media\job-transitions.ts | 84 | — | ✅ |
 | src\services\channel-media\jobs.ts | 120 | — | ✅ |
-| src\services\channel-media\orchestrator-recovery.ts | 73 | ChannelMediaRecoveryGate | ✅ |
-| src\services\channel-media\orchestrator-support.ts | 130 | ChannelMediaOrchestratorDependencies, ProcessChannelMediaJobArgs, ChannelMediaProcessResult... | ✅ |
-| src\services\channel-media\orchestrator.ts | 144 | — | ✅ |
+| src\services\channel-media\orchestrator-recovery.ts | 83 | ChannelMediaRecoveryGate | ✅ |
+| src\services\channel-media\orchestrator-support.ts | 131 | ChannelMediaOrchestratorDependencies, ProcessChannelMediaJobArgs, ChannelMediaProcessResult... | ✅ |
+| src\services\channel-media\orchestrator.ts | 145 | — | ✅ |
 | src\services\channel-media\providers-sendblue.ts | 76 | — | ✅ |
 | src\services\channel-media\providers-telegram.ts | 79 | — | ✅ |
 | src\services\channel-media\providers.ts | 16 | — | ✅ |
@@ -263,7 +267,7 @@ Last updated: 2026-04-18 | Session: 7.1 (Hindsight Projection Adapter)
 | src\tools\recall.ts | 61 | — | ✅ |
 | src\tools\retain.ts | 74 | — | ✅ |
 | src\types\action.ts | 105 | CapabilityClass, AuthorizationLevel, AUTH_LEVEL_ORDINAL... | ✅ |
-| src\types\artifact-intake.ts | 76 | ArtifactRole, ArtifactStorageKind, ArtifactEncryptionFamily... | ✅ |
+| src\types\artifact-intake.ts | 85 | ArtifactRole, ArtifactStorageKind, ArtifactEncryptionFamily... | ✅ |
 | src\types\bootstrap.ts | 76 | BootstrapStatus, BootstrapParams, InterviewDomain... | ✅ |
 | src\types\canonical-capture-pipeline.ts | 65 | CanonicalPipelineCaptureInput, CanonicalProjectionDispatchMessage, CanonicalCapturePipelineResult | ✅ |
 | src\types\canonical-governance-records.ts | 109 | CanonicalEventRecord, CanonicalEntityRecord, CanonicalClaimRecord... | ✅ |

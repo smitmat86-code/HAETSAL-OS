@@ -6,7 +6,7 @@ import { cleanupChannelMediaHandoff } from './delivery'
 import { expireChannelMediaDeliveryClaim } from './delivery-state'
 import { deleteChannelMediaHandoff } from './handoff'
 import { claimChannelMediaJob, getChannelMediaJob } from './jobs'
-import { markChannelMediaFailed } from './job-transitions'
+import { markChannelMediaFailed, markChannelMediaIntegrityIncident } from './job-transitions'
 import { deleteChannelMediaRecovery } from './recovery'
 
 interface ExpiredRow {
@@ -14,6 +14,7 @@ interface ExpiredRow {
   tenant_id: string
   status: string
   delivery_status: string
+  error_code: string | null
   lease_expires_at: number | null
 }
 
@@ -23,7 +24,7 @@ export async function reapExpiredChannelMediaJobs(
   limit = 100,
 ): Promise<{ reaped: number }> {
   const rows = await env.D1_US.prepare(
-    `SELECT id, tenant_id, status, delivery_status, lease_expires_at FROM channel_media_jobs
+    `SELECT id, tenant_id, status, delivery_status, error_code, lease_expires_at FROM channel_media_jobs
      WHERE expires_at <= ? AND handoff_status = 'pending'
      ORDER BY expires_at ASC LIMIT ?`,
   ).bind(now, limit).all<ExpiredRow>()
@@ -45,6 +46,10 @@ export async function reapExpiredChannelMediaJobs(
       row.status === 'processing' && row.lease_expires_at !== null &&
       Number(row.lease_expires_at) > Date.now()
     ) continue
+    if (
+      row.status === 'delivery_unknown' && row.delivery_status === 'unknown' &&
+      row.error_code === ARTIFACT_INTAKE_ERROR.INVALID_STATE
+    ) continue
 
     if (row.delivery_status === 'pending') {
       const current = await getChannelMediaJob(row.tenant_id, row.id, env)
@@ -55,6 +60,10 @@ export async function reapExpiredChannelMediaJobs(
         continue
       }
       if (recovery.status === 'in_progress') continue
+      if (recovery.status === 'inconsistent' && recovery.protectedFinalizedHistory) {
+        await markChannelMediaIntegrityIncident(row.tenant_id, row.id, env)
+        continue
+      }
       if (['accepted', 'retryable', 'processing'].includes(current.status)) {
         const claimed = await claimChannelMediaJob(row.tenant_id, row.id, env)
         if (!claimed || claimed.status !== 'processing' || !claimed.leaseToken) continue

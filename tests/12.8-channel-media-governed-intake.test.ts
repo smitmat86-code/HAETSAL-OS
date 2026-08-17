@@ -876,14 +876,87 @@ describe('12.8 governed common channel media intake', () => {
           },
         },
       })
-      expect(outcome).toBe('terminal_failed')
-      expect(messages).toEqual(['I could not capture that photo. Please try sending it again.'])
+      expect(outcome).toBe('processed')
+      expect(messages).toEqual([])
       expect(messages).not.toContain('Captured that photo.')
       expect(await getChannelMediaJob(TENANT_A, job.id, env)).toMatchObject({
-        status: 'failed', deliveryStatus: 'delivered', errorCode: ARTIFACT_INTAKE_ERROR.INVALID_STATE,
+        status: 'delivery_unknown', deliveryStatus: 'unknown', errorCode: ARTIFACT_INTAKE_ERROR.INVALID_STATE,
       })
+      const lifecycle = await env.D1_US.prepare(
+        `SELECT f.status AS finalization_status, o.status AS operation_status
+         FROM artifact_intake_finalizations f
+         JOIN artifact_intake_operations o ON o.finalization_id = f.id AND o.tenant_id = f.tenant_id
+         WHERE f.tenant_id = ? AND f.idempotency_hash = ?`,
+      ).bind(TENANT_A, await sha256Text(`channel-media-finalize:${job.id}`))
+        .first<{ finalization_status: string; operation_status: string }>()
+      expect(lifecycle).toEqual({ finalization_status: 'finalized', operation_status: 'finalized' })
+      expect(await env.R2_ARTIFACTS.head(await channelMediaHandoffKey(TENANT_A, job.id))).not.toBeNull()
+      expect(await env.R2_ARTIFACTS.head(await channelMediaRecoveryKey(TENANT_A, job.id))).not.toBeNull()
+
+      await env.D1_US.prepare(
+        `UPDATE channel_media_jobs SET status = 'finalized', delivery_status = 'pending',
+         error_code = NULL, expires_at = 1 WHERE tenant_id = ? AND id = ?`,
+      ).bind(TENANT_A, job.id).run()
+      expect(await reapExpiredChannelMediaJobs(env, Date.now(), 100)).toEqual({ reaped: 0 })
+      expect(await getChannelMediaJob(TENANT_A, job.id, env)).toMatchObject({
+        status: 'delivery_unknown', deliveryStatus: 'unknown',
+        errorCode: ARTIFACT_INTAKE_ERROR.INVALID_STATE, handoffStatus: 'pending',
+      })
+      expect(await env.R2_ARTIFACTS.head(await channelMediaHandoffKey(TENANT_A, job.id))).not.toBeNull()
+      expect(await env.R2_ARTIFACTS.head(await channelMediaRecoveryKey(TENANT_A, job.id))).not.toBeNull()
+      expect(await reapExpiredChannelMediaJobs(env, Date.now(), 100)).toEqual({ reaped: 0 })
     },
   )
+
+  it('lets neither channel nor artifact reaper cross a live finalization lease', async () => {
+    const kek = await installTenantKek(TENANT_A)
+    const tmk = await key()
+    const job = await reserve(`live-finalization-lease-${SUITE}`, kek)
+    let reached!: () => void
+    let release!: () => void
+    const protectedReached = new Promise<void>(resolve => { reached = resolve })
+    const gate = new Promise<void>(resolve => { release = resolve })
+    const worker = processChannelMediaJob({
+      tenantId: TENANT_A, operationId: job.id, tmk, kek, env,
+      dependencies: {
+        acquire: async () => ({ bytes: JPEG, detectedMimeType: 'image/jpeg' }),
+        describe: async () => `live-finalization-lease-description-${SUITE}`,
+        deliver: async () => 'delivered',
+        afterOperationsProtected: async () => { reached(); await gate },
+      },
+    })
+    await protectedReached
+    const finalization = await env.D1_US.prepare(
+      `SELECT id, lease_expires_at FROM artifact_intake_finalizations
+       WHERE tenant_id = ? AND status = 'reserved' ORDER BY created_at DESC LIMIT 1`,
+    ).bind(TENANT_A).first<{ id: string; lease_expires_at: number }>()
+    expect(finalization?.lease_expires_at).toBeGreaterThan(Date.now())
+    await env.D1_US.batch([
+      env.D1_US.prepare(
+        `UPDATE channel_media_jobs SET expires_at = 1, lease_expires_at = 1
+         WHERE tenant_id = ? AND id = ?`,
+      ).bind(TENANT_A, job.id),
+      env.D1_US.prepare(
+        `UPDATE artifact_intake_finalizations SET recovery_expires_at = 1
+         WHERE tenant_id = ? AND id = ?`,
+      ).bind(TENANT_A, finalization!.id),
+      env.D1_US.prepare(
+        `UPDATE artifact_intake_operations SET expires_at = 1, finalization_protected_until = 1
+         WHERE tenant_id = ? AND finalization_id = ?`,
+      ).bind(TENANT_A, finalization!.id),
+    ])
+    expect((await reapExpiredChannelMediaJobs(env, Date.now() + 1, 100)).reaped).toBe(0)
+    expect((await reapExpiredArtifactUploads(env, Date.now() + 1, 100)).reaped).toBe(0)
+    expect(await env.D1_US.prepare(
+      `SELECT status, lease_expires_at FROM artifact_intake_finalizations
+       WHERE tenant_id = ? AND id = ?`,
+    ).bind(TENANT_A, finalization!.id).first()).toMatchObject({ status: 'reserved' })
+    expect(await getChannelMediaJob(TENANT_A, job.id, env)).toMatchObject({
+      status: 'processing', handoffStatus: 'pending',
+    })
+    release()
+    await worker.catch(() => undefined)
+  })
 
   it('fences a stale worker after its delayed finalization reservation loses the channel lease', async () => {
     const kek = await key()
@@ -1108,6 +1181,79 @@ describe('12.8 governed common channel media intake', () => {
       `SELECT status FROM artifact_intake_finalizations WHERE tenant_id = ? AND id = ?`,
     ).bind(TENANT_A, finalization!.id).first<{ status: string }>()).toMatchObject({ status: 'finalized' })
     expect(await env.R2_ARTIFACTS.head(operation!.r2_key)).not.toBeNull()
+  })
+
+  it('re-proves and repairs a stale failed-parent/finalized-child channel split', async () => {
+    const kek = await installTenantKek(TENANT_A)
+    const tmk = await key()
+    const job = await reserve(`failed-parent-finalized-child-${SUITE}`, kek)
+    await expect(processChannelMediaJob({
+      tenantId: TENANT_A, operationId: job.id, tmk, kek, env,
+      dependencies: {
+        acquire: async () => ({ bytes: JPEG, detectedMimeType: 'image/jpeg' }),
+        describe: async () => `failed-parent-finalized-child-${SUITE}`,
+        deliver: async () => 'delivered',
+      },
+    })).resolves.toBe('processed')
+    const finalization = await env.D1_US.prepare(
+      `SELECT id FROM artifact_intake_finalizations
+       WHERE tenant_id = ? AND idempotency_hash = ?`,
+    ).bind(TENANT_A, await sha256Text(`channel-media-finalize:${job.id}`))
+      .first<{ id: string }>()
+    await env.D1_US.batch([
+      env.D1_US.prepare(
+        `UPDATE artifact_intake_finalizations SET status = 'failed', error_code = ?,
+         lease_owner = NULL, lease_expires_at = NULL, recovery_expires_at = 1
+         WHERE tenant_id = ? AND id = ?`,
+      ).bind(ARTIFACT_INTAKE_ERROR.CANONICAL_WRITE_FAILED, TENANT_A, finalization!.id),
+      env.D1_US.prepare(
+        `UPDATE channel_media_jobs SET status = 'processing', delivery_status = 'pending',
+         lease_token = NULL, lease_expires_at = NULL WHERE tenant_id = ? AND id = ?`,
+      ).bind(TENANT_A, job.id),
+    ])
+    const split = await getChannelMediaJob(TENANT_A, job.id, env)
+    await expect(recoverFinalizedChannelMediaJob(split!, env)).resolves.toEqual({ status: 'recovered' })
+    expect(await env.D1_US.prepare(
+      `SELECT f.status AS finalization_status, o.status AS operation_status
+       FROM artifact_intake_finalizations f
+       JOIN artifact_intake_operations o ON o.finalization_id = f.id AND o.tenant_id = f.tenant_id
+       WHERE f.tenant_id = ? AND f.id = ?`,
+    ).bind(TENANT_A, finalization!.id).first()).toEqual({
+      finalization_status: 'finalized', operation_status: 'finalized',
+    })
+  })
+
+  it('protects finalized history when the operation set cardinality is corrupt', async () => {
+    const kek = await installTenantKek(TENANT_A)
+    const tmk = await key()
+    const job = await reserve(`finalized-cardinality-incident-${SUITE}`, kek)
+    await expect(processChannelMediaJob({
+      tenantId: TENANT_A, operationId: job.id, tmk, kek, env,
+      dependencies: {
+        acquire: async () => ({ bytes: JPEG, detectedMimeType: 'image/jpeg' }),
+        describe: async () => `finalized-cardinality-incident-${SUITE}`,
+        deliver: async () => 'delivered',
+      },
+    })).resolves.toBe('processed')
+    const finalization = await env.D1_US.prepare(
+      `SELECT id FROM artifact_intake_finalizations
+       WHERE tenant_id = ? AND idempotency_hash = ?`,
+    ).bind(TENANT_A, await sha256Text(`channel-media-finalize:${job.id}`))
+      .first<{ id: string }>()
+    await env.D1_US.prepare(
+      `UPDATE artifact_intake_finalizations SET expected_operation_count = 0
+       WHERE tenant_id = ? AND id = ?`,
+    ).bind(TENANT_A, finalization!.id).run()
+    const incident = vi.spyOn(console, 'error').mockImplementation(() => undefined)
+    await expect(recoverFinalizedChannelMediaJob(
+      (await getChannelMediaJob(TENANT_A, job.id, env))!, env,
+    )).resolves.toEqual({
+      status: 'inconsistent', errorCode: ARTIFACT_INTAKE_ERROR.INVALID_STATE,
+      protectedFinalizedHistory: true,
+    })
+    expect(incident).toHaveBeenCalledWith('ARTIFACT_INTEGRITY_INCIDENT', {
+      reason: 'operation_set_mismatch', finalizationId: finalization!.id,
+    })
   })
 
   it('fails a genuinely abandoned stale finalization reservation instead of retrying forever', async () => {

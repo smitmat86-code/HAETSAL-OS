@@ -10,6 +10,8 @@ export interface ArtifactReaperResult {
   reaped: number
   repairedFinalized: number
   failed: number
+  deferred: number
+  integrityIncidents: number
 }
 
 export async function reapExpiredArtifactUploads(
@@ -22,20 +24,25 @@ export async function reapExpiredArtifactUploads(
     reaped: 0,
     repairedFinalized: 0,
     failed: 0,
+    deferred: 0,
+    integrityIncidents: 0,
   }
   const stale = await recoverOrFailStaleArtifactFinalizations(env, now, limit)
   result.failed += stale.failed
   result.repairedFinalized += stale.repairedFinalized
+  result.deferred += stale.deferred
+  result.integrityIncidents += stale.integrityIncidents
   const rows = await env.D1_US.prepare(
     `SELECT * FROM artifact_intake_operations o
      WHERE o.status IN ('reserved', 'sealed', 'failed') AND o.expires_at <= ?
        AND (o.expiry_claim_token IS NULL OR o.expiry_claim_expires_at <= ?)
        AND NOT EXISTS (
          SELECT 1 FROM artifact_intake_finalizations f
-         WHERE f.tenant_id = o.tenant_id AND f.id = o.finalization_id AND f.status = 'reserved'
+          WHERE f.tenant_id = o.tenant_id AND f.id = o.finalization_id
+            AND (f.status IN ('reserved', 'finalized') OR f.lease_expires_at > ?)
        )
      ORDER BY o.expires_at ASC LIMIT ?`,
-  ).bind(now, now, limit).all<ArtifactIntakeOperationRow>()
+  ).bind(now, now, now, limit).all<ArtifactIntakeOperationRow>()
   for (const row of rows.results) {
     result.inspected += 1
     const claimToken = crypto.randomUUID()
@@ -50,11 +57,12 @@ export async function reapExpiredArtifactUploads(
            AND NOT EXISTS (
              SELECT 1 FROM artifact_intake_finalizations f
              WHERE f.tenant_id = artifact_intake_operations.tenant_id
-               AND f.id = artifact_intake_operations.finalization_id AND f.status = 'reserved'
+                AND f.id = artifact_intake_operations.finalization_id
+                AND (f.status IN ('reserved', 'finalized') OR f.lease_expires_at > ?)
            )`,
       ).bind(
         claimToken, now + ARTIFACT_EXPIRY_CLAIM_LEASE_MS, now,
-        row.tenant_id, row.upload_id, now, now, now,
+        row.tenant_id, row.upload_id, now, now, now, now,
       ).run()
       if (Number(claimed.meta.changes ?? 0) !== 1) continue
 

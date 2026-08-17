@@ -72,7 +72,7 @@ describe('12.0 governed artifact intake contract', () => {
       tenant_id: 'tenant-a',
       searchable_content: 'client extraction',
       declared_derivative_upload_ids: ['upload-derivative'],
-      artifacts: [{ upload_id: 'upload-source', tenant_id: 'tenant-a', role: 'source', primary: true }],
+      artifacts: [{ upload_id: 'upload-source', tenant_id: 'tenant-a', role: 'source', primary: true, byte_length: 1 }],
     })
     expect(result.success).toBe(false)
     expect(issueMessages(result)).toContain(ARTIFACT_INTAKE_ERROR.MISSING_DECLARED_DERIVATIVE)
@@ -82,7 +82,7 @@ describe('12.0 governed artifact intake contract', () => {
     const result = finalizeArtifactCaptureSchema.safeParse({
       tenant_id: 'tenant-a',
       searchable_content: 'client extraction',
-      artifacts: [{ upload_id: 'upload-source', tenant_id: 'tenant-b', role: 'source', primary: true }],
+      artifacts: [{ upload_id: 'upload-source', tenant_id: 'tenant-b', role: 'source', primary: true, byte_length: 1 }],
     })
     expect(result.success).toBe(false)
     expect(issueMessages(result)).toContain(ARTIFACT_INTAKE_ERROR.TENANT_MISMATCH)
@@ -94,10 +94,10 @@ describe('12.0 governed artifact intake contract', () => {
       searchable_content: 'client extraction',
       declared_derivative_upload_ids: ['upload-derivative'],
       artifacts: [
-        { upload_id: 'upload-source', tenant_id: 'tenant-a', role: 'source', primary: true },
+        { upload_id: 'upload-source', tenant_id: 'tenant-a', role: 'source', primary: true, byte_length: 1 },
         {
           upload_id: 'upload-derivative', tenant_id: 'tenant-a', role: 'derivative',
-          parent_upload_id: 'upload-source', primary: false,
+          parent_upload_id: 'upload-source', primary: false, byte_length: 1,
         },
       ],
     }).success).toBe(true)

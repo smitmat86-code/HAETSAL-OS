@@ -4,13 +4,19 @@ import type { ArtifactFinalizationRow } from './finalize'
 import type { ArtifactIntakeOperationRow } from './operations'
 import { proveManagedArtifactCiphertext } from './storage'
 import { artifactManifestIdentitySha256 } from './manifest-identity'
+import {
+  artifactProofIndeterminate,
+  artifactProofMismatch,
+  type ArtifactProofResult,
+  verifiedArtifactProof,
+} from './proof-result'
 
 /** Proves the complete cross-store boundary without relying on caller input. */
 export async function proveArtifactFinalizationCanonicalSuccess(args: {
   finalization: ArtifactFinalizationRow
   operations: ArtifactIntakeOperationRow[]
   env: Env
-}): Promise<boolean> {
+}): Promise<ArtifactProofResult> {
   const { finalization, operations, env } = args
   if (
     Number(finalization.expected_operation_count) <= 0 ||
@@ -18,8 +24,10 @@ export async function proveArtifactFinalizationCanonicalSuccess(args: {
     operations.length !== Number(finalization.expected_operation_count) ||
     new Set(operations.map(row => row.upload_id)).size !== operations.length ||
     new Set(operations.map(row => row.artifact_id)).size !== operations.length
-  ) return false
+  ) return artifactProofMismatch('operation_set_mismatch')
 
+  // Sequential proof bounds live ciphertext memory to one object. Never replace
+  // this with unbounded Promise.all over manifest entries.
   for (const row of operations) {
     if (
       !['sealed', 'finalized'].includes(row.status) || row.finalization_id !== finalization.id ||
@@ -27,37 +35,41 @@ export async function proveArtifactFinalizationCanonicalSuccess(args: {
       row.canonical_document_id !== finalization.canonical_document_id ||
       row.canonical_operation_id !== finalization.canonical_operation_id ||
       !row.ciphertext_sha256 || !row.ciphertext_byte_length || !row.encryption_family
-    ) return false
-    try {
-      await proveManagedArtifactCiphertext({
-        env, tenantId: row.tenant_id, uploadId: row.upload_id, recordedKey: row.r2_key,
-        expectedCiphertextByteLength: Number(row.ciphertext_byte_length),
-        expectedCiphertextSha256: row.ciphertext_sha256,
-      })
-    } catch {
-      return false
-    }
+    ) return artifactProofMismatch('operation_metadata_mismatch')
+    const rawProof = await proveManagedArtifactCiphertext({
+      env, tenantId: row.tenant_id, uploadId: row.upload_id, recordedKey: row.r2_key,
+      expectedCiphertextByteLength: Number(row.ciphertext_byte_length),
+      expectedCiphertextSha256: row.ciphertext_sha256,
+    })
+    if (rawProof.status !== 'verified') return rawProof
   }
 
   const store = getCanonicalMemoryStore(env)
-  const [capture, document, operation] = await Promise.all([
-    store.getCapture(finalization.tenant_id, finalization.canonical_capture_id),
-    store.getDocument(finalization.tenant_id, finalization.canonical_document_id),
-    store.getOperationById(finalization.tenant_id, finalization.canonical_operation_id),
-  ])
-  const manifest = document?.artifact_manifest ?? []
+  let capture
+  let document
+  let operation
+  try {
+    // An exception is indeterminate; an authoritative null row is a mismatch.
+    capture = await store.getCapture(finalization.tenant_id, finalization.canonical_capture_id)
+    document = await store.getDocument(finalization.tenant_id, finalization.canonical_document_id)
+    operation = await store.getOperationById(finalization.tenant_id, finalization.canonical_operation_id)
+  } catch {
+    return artifactProofIndeterminate('canonical_store_unavailable')
+  }
+  if (!capture || !document || !operation) return artifactProofMismatch('canonical_record_missing')
+
+  const manifest = document.artifact_manifest ?? []
   const primary = manifest.filter(item => item.primary)
   const manifestIds = new Set(manifest.map(item => item.artifact_id))
   const source = manifest.filter(item => item.role === 'source')
   if (
-    !capture || !document || !operation || manifest.length !== operations.length ||
-    manifestIds.size !== manifest.length || source.length !== 1 || primary.length !== 1 ||
-    primary[0]!.role !== 'source' || primary[0]!.parent_artifact_id !== null ||
-    capture.artifact_id !== primary[0]!.artifact_id ||
+    manifest.length !== operations.length || manifestIds.size !== manifest.length ||
+    source.length !== 1 || primary.length !== 1 || primary[0]!.role !== 'source' ||
+    primary[0]!.parent_artifact_id !== null || capture.artifact_id !== primary[0]!.artifact_id ||
     document.capture_id !== capture.id || document.artifact_id !== primary[0]!.artifact_id ||
     document.body_r2_key !== capture.body_r2_key || operation.capture_id !== capture.id ||
     operation.status !== 'accepted'
-  ) return false
+  ) return artifactProofMismatch('canonical_metadata_mismatch')
 
   const byArtifact = new Map(operations.map(row => [row.artifact_id, row]))
   const priorArtifacts = new Set<string>()
@@ -71,10 +83,10 @@ export async function proveArtifactFinalizationCanonicalSuccess(args: {
       row && artifact.ordinal === ordinal && artifact.storage_kind === 'managed_r2' &&
       artifact.r2_key === row.r2_key && Number(artifact.byte_length) === Number(row.byte_length) &&
       artifact.sha256 === row.plaintext_sha256 && artifact.cipher_sha256 === row.ciphertext_sha256 &&
-      artifact.encryption_family === row.encryption_family,
-    )
+      artifact.encryption_family === row.encryption_family)
   })
-  if (!exactManifest) return false
+  if (!exactManifest) return artifactProofMismatch('canonical_manifest_mismatch')
+
   const canonicalIdentity = manifest.map(artifact => ({
     uploadId: byArtifact.get(artifact.artifact_id)!.upload_id,
     role: artifact.role,
@@ -85,5 +97,11 @@ export async function proveArtifactFinalizationCanonicalSuccess(args: {
     byteLength: Number(artifact.byte_length),
     plaintextSha256: artifact.sha256!,
   }))
-  return await artifactManifestIdentitySha256(canonicalIdentity) === finalization.artifact_manifest_sha256
+  try {
+    return await artifactManifestIdentitySha256(canonicalIdentity) === finalization.artifact_manifest_sha256
+      ? verifiedArtifactProof(undefined)
+      : artifactProofMismatch('canonical_manifest_mismatch')
+  } catch {
+    return artifactProofIndeterminate('crypto_unavailable')
+  }
 }

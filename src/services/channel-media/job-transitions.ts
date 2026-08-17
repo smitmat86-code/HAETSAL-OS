@@ -70,6 +70,18 @@ export async function repairChannelMediaFinalized(args: {
   }
 }
 
+/** Records an authoritative post-finalization integrity incident without a false failure reply. */
+export async function markChannelMediaIntegrityIncident(
+  tenantId: string, operationId: string, env: Env,
+): Promise<void> {
+  await env.D1_US.prepare(
+    `UPDATE channel_media_jobs SET status = 'delivery_unknown', delivery_status = 'unknown',
+     error_code = ?, lease_token = NULL, lease_expires_at = NULL, updated_at = ?
+     WHERE tenant_id = ? AND id = ?
+       AND status IN ('processing', 'finalized', 'delivery_unknown')`,
+  ).bind(ARTIFACT_INTAKE_ERROR.INVALID_STATE, Date.now(), tenantId, operationId).run()
+}
+
 export async function markChannelMediaFailed(
   tenantId: string, operationId: string, leaseToken: string, errorCode: string, env: Env,
 ): Promise<void> {

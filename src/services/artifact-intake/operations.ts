@@ -317,8 +317,15 @@ export async function acquireArtifactFinalizationLease(args: {
   recoveryMs?: number
   allowExpiredRecoveryProof?: boolean
 }, env: Env): Promise<{ leaseExpiresAt: number; recoveryExpiresAt: number }> {
-  const leaseExpiresAt = args.now + (args.leaseMs ?? ARTIFACT_FINALIZATION_LEASE_MS)
-  const initialRecoveryExpiresAt = args.now + (args.recoveryMs ?? ARTIFACT_FINALIZATION_RECOVERY_MS)
+  const leaseMs = args.leaseMs ?? ARTIFACT_FINALIZATION_LEASE_MS
+  const recoveryMs = args.recoveryMs ?? ARTIFACT_FINALIZATION_RECOVERY_MS
+  if (!args.allowExpiredRecoveryProof && recoveryMs < leaseMs) {
+    throw new ArtifactIntakeContractError(ARTIFACT_INTAKE_ERROR.INVALID_STATE)
+  }
+  const leaseExpiresAt = args.now + leaseMs
+  const initialRecoveryExpiresAt = args.allowExpiredRecoveryProof
+    ? leaseExpiresAt
+    : args.now + recoveryMs
   const activeLease = env.D1_US.prepare(
     `UPDATE artifact_intake_finalizations
      SET lease_owner = ?, lease_expires_at = ?, recovery_expires_at = COALESCE(recovery_expires_at, ?), updated_at = ?
@@ -326,7 +333,7 @@ export async function acquireArtifactFinalizationLease(args: {
        AND expected_operation_count = ?
        AND canonical_capture_id = ? AND canonical_document_id = ? AND canonical_operation_id = ?
        AND (lease_owner = ? OR lease_owner IS NULL OR lease_expires_at IS NULL OR lease_expires_at <= ?)
-       AND (recovery_expires_at IS NULL OR recovery_expires_at > ?)`,
+       AND (recovery_expires_at IS NULL OR recovery_expires_at >= ?)`,
   )
   const proofBackedStaleLease = env.D1_US.prepare(
     `UPDATE artifact_intake_finalizations
@@ -341,7 +348,9 @@ export async function acquireArtifactFinalizationLease(args: {
     args.leaseOwner, leaseExpiresAt, initialRecoveryExpiresAt, args.now,
     args.tenantId, args.finalizationId, args.expectedOperationCount,
     args.captureId, args.documentId, args.operationId,
-    ...(args.allowExpiredRecoveryProof ? [args.now, args.now] : [args.leaseOwner, args.now, args.now]),
+    ...(args.allowExpiredRecoveryProof
+      ? [args.now, args.now]
+      : [args.leaseOwner, args.now, leaseExpiresAt]),
   ).run()
   if (changed(result) !== 1) {
     throw new ArtifactIntakeContractError(ARTIFACT_INTAKE_ERROR.INVALID_STATE)
@@ -456,6 +465,44 @@ export async function markArtifactOperationsFinalized(args: {
   }
 }
 
+/**
+ * Repairs the only allowed post-acknowledgement split: the parent is already
+ * finalized while one or more exact child rows remain sealed.
+ */
+export async function markArtifactOperationsFinalizedForCompletedFinalization(args: {
+  tenantId: string
+  finalizationId: string
+  uploadIds: string[]
+  captureId: string
+  documentId: string
+  operationId: string
+  now: number
+}, env: Env): Promise<void> {
+  const uploadIds = uniqueUploadIds(args.uploadIds)
+  const placeholders = uploadIds.map(() => '?').join(', ')
+  // postflight-safe: placeholders contains only one parameter marker per validated upload ID.
+  const result = await env.D1_US.prepare(
+    `UPDATE artifact_intake_operations
+     SET status = 'finalized', error_code = NULL, finalization_protected_until = NULL,
+         expiry_claim_token = NULL, expiry_claim_expires_at = NULL, updated_at = ?
+     WHERE tenant_id = ? AND upload_id IN (${placeholders})
+       AND status IN ('sealed', 'finalized') AND finalization_id = ? AND expiry_claim_token IS NULL
+       AND canonical_capture_id = ? AND canonical_document_id = ? AND canonical_operation_id = ?
+       AND EXISTS (
+         SELECT 1 FROM artifact_intake_finalizations f
+         WHERE f.tenant_id = ? AND f.id = ? AND f.status = 'finalized'
+           AND f.expected_operation_count = ?
+       )`,
+  ).bind(
+    args.now, args.tenantId, ...uploadIds, args.finalizationId,
+    args.captureId, args.documentId, args.operationId,
+    args.tenantId, args.finalizationId, uploadIds.length,
+  ).run()
+  if (changed(result) !== uploadIds.length) {
+    throw new ArtifactIntakeContractError(ARTIFACT_INTAKE_ERROR.INVALID_STATE)
+  }
+}
+
 export async function failArtifactFinalizationAndReleaseOperations(args: {
   tenantId: string
   finalizationId: string
@@ -467,13 +514,29 @@ export async function failArtifactFinalizationAndReleaseOperations(args: {
     ? env.D1_US.prepare(
       `UPDATE artifact_intake_finalizations
        SET status = 'failed', error_code = ?, lease_owner = NULL, lease_expires_at = NULL, updated_at = ?
-       WHERE tenant_id = ? AND id = ? AND status = 'reserved' AND lease_owner = ?`,
-    ).bind(args.errorCode, args.now, args.tenantId, args.finalizationId, args.expectedLeaseOwner)
+       WHERE tenant_id = ? AND id = ? AND status = 'reserved' AND lease_owner = ?
+         AND (lease_expires_at IS NULL OR lease_expires_at <= ?)
+         AND NOT EXISTS (
+           SELECT 1 FROM artifact_intake_operations o
+           WHERE o.tenant_id = ? AND o.finalization_id = ? AND o.status = 'finalized'
+         )`,
+    ).bind(
+      args.errorCode, args.now, args.tenantId, args.finalizationId, args.expectedLeaseOwner,
+      args.now, args.tenantId, args.finalizationId,
+    )
     : env.D1_US.prepare(
       `UPDATE artifact_intake_finalizations
        SET status = 'failed', error_code = ?, lease_owner = NULL, lease_expires_at = NULL, updated_at = ?
-       WHERE tenant_id = ? AND id = ? AND status = 'reserved'`,
-    ).bind(args.errorCode, args.now, args.tenantId, args.finalizationId)
+       WHERE tenant_id = ? AND id = ? AND status = 'reserved'
+         AND (lease_expires_at IS NULL OR lease_expires_at <= ?)
+         AND NOT EXISTS (
+           SELECT 1 FROM artifact_intake_operations o
+           WHERE o.tenant_id = ? AND o.finalization_id = ? AND o.status = 'finalized'
+         )`,
+    ).bind(
+      args.errorCode, args.now, args.tenantId, args.finalizationId,
+      args.now, args.tenantId, args.finalizationId,
+    )
   const results = await env.D1_US.batch([
     failFinalization,
     env.D1_US.prepare(

@@ -20,12 +20,20 @@ import {
   getArtifactIntakeOperation,
   loadArtifactOperationsForFinalization,
   markArtifactOperationsFinalized,
+  markArtifactOperationsFinalizedForCompletedFinalization,
   markArtifactOperationsForFinalize,
   type ArtifactIntakeOperationRow,
 } from './operations'
-import { proveManagedArtifactCiphertext } from './storage'
 import { artifactManifestIdentitySha256 } from './manifest-identity'
 import { finalizeArtifactCaptureSchema } from './schemas'
+import { proveManagedArtifactCiphertext } from './storage'
+import { proveArtifactFinalizationCanonicalSuccess } from './finalization-proof'
+import {
+  artifactProofIndeterminate,
+  artifactProofMismatch,
+  type ArtifactProofResult,
+  verifiedArtifactProof,
+} from './proof-result'
 
 export interface ArtifactFinalizationRow {
   id: string
@@ -160,6 +168,7 @@ function validateManifestContract(input: FinalizeArtifactCaptureInput): void {
       role: artifact.role,
       parent_upload_id: artifact.parentUploadId ?? undefined,
       primary: artifact.primary,
+      byte_length: artifact.byteLength,
     })),
   })
   if (!result.success) {
@@ -301,15 +310,15 @@ async function assertFinalizationLease(
 async function proveRawOperations(
   rows: Map<string, ArtifactIntakeOperationRow>,
   env: Env,
-): Promise<void> {
-  await Promise.all([...rows.values()].map(row => {
+): Promise<ArtifactProofResult> {
+  for (const row of rows.values()) {
     if (!row.ciphertext_sha256 || !row.ciphertext_byte_length || !row.encryption_family) {
-      throw new ArtifactIntakeContractError(ARTIFACT_INTAKE_ERROR.INVALID_STATE)
+      return artifactProofMismatch('operation_metadata_mismatch')
     }
     if (row.expiry_claim_token) {
-      throw new ArtifactIntakeContractError(ARTIFACT_INTAKE_ERROR.INVALID_STATE)
+      return artifactProofMismatch('operation_metadata_mismatch')
     }
-    return proveManagedArtifactCiphertext({
+    const proof = await proveManagedArtifactCiphertext({
       env,
       tenantId: row.tenant_id,
       uploadId: row.upload_id,
@@ -317,7 +326,9 @@ async function proveRawOperations(
       expectedCiphertextByteLength: Number(row.ciphertext_byte_length),
       expectedCiphertextSha256: row.ciphertext_sha256,
     })
-  }))
+    if (proof.status !== 'verified') return proof
+  }
+  return verifiedArtifactProof(undefined)
 }
 
 async function assertCanonicalProof(args: {
@@ -326,14 +337,22 @@ async function assertCanonicalProof(args: {
   manifest: ArtifactManifestReceipt[]
   operations: Map<string, ArtifactIntakeOperationRow>
   env: Env
-}): Promise<void> {
+}): Promise<ArtifactProofResult> {
   const store = getCanonicalMemoryStore(args.env)
-  const capture = await store.getCapture(args.input.tenantId, args.finalization.canonical_capture_id)
-  const document = await store.getDocument(args.input.tenantId, args.finalization.canonical_document_id)
-  const operation = await store.getOperationById(args.input.tenantId, args.finalization.canonical_operation_id)
+  let capture
+  let document
+  let operation
+  try {
+    capture = await store.getCapture(args.input.tenantId, args.finalization.canonical_capture_id)
+    document = await store.getDocument(args.input.tenantId, args.finalization.canonical_document_id)
+    operation = await store.getOperationById(args.input.tenantId, args.finalization.canonical_operation_id)
+  } catch {
+    return artifactProofIndeterminate('canonical_store_unavailable')
+  }
   const primary = args.manifest.filter(item => item.primary)
+  if (!capture || !document || !operation) return artifactProofMismatch('canonical_record_missing')
   if (
-    !capture || !document || !operation || primary.length !== 1 ||
+    primary.length !== 1 ||
     capture.source_system !== (args.input.sourceSystem ?? 'file') ||
     capture.source_ref !== (args.input.sourceRef ?? null) ||
     capture.artifact_id !== primary[0]!.artifactId ||
@@ -341,7 +360,7 @@ async function assertCanonicalProof(args: {
     document.body_r2_key !== capture.body_r2_key ||
     operation.capture_id !== capture.id || operation.status !== 'accepted' ||
     document.artifact_manifest.length !== args.manifest.length
-  ) throw new ArtifactIntakeContractError(ARTIFACT_INTAKE_ERROR.INVALID_STATE)
+  ) return artifactProofMismatch('canonical_metadata_mismatch')
 
   for (let index = 0; index < args.manifest.length; index += 1) {
     const expected = args.manifest[index]!
@@ -354,8 +373,25 @@ async function assertCanonicalProof(args: {
       actual.media_type !== expected.mediaType || Number(actual.byte_length) !== expected.byteLength ||
       actual.sha256 !== expected.plaintextSha256 || actual.cipher_sha256 !== expected.ciphertextSha256 ||
       actual.encryption_family !== expected.encryptionFamily
-    ) throw new ArtifactIntakeContractError(ARTIFACT_INTAKE_ERROR.INVALID_STATE)
+    ) return artifactProofMismatch('canonical_manifest_mismatch')
   }
+  return verifiedArtifactProof(undefined)
+}
+
+class ArtifactProofError extends ArtifactIntakeContractError {
+  constructor(readonly proof: Exclude<ArtifactProofResult, { status: 'verified' }>) {
+    super(proof.status === 'indeterminate'
+      ? ARTIFACT_INTAKE_ERROR.CANONICAL_WRITE_FAILED
+      : ARTIFACT_INTAKE_ERROR.INVALID_STATE)
+  }
+}
+
+function requireVerifiedProof(proof: ArtifactProofResult, finalizedHistory = false): void {
+  if (proof.status === 'verified') return
+  if (finalizedHistory && proof.status === 'authoritative_mismatch') {
+    console.error('ARTIFACT_INTEGRITY_INCIDENT', { reason: proof.reason })
+  }
+  throw new ArtifactProofError(proof)
 }
 
 export async function finalizeArtifactCapture(
@@ -376,8 +412,18 @@ export async function finalizeArtifactCapture(
   if (finalization.status === 'finalized') {
     const operations = await loadSealedOperations(input, finalization, env)
     const manifest = buildManifest(input, operations)
-    await proveRawOperations(operations, env)
-    await assertCanonicalProof({ input, finalization, manifest, operations, env })
+    requireVerifiedProof(await proveRawOperations(operations, env), true)
+    requireVerifiedProof(
+      await assertCanonicalProof({ input, finalization, manifest, operations, env }), true,
+    )
+    if ([...operations.values()].some(row => row.status !== 'finalized')) {
+      await markArtifactOperationsFinalizedForCompletedFinalization({
+        tenantId: input.tenantId, finalizationId: finalization.id, uploadIds,
+        captureId: finalization.canonical_capture_id,
+        documentId: finalization.canonical_document_id,
+        operationId: finalization.canonical_operation_id, now: Date.now(),
+      }, env)
+    }
     return receiptFor(finalization, manifest, input)
   }
 
@@ -423,7 +469,7 @@ export async function finalizeArtifactCapture(
     if (operations.size !== eligible.size || uploadIds.some(uploadId => !operations!.has(uploadId))) {
       throw new ArtifactIntakeContractError(ARTIFACT_INTAKE_ERROR.INVALID_STATE)
     }
-    await proveRawOperations(operations, env)
+    requireVerifiedProof(await proveRawOperations(operations, env))
     await fence.afterOperationsProtected?.()
     await assertFinalizationLease(finalization, leaseOwner, env)
 
@@ -470,39 +516,45 @@ export async function finalizeArtifactCapture(
     }
 
     await assertFinalizationLease(finalization, leaseOwner, env)
-    await proveRawOperations(operations, env)
-    await assertCanonicalProof({ input, finalization, manifest, operations, env })
+    requireVerifiedProof(await proveRawOperations(operations, env))
+    requireVerifiedProof(await assertCanonicalProof({ input, finalization, manifest, operations, env }))
     await markFinalizationComplete(finalization, uploadIds, leaseOwner, env)
     return receiptFor(finalization, manifest, input)
   } catch (error) {
-    const code = error instanceof ArtifactIntakeContractError
-      ? error.code : ARTIFACT_INTAKE_ERROR.CANONICAL_WRITE_FAILED
-    let safeCanonicalProof = false
     if (operations) {
-      try {
-        const manifest = buildManifest(input, operations)
-        await proveRawOperations(operations, env)
-        await assertCanonicalProof({ input, finalization, manifest, operations, env })
-        safeCanonicalProof = true
-      } catch {
-        safeCanonicalProof = false
+      const exactProof = await proveArtifactFinalizationCanonicalSuccess({
+        finalization, operations: [...operations.values()], env,
+      }).catch(() => artifactProofIndeterminate('canonical_store_unavailable') as ArtifactProofResult)
+      if (exactProof.status === 'verified') {
+        try {
+          const current = await env.D1_US.prepare(
+            `SELECT * FROM artifact_intake_finalizations
+             WHERE tenant_id = ? AND id = ? LIMIT 1`,
+          ).bind(input.tenantId, finalization.id).first<ArtifactFinalizationRow>()
+          if (current?.status === 'finalized') {
+            await markArtifactOperationsFinalizedForCompletedFinalization({
+              tenantId: input.tenantId, finalizationId: finalization.id, uploadIds,
+              captureId: finalization.canonical_capture_id,
+              documentId: finalization.canonical_document_id,
+              operationId: finalization.canonical_operation_id, now: Date.now(),
+            }, env)
+            return receiptFor(finalization, buildManifest(input, operations), input)
+          }
+          await markFinalizationComplete(finalization, uploadIds, leaseOwner, env)
+          return receiptFor(finalization, buildManifest(input, operations), input)
+        } catch {
+          // Exact success is already durable. Preserve the recoverable split;
+          // a retry re-reads and re-proves instead of writing failed history.
+        }
       }
     }
-    const canonicalExists = Boolean(await store.getCapture(
-      input.tenantId, finalization.canonical_capture_id,
-    ).catch(() => null))
-    if (code === ARTIFACT_INTAKE_ERROR.CANONICAL_WRITE_FAILED && !canonicalExists) {
-      await env.D1_US.prepare(
-        `UPDATE artifact_intake_finalizations
-         SET lease_owner = NULL, lease_expires_at = NULL, updated_at = ?
-         WHERE tenant_id = ? AND id = ? AND status = 'reserved' AND lease_owner = ?`,
-      ).bind(Date.now(), input.tenantId, finalization.id, leaseOwner).run().catch(() => undefined)
-    } else if (!safeCanonicalProof) {
-      await failArtifactFinalizationAndReleaseOperations({
-        tenantId: input.tenantId, finalizationId: finalization.id,
-        expectedLeaseOwner: leaseOwner, errorCode: code, now: Date.now(),
-      }, env).catch(() => undefined)
-    }
+    // Release only the processing lease so a retry can re-prove immediately.
+    // Operation bindings, raw bytes, and recovery protection remain intact.
+    await env.D1_US.prepare(
+      `UPDATE artifact_intake_finalizations
+       SET lease_owner = NULL, lease_expires_at = NULL, updated_at = ?
+       WHERE tenant_id = ? AND id = ? AND status = 'reserved' AND lease_owner = ?`,
+    ).bind(Date.now(), input.tenantId, finalization.id, leaseOwner).run().catch(() => undefined)
     if (error instanceof ArtifactIntakeContractError) throw error
     throw new ArtifactIntakeContractError(ARTIFACT_INTAKE_ERROR.CANONICAL_WRITE_FAILED)
   }

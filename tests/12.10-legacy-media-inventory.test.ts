@@ -53,22 +53,23 @@ describe('12.10 executable legacy SQL query boundaries', () => {
     const proof = inject('legacyPostgresBoundary')
     expect(proof.explain.length).toBeGreaterThan(0)
     const replacements = exactManagedPrimarySourceReplacements(proof.rows)
-    expect(replacements).toEqual([{
-      key: 'telegram-media/tenant/valid', tenantId: 'tenant', captureId: 'valid', role: 'source',
-    }])
+    expect(replacements).toEqual([])
 
     const returnedKeys = proof.rows.map(row => row.key)
     expect(returnedKeys).toContain('telegram-media/tenant/derivative')
     expect(returnedKeys).toContain('telegram-media/tenant/mixed-source')
     expect(returnedKeys).toContain('telegram-media/tenant/multiple-a')
+    expect(returnedKeys).toContain('telegram-media/tenant/pre-role')
     expect(returnedKeys).not.toContain('telegram-media/tenant/missing')
     expect(returnedKeys).not.toContain('telegram-media/tenant/mismatch')
     expect(proof.rows.find(row => row.key === 'telegram-media/tenant/derivative')?.legacy_role).toBe('derivative')
+    expect(proof.rows.find(row => row.key === 'telegram-media/tenant/valid')?.legacy_role).toBeNull()
+    expect(proof.rows.find(row => row.key === 'telegram-media/tenant/pre-role')?.legacy_role).toBeNull()
     expect(proof.rows.find(row => row.key === 'telegram-media/tenant/mixed-source')?.legacy_artifact_count).toBe('2')
-    expect(proof.rows.find(row => row.key === 'telegram-media/tenant/multiple-a')?.eligible_legacy_source_count).toBe('2')
+    expect(proof.rows.find(row => row.key === 'telegram-media/tenant/multiple-a')?.eligible_legacy_source_count).toBe('0')
     expect(returnedKeys).not.toContain('telegram-media/tenant/conflicting')
     expect(exactManagedPrimarySourceReplacements(
-      proof.rows.filter(row => row.key !== 'telegram-media/tenant/valid'),
+      proof.rows,
     )).toEqual([])
   })
 })
@@ -308,7 +309,7 @@ describe('12.10 legacy media inventory classification', () => {
       legacy_artifact_count: 1, eligible_legacy_source_count: 0, managed_primary_source_count: 1,
     }]
     expect(exactManagedPrimarySourceReplacements(queryRows)).toEqual([])
-    expect(LEGACY_MANAGED_REPLACEMENT_CANDIDATES_SQL).toContain('role AS legacy_role')
+    expect(LEGACY_MANAGED_REPLACEMENT_CANDIDATES_SQL).toContain('END AS legacy_role')
     expect(LEGACY_D1_CANONICAL_REFERENCES_SQL).toContain("THEN 'source' ELSE NULL END AS role")
     const reference = { key: object.key, tenantId: 't', captureId: 'capture', role: 'derivative' }
     const classified = classifyLegacyMediaInventory({

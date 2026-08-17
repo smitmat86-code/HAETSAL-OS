@@ -6,7 +6,7 @@ import { channelMediaRetrySeconds } from './claim-outcome'
 import { cleanupChannelMediaHandoff, type ChannelMediaDeliver } from './delivery'
 import { markChannelMediaDeliveryUnknown } from './delivery-state'
 import { getChannelMediaJob } from './jobs'
-import { markChannelMediaFailed } from './job-transitions'
+import { markChannelMediaFailed, markChannelMediaIntegrityIncident } from './job-transitions'
 import {
   handleTerminalChannelMediaJob,
   type ChannelMediaProcessResult,
@@ -39,6 +39,11 @@ export async function resolveChannelMediaRecovery(args: {
     ? await getChannelMediaJob(args.job.tenantId, args.job.id, args.env)
     : args.job
   if (!job) throw new ArtifactIntakeContractError(ARTIFACT_INTAKE_ERROR.NOT_FOUND)
+
+  if (recovery.status === 'inconsistent' && recovery.protectedFinalizedHistory) {
+    await markChannelMediaIntegrityIncident(job.tenantId, job.id, args.env)
+    return { status: 'result', result: 'processed' }
+  }
 
   if (job.status === 'finalized' || job.status === 'failed') {
     if (recovery.status === 'inconsistent') {

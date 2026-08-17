@@ -1,4 +1,9 @@
 export const ARTIFACT_MAX_BYTES = 25 * 1024 * 1024
+// Exact proof materializes at most one ciphertext body at a time. The manifest
+// caps keep request metadata and aggregate work comfortably below the 128 MiB
+// Worker memory ceiling; larger exact sets must use the bulk-import lane.
+export const ARTIFACT_MANIFEST_MAX_COUNT = 8
+export const ARTIFACT_MANIFEST_MAX_AGGREGATE_BYTES = 64 * 1024 * 1024
 export const TELEGRAM_ARTIFACT_MAX_BYTES = 20 * 1024 * 1024
 export const ARTIFACT_DOWNLOAD_TIMEOUT_MS = 20_000
 export const ARTIFACT_UPLOAD_EXPIRY_MS = 15 * 60 * 1000
@@ -24,6 +29,11 @@ export const CHANNEL_MEDIA_RECOVERY_MAX_BYTES = 16_384
 
 export const ARTIFACT_INTAKE_CONFIG = Object.freeze({
   maxBytes: ARTIFACT_MAX_BYTES,
+  manifest: Object.freeze({
+    maxCount: ARTIFACT_MANIFEST_MAX_COUNT,
+    maxAggregateBytes: ARTIFACT_MANIFEST_MAX_AGGREGATE_BYTES,
+    proofConcurrency: 1,
+  }),
   providerLimits: Object.freeze({
     telegramMaxBytes: TELEGRAM_ARTIFACT_MAX_BYTES,
   }),

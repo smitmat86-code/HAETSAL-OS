@@ -1,6 +1,12 @@
 import type { Env } from '../../types/env'
 import { ArtifactIntakeContractError, ARTIFACT_INTAKE_ERROR } from './contracts'
 import { sha256Bytes, sha256Text } from './crypto'
+import {
+  artifactProofIndeterminate,
+  artifactProofMismatch,
+  type ArtifactProofResult,
+  verifiedArtifactProof,
+} from './proof-result'
 
 const UPLOAD_ID_PATTERN = /^[a-f0-9-]{36}$/i
 
@@ -43,22 +49,45 @@ export async function proveManagedArtifactCiphertext(args: {
   recordedKey: string
   expectedCiphertextByteLength: number
   expectedCiphertextSha256: string
-}): Promise<ManagedArtifactCiphertextProof> {
-  const expectedKey = await managedArtifactR2Key(args.tenantId, args.uploadId)
+}): Promise<ArtifactProofResult<ManagedArtifactCiphertextProof>> {
+  let expectedKey: string
+  try {
+    expectedKey = await managedArtifactR2Key(args.tenantId, args.uploadId)
+  } catch (error) {
+    if (error instanceof ArtifactIntakeContractError) {
+      return artifactProofMismatch('operation_metadata_mismatch')
+    }
+    return artifactProofIndeterminate('crypto_unavailable')
+  }
   if (args.recordedKey !== expectedKey) {
-    throw new ArtifactIntakeContractError(ARTIFACT_INTAKE_ERROR.INVALID_STATE)
+    return artifactProofMismatch('storage_key_mismatch')
   }
-  const object = await args.env.R2_ARTIFACTS.get(expectedKey)
-  if (!object) throw new ArtifactIntakeContractError(ARTIFACT_INTAKE_ERROR.INVALID_STATE)
-  const bytes = new Uint8Array(await object.arrayBuffer())
+  let object: R2ObjectBody | null
+  try {
+    object = await args.env.R2_ARTIFACTS.get(expectedKey)
+  } catch {
+    return artifactProofIndeterminate('r2_unavailable')
+  }
+  if (!object) return artifactProofMismatch('object_missing')
+  let bytes: Uint8Array
+  try {
+    bytes = new Uint8Array(await object.arrayBuffer())
+  } catch {
+    return artifactProofIndeterminate('r2_unavailable')
+  }
   if (bytes.byteLength !== args.expectedCiphertextByteLength) {
-    throw new ArtifactIntakeContractError(ARTIFACT_INTAKE_ERROR.HASH_MISMATCH)
+    return artifactProofMismatch('ciphertext_byte_length_mismatch')
   }
-  const ciphertextSha256 = await sha256Bytes(bytes)
+  let ciphertextSha256: string
+  try {
+    ciphertextSha256 = await sha256Bytes(bytes)
+  } catch {
+    return artifactProofIndeterminate('crypto_unavailable')
+  }
   if (ciphertextSha256 !== args.expectedCiphertextSha256) {
-    throw new ArtifactIntakeContractError(ARTIFACT_INTAKE_ERROR.HASH_MISMATCH)
+    return artifactProofMismatch('ciphertext_hash_mismatch')
   }
-  return { key: expectedKey, byteLength: bytes.byteLength, ciphertextSha256 }
+  return verifiedArtifactProof({ key: expectedKey, byteLength: bytes.byteLength, ciphertextSha256 })
 }
 
 export async function deleteProvenManagedArtifact(args: {

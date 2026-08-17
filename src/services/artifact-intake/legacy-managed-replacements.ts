@@ -25,13 +25,32 @@ export const LEGACY_D1_CANONICAL_REFERENCES_SQL = `
      OR artifact.r2_key LIKE 'sendblue-media/%'`
 
 export const LEGACY_MANAGED_REPLACEMENT_CANDIDATES_SQL = `
-  WITH legacy_artifacts AS (
-    SELECT r2_key AS key, tenant_id, capture_id, role AS legacy_role,
+  WITH legacy_evidence AS (
+    SELECT legacy.r2_key AS key, legacy.tenant_id, legacy.capture_id,
+           CASE
+             WHEN legacy.role = 'derivative' THEN 'derivative'
+             WHEN legacy.id = capture.artifact_id AND 1 = (
+               SELECT COUNT(*) FROM haetsal_canonical.canonical_documents document
+               WHERE document.tenant_id = legacy.tenant_id
+                 AND document.capture_id = legacy.capture_id
+                 AND document.artifact_id = legacy.id
+             ) AND 1 = (
+               SELECT COUNT(*) FROM haetsal_canonical.canonical_documents document
+               WHERE document.tenant_id = legacy.tenant_id
+                 AND document.capture_id = legacy.capture_id
+             ) THEN 'source'
+             ELSE NULL
+           END AS legacy_role
+    FROM haetsal_canonical.canonical_artifacts legacy
+    LEFT JOIN haetsal_canonical.canonical_captures capture
+      ON capture.tenant_id = legacy.tenant_id AND capture.id = legacy.capture_id
+    WHERE legacy.r2_key LIKE 'telegram-media/%' OR legacy.r2_key LIKE 'sendblue-media/%'
+  ), legacy_artifacts AS (
+    SELECT key, tenant_id, capture_id, legacy_role,
            COUNT(*) OVER (PARTITION BY tenant_id, capture_id) AS legacy_artifact_count,
-           COUNT(*) FILTER (WHERE role = 'source')
+           COUNT(*) FILTER (WHERE legacy_role = 'source')
              OVER (PARTITION BY tenant_id, capture_id) AS eligible_legacy_source_count
-    FROM haetsal_canonical.canonical_artifacts
-    WHERE r2_key LIKE 'telegram-media/%' OR r2_key LIKE 'sendblue-media/%'
+    FROM legacy_evidence
   ), managed_primary_sources AS (
     SELECT capture.tenant_id, capture.id AS capture_id,
            COUNT(*) OVER (PARTITION BY capture.tenant_id, capture.id) AS managed_primary_source_count

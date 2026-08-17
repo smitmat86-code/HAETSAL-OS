@@ -21,7 +21,7 @@ const fixtureSql = `
   );
   CREATE TABLE haetsal_canonical.canonical_artifacts (
     id text PRIMARY KEY, tenant_id text NOT NULL, capture_id text NOT NULL,
-    storage_kind text NOT NULL, r2_key text, role text NOT NULL
+    storage_kind text NOT NULL, r2_key text
   );
   CREATE TABLE haetsal_canonical.canonical_documents (
     id text PRIMARY KEY, tenant_id text NOT NULL, capture_id text NOT NULL, artifact_id text
@@ -35,7 +35,16 @@ const fixtureSql = `
     ('conflicting-documents', 'tenant', 'managed-conflicting'),
     ('multiple-legacy', 'tenant', 'managed-multiple'),
     ('mismatched-capture', 'tenant', 'managed-foreign'),
+    ('pre-role', 'tenant', 'managed-pre-role'),
     ('managed-owner', 'tenant', NULL);
+
+  -- This row predates the role column. The subsequent DEFAULT source value is
+  -- schema history, not provenance, and must not make it deletion-eligible.
+  INSERT INTO haetsal_canonical.canonical_artifacts
+    (id, tenant_id, capture_id, storage_kind, r2_key) VALUES
+    ('legacy-pre-role', 'tenant', 'pre-role', 'legacy_r2', 'telegram-media/tenant/pre-role');
+  ALTER TABLE haetsal_canonical.canonical_artifacts
+    ADD COLUMN role text NOT NULL DEFAULT 'source';
 
   INSERT INTO haetsal_canonical.canonical_artifacts
     (id, tenant_id, capture_id, storage_kind, r2_key, role) VALUES
@@ -56,6 +65,9 @@ const fixtureSql = `
     ('managed-multiple', 'tenant', 'multiple-legacy', 'managed_r2', 'artifact-intake/v1/multiple', 'source'),
     ('legacy-mismatch', 'tenant', 'mismatched-capture', 'legacy_r2', 'telegram-media/tenant/mismatch', 'source'),
     ('managed-foreign', 'tenant', 'managed-owner', 'managed_r2', 'artifact-intake/v1/foreign', 'source');
+  INSERT INTO haetsal_canonical.canonical_artifacts
+    (id, tenant_id, capture_id, storage_kind, r2_key, role) VALUES
+    ('managed-pre-role', 'tenant', 'pre-role', 'managed_r2', 'artifact-intake/v1/pre-role', 'source');
 
   INSERT INTO haetsal_canonical.canonical_documents (id, tenant_id, capture_id, artifact_id) VALUES
     ('doc-valid', 'tenant', 'valid', 'managed-valid'),
@@ -65,6 +77,8 @@ const fixtureSql = `
     ('doc-conflicting-b', 'tenant', 'conflicting-documents', 'managed-conflicting-other'),
     ('doc-multiple', 'tenant', 'multiple-legacy', 'managed-multiple'),
     ('doc-mismatch', 'tenant', 'mismatched-capture', 'managed-foreign');
+  INSERT INTO haetsal_canonical.canonical_documents (id, tenant_id, capture_id, artifact_id) VALUES
+    ('doc-pre-role', 'tenant', 'pre-role', 'managed-pre-role');
 `
 
 function serializableRows(rows: LegacyManagedReplacementQueryRow[]): LegacyManagedReplacementQueryRow[] {

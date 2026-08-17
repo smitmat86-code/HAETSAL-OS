@@ -1,5 +1,10 @@
 import { z } from 'zod'
-import { ARTIFACT_MAX_BYTES, TELEGRAM_ARTIFACT_MAX_BYTES } from './config'
+import {
+  ARTIFACT_MANIFEST_MAX_AGGREGATE_BYTES,
+  ARTIFACT_MANIFEST_MAX_COUNT,
+  ARTIFACT_MAX_BYTES,
+  TELEGRAM_ARTIFACT_MAX_BYTES,
+} from './config'
 import { ARTIFACT_INTAKE_ERROR } from './contracts'
 import { validateInitialArtifactDownloadUrl } from './download-policy'
 
@@ -46,17 +51,32 @@ const artifactManifestEntrySchema = z.object({
   role: z.enum(['source', 'derivative']),
   parent_upload_id: uploadIdSchema.optional(),
   primary: z.boolean(),
+  byte_length: z.number().int().positive().max(
+    ARTIFACT_MAX_BYTES,
+    ARTIFACT_INTAKE_ERROR.BULK_IMPORT_REQUIRED,
+  ),
 }).strict()
 
 export const finalizeArtifactCaptureSchema = z.object({
   tenant_id: tenantIdSchema,
   searchable_content: z.string().trim().min(1),
   declared_derivative_upload_ids: z.array(uploadIdSchema).default([]),
-  artifacts: z.array(artifactManifestEntrySchema),
+  artifacts: z.array(artifactManifestEntrySchema).max(
+    ARTIFACT_MANIFEST_MAX_COUNT,
+    ARTIFACT_INTAKE_ERROR.BULK_IMPORT_REQUIRED,
+  ),
 }).strict().superRefine((value, ctx) => {
   if (value.artifacts.length === 0) {
     ctx.addIssue({ code: 'custom', path: ['artifacts'], message: ARTIFACT_INTAKE_ERROR.RAW_BYTES_UNAVAILABLE })
     return
+  }
+  if (value.artifacts.reduce((total, artifact) => total + artifact.byte_length, 0) >
+      ARTIFACT_MANIFEST_MAX_AGGREGATE_BYTES) {
+    ctx.addIssue({
+      code: 'custom',
+      path: ['artifacts'],
+      message: ARTIFACT_INTAKE_ERROR.BULK_IMPORT_REQUIRED,
+    })
   }
 
   const ids = new Set<string>()
@@ -108,40 +128,4 @@ export const finalizeArtifactCaptureSchema = z.object({
   }
 })
 
-export const CHATGPT_ARTIFACT_FILE_TOOL_CONTRACT = Object.freeze({
-  name: 'capture_artifact_file',
-  title: 'Capture attached file',
-  description: 'Use this only when a directly attached ChatGPT file is in scope. Read the attachment first, then provide a model-generated searchable extraction. Do not copy the temporary URL, file ID, or file name into other fields.',
-  inputSchema: {
-    type: 'object',
-    properties: {
-      file: {
-        type: 'object',
-        properties: {
-          download_url: { type: 'string' },
-          file_id: { type: 'string' },
-          mime_type: { type: 'string' },
-          file_name: { type: 'string' },
-        },
-        required: ['download_url', 'file_id'],
-        additionalProperties: false,
-      },
-      searchable_content: { type: 'string' },
-      title: { type: 'string' },
-      scope: { type: 'string' },
-      model_runtime: { type: 'string' },
-    },
-    required: ['file', 'searchable_content'],
-    additionalProperties: false,
-  },
-  annotations: {
-    readOnlyHint: false,
-    destructiveHint: false,
-    openWorldHint: false,
-  },
-  _meta: {
-    'openai/fileParams': ['file'],
-    ui: { visibility: ['model', 'app'] },
-    'openai/widgetAccessible': true,
-  },
-} as const)
+export { CHATGPT_ARTIFACT_FILE_TOOL_CONTRACT } from './chatgpt-tool-contract'

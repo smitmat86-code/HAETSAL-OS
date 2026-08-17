@@ -2228,3 +2228,35 @@
 **Stop boundary:** No Telegram or Sendblue live gate ran. No legacy inventory, approval, or remediation command ran. No legacy object was read, migrated, overwritten, or deleted. Neither the primary branch nor `codex/artifact-intake-session-1` was merged or advanced.
 
 ---
+
+### Session 5 artifact-lifecycle correctness correction — 2026-08-17
+
+**Status:** The correction is committed and independently approved on `codex/session5-final-correction`, but it is not deployed. The required production overlap audit and fix-forward deployment are blocked by invalid Cloudflare authentication, so this work is not described as final or fully production-validated.
+
+**Commit and scope:**
+- Review baseline: `051ef20`; live implementation under correction: `f43ef97`; correction implementation: `7106be9e7d44c5f97c2e1aacf5635a65d48aea40`.
+- Proof is tri-state (`verified`, bounded `authoritative_mismatch`, or bounded `indeterminate`). Storage, D1, canonical-store, transport, and platform exceptions defer without releasing bindings, raw bytes, recovery protection, or channel work.
+- Finalized parent/child history is monotonic. Later authoritative failure records a content-free integrity incident and preserves remaining evidence. Split parent/child acknowledgements are re-proved and can move only toward finalized.
+- A finalization lease is rejected unless its recovery deadline covers the entire lease. Stale selection, failure CAS, channel recovery, and both reapers exclude live leases.
+- Normal proof is sequential and bounded to 8 manifest entries and 64 MiB aggregate plaintext. Exceeding either limit returns `bulk_import_required`; declared derivatives remain mandatory.
+- Historical defaulted `source` values are not treated as provenance. Exact capture/document primary-pointer proof is required; otherwise the row remains ambiguous and deletion-ineligible.
+
+**Validation:**
+- Focused lifecycle, channel-media, provider, and executable legacy-inventory lane: 84 passed across 6 files.
+- Full suite on the postflight-clean implementation: 631 passed, 1 skipped across 95 files (632 total).
+- `npm run postflight`: passed. `npx wrangler deploy --dry-run`: passed; upload 3,733.30 KiB / gzip 715.31 KiB.
+- `git diff --check 051ef20`: passed.
+- Independent architecture/concurrency, security/privacy, and test/acceptance re-reviews all approved the reviewed implementation diff. Reviewer-driven regressions cover protected channel-reaper evidence, null-deadline lease bounds, finalized operation-set corruption, direct finalized replay incidents, and stale failed-parent/finalized-child repair.
+
+**Production overlap audit and deployment:**
+- The aggregate-only audit query is preserved in `src/services/artifact-intake/migration-overlap-audit.ts`. It reports only four counts for the directly verified migration-to-deployment interval and has executable coverage for an old writer inserting after the backfill.
+- `npx wrangler whoami` failed before any production query or mutation with Cloudflare API code `9109` (`Invalid access token`). No alternate configured Cloudflare credential source was available in the workspace.
+- Therefore the overlap result is **unknown**, not zero. No remote D1 query, migration, Worker deployment, production version verification, health check, Telegram/Sendblue gate, legacy inventory, or remediation was run.
+
+**Required production continuation:** Restore a valid secure Cloudflare credential; directly verify the migration-1032 application timestamp and the currently serving Worker boundary; run the aggregate-only overlap audit. If any count is nonzero, stop and obtain approval for a proof-backed reconciliation plan. If all counts are zero, deploy the exact correction commit fix-forward, verify the deployment ID/Worker version and D1 migration state, and run only content-free state-machine health checks.
+
+**Schema rollout rule:** Future lifecycle schema changes use expand → deploy compatible readers/writers → read-only interval audit → bounded idempotent backfill → verify → enforce in a later change. A one-time backfill must not be followed by a deployment window in which an old writer can recreate invalid rows.
+
+**Stop boundary:** The primary branch was not merged or advanced. Production state was not mutated.
+
+---

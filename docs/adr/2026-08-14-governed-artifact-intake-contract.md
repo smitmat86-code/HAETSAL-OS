@@ -1,7 +1,7 @@
 # ADR: governed artifact intake contract
 
 Date: 2026-08-14
-Status: accepted; Sessions 2-4 and the final Session 5 artifact-lifecycle correction are deployed; fresh Telegram/Sendblue live proof remains pending
+Status: accepted; Sessions 2-4 and artifact-lifecycle version `f43ef97` are deployed; the 2026-08-17 correctness correction is committed but awaits production overlap audit and deployment
 
 ## Context
 
@@ -26,6 +26,7 @@ Vendor blindness is explicitly not a goal and must not be claimed. Cloudflare an
 ## Fixed contract defaults
 
 - Interactive maximum: 25 MiB; larger inputs return `bulk_import_required`. Telegram additionally inherits the Bot API's 20 MiB download ceiling.
+- One normal finalization may contain at most 8 artifacts and 64 MiB aggregate plaintext. Proof reads managed ciphertext sequentially, so multiple maximum-sized bodies are never resident concurrently. Larger manifests require a separate bulk-import path and may not omit intentional derivatives.
 - MIME: sniffed/detected MIME is authoritative. Missing or `application/octet-stream` declarations are unspecified; any other declared/detected mismatch returns `mime_mismatch`.
 - Download URLs: public HTTPS only, no URL credentials, localhost, single-label/local names, or private/reserved resolved addresses. The downloader must pin the resolved public address for a request and repeat validation after every redirect.
 - Download timeout: 20 seconds. Maximum redirects: 3.
@@ -59,6 +60,16 @@ Every processing transition requires the current lease token and a single-row co
 Channel job leases, deterministic upload/finalize idempotency keys, and a separately tokenized delivery claim prevent duplicate artifacts, captures, documents, and acknowledgements under webhook and queue redelivery. Redelivery inside a delivery lease is delayed without another provider call. At claim expiry, a guarded transition records `delivery_unknown`, fences stale completion, and cleans the encrypted handoff/recovery state without automatically re-sending. The generic finalizer makes its idempotent reservation visible before an optional caller fence; channel media then renews the exact processing lease immediately before any artifact-operation mutation or canonical write. A worker that lost that lease cannot begin canonical side effects. A fresh canonical finalization reservation is `in_progress`, not absence; every pending-delivery reaper path checks canonical recovery before deleting either encrypted state object. Canonical proof repairs only a competing pending channel failure by CAS and always wins before response delivery; it cannot overwrite a claimed or genuinely delivered response. If the Cron KEK is absent or expired, media webhook acceptance returns a retryable failure before creating a D1 job or queue message.
 
 Artifact finalization now binds every expected operation in one guarded update, records an exact ordered manifest-identity hash, extends each source/derivative through the bounded recovery window, and proves the managed R2 key, ciphertext length, and ciphertext SHA-256 both before and after canonical write. Expiry reaping first wins a separate CAS claim and can never claim an operation owned by a reserved finalization. At the stale boundary, complete operation/manifest/capture/document/operation/R2 proof permits one proof-backed takeover and repair; absent or mismatched proof fails the reservation, releases its operations, and makes them eligible for normal cleanup. Capture presence alone is never success proof.
+
+### 2026-08-17 lifecycle correction
+
+Proof is a structured tri-state result. Deterministic absence or exact metadata, length, or hash disagreement is an authoritative mismatch. R2, D1, canonical-store, transport, timeout, and platform exceptions are indeterminate. Indeterminate recovery retains the finalization, bindings, raw bytes, and reaper protection and schedules another proof pass; it never invalidates proof or changes channel work to failure. Once either a finalization or operation is finalized, its status is monotonic. A later authoritative mismatch is a content-free integrity incident and preserves remaining handoff/recovery evidence rather than rewriting finalized history.
+
+Lease acquisition requires the recovery deadline to cover the complete granted lease, including rows whose deadline was previously null. Stale selection, failure compare-and-swap, channel recovery, and both reapers independently exclude live leases. Parent/child completion is ordered so acknowledgement loss leaves a proof-recoverable split; a failed parent with finalized children cannot be newly created, while a historical split is re-proved before repair.
+
+Historical artifact role defaults are not provenance. A legacy artifact is source only when exact canonical capture and document primary pointers prove it; otherwise it is ambiguous and deletion-ineligible.
+
+Migration rollout uses expand, compatible deploy, read-only overlap audit, idempotent backfill, verification, and later enforcement. Migration 1032 preceded the prior Worker deployment, so the 2026-08-17 correction includes an aggregate-only audit for old-writer rows created in that interval. Production authentication was invalid during this correction pass; the audit result remains unknown and the correction has not been deployed.
 
 ### Session 5 legacy remediation approval contract
 

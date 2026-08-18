@@ -8,6 +8,7 @@ import {
   ARTIFACT_FINALIZATION_LEASE_MS,
   ARTIFACT_FINALIZATION_RECOVERY_MS,
   ARTIFACT_MAX_BYTES,
+  ARTIFACT_UPLOAD_ATTEMPT_LEASE_MS,
   ARTIFACT_UPLOAD_EXPIRY_MS,
 } from './config'
 import {
@@ -17,6 +18,7 @@ import {
 } from './contracts'
 import { sealArtifactBytes, sha256Bytes, sha256Text, unsealArtifactBytes } from './crypto'
 import {
+  managedArtifactAttemptR2Key,
   managedArtifactExists,
   managedArtifactR2Key,
   putManagedArtifactCiphertext,
@@ -43,6 +45,9 @@ export interface ArtifactIntakeOperationRow {
   finalization_protected_until: number | null
   expiry_claim_token: string | null
   expiry_claim_expires_at: number | null
+  upload_attempt_token: string | null
+  upload_attempt_expires_at: number | null
+  adopted_attempt_token: string | null
   canonical_capture_id: string | null
   canonical_document_id: string | null
   canonical_operation_id: string | null
@@ -161,23 +166,105 @@ export async function getArtifactIntakeStatus(args: {
   return toReceipt(row)
 }
 
+/**
+ * Attempt-fenced failure. Only the live attempt owner may record failure, and
+ * a sealed, finalized, bound, or expiry-claimed operation is never downgraded.
+ */
 async function markUploadFailed(
   env: Env,
   row: ArtifactIntakeOperationRow,
+  attemptToken: string,
   errorCode: string,
 ): Promise<void> {
   await env.D1_US.prepare(
     `UPDATE artifact_intake_operations
-     SET status = 'failed', error_code = ?, updated_at = ?
-     WHERE tenant_id = ? AND upload_id = ? AND status != 'finalized'`,
-  ).bind(errorCode, Date.now(), row.tenant_id, row.upload_id).run()
+     SET status = 'failed', error_code = ?, upload_attempt_token = NULL,
+         upload_attempt_expires_at = NULL, updated_at = ?
+     WHERE tenant_id = ? AND upload_id = ? AND status IN ('reserved', 'failed')
+       AND upload_attempt_token = ? AND expiry_claim_token IS NULL AND finalization_id IS NULL`,
+  ).bind(errorCode, Date.now(), row.tenant_id, row.upload_id, attemptToken).run()
+}
+
+interface AdoptCiphertextArgs {
+  row: ArtifactIntakeOperationRow
+  env: Env
+  attemptToken: string
+  detectedMimeType: string
+  family: 'tmk' | 'kek'
+  ciphertextSha256: string
+  ciphertextByteLength: number
+  /** NULL adopts the legacy per-upload key already recorded in r2_key. */
+  adoptedKey: string | null
+}
+
+/**
+ * CAS adoption of exactly one attempt's ciphertext identity. The guards prove
+ * live attempt ownership, an unexpired unfinalized operation, no expiry claim,
+ * and no finalization binding; a stale or raced writer changes zero rows.
+ */
+async function adoptUploadedCiphertext(args: AdoptCiphertextArgs): Promise<boolean> {
+  const now = Date.now()
+  const result = await args.env.D1_US.prepare(
+    `UPDATE artifact_intake_operations
+     SET status = 'sealed', error_code = NULL, detected_mime_category = ?, ciphertext_sha256 = ?,
+         ciphertext_byte_length = ?, encryption_family = ?,
+         r2_key = COALESCE(?, r2_key), adopted_attempt_token = ?,
+         upload_attempt_token = NULL, upload_attempt_expires_at = NULL, updated_at = ?
+     WHERE tenant_id = ? AND upload_id = ? AND status IN ('reserved', 'failed')
+       AND upload_attempt_token = ? AND upload_attempt_expires_at > ?
+       AND expiry_claim_token IS NULL AND finalization_id IS NULL AND expires_at > ?`,
+  ).bind(
+    mimeCategory(args.detectedMimeType), args.ciphertextSha256,
+    args.ciphertextByteLength, args.family,
+    args.adoptedKey, args.adoptedKey === null ? null : args.attemptToken,
+    now, args.row.tenant_id, args.row.upload_id, args.attemptToken, now, now,
+  ).run()
+  return changed(result) === 1
+}
+
+/** Verifies an idempotent replay against the adopted ciphertext, mutating nothing. */
+async function verifySealedReplay(
+  row: ArtifactIntakeOperationRow,
+  plaintextHash: string,
+  env: Env,
+): Promise<ArtifactUploadReceipt> {
+  if (plaintextHash !== row.plaintext_sha256 || !row.ciphertext_sha256) {
+    throw new ArtifactIntakeContractError(ARTIFACT_INTAKE_ERROR.HASH_MISMATCH)
+  }
+  const existing = await readManagedArtifactCiphertext(env, row.r2_key)
+  if (!existing || await sha256Bytes(existing) !== row.ciphertext_sha256) {
+    throw new ArtifactIntakeContractError(ARTIFACT_INTAKE_ERROR.INVALID_STATE)
+  }
+  return toReceipt(row)
+}
+
+async function claimUploadAttempt(
+  row: ArtifactIntakeOperationRow,
+  attemptToken: string,
+  env: Env,
+): Promise<void> {
+  const now = Date.now()
+  const claimed = await env.D1_US.prepare(
+    `UPDATE artifact_intake_operations
+     SET upload_attempt_token = ?, upload_attempt_expires_at = ?, updated_at = ?
+     WHERE tenant_id = ? AND upload_id = ? AND status IN ('reserved', 'failed')
+       AND expiry_claim_token IS NULL AND finalization_id IS NULL AND expires_at > ?
+       AND (upload_attempt_token IS NULL OR upload_attempt_expires_at <= ?)`,
+  ).bind(
+    attemptToken, now + ARTIFACT_UPLOAD_ATTEMPT_LEASE_MS, now,
+    row.tenant_id, row.upload_id, now, now,
+  ).run()
+  if (changed(claimed) !== 1) {
+    throw new ArtifactIntakeContractError(ARTIFACT_INTAKE_ERROR.INVALID_STATE)
+  }
 }
 
 async function recoverExistingCiphertext(args: {
   row: ArtifactIntakeOperationRow
   key: CryptoKey
   family: 'tmk' | 'kek'
-  bytes: Uint8Array
+  attemptToken: string
+  plaintextHash: string
   env: Env
   detectedMimeType: string
 }): Promise<ArtifactUploadReceipt | null> {
@@ -185,30 +272,26 @@ async function recoverExistingCiphertext(args: {
   if (!existing) return null
   try {
     const plaintext = await unsealArtifactBytes(existing, args.key, args.family)
-    const plaintextHash = await sha256Bytes(plaintext)
-    if (plaintextHash !== args.row.plaintext_sha256 || plaintextHash !== await sha256Bytes(args.bytes)) {
+    if (await sha256Bytes(plaintext) !== args.plaintextHash) {
       throw new ArtifactIntakeContractError(ARTIFACT_INTAKE_ERROR.HASH_MISMATCH)
     }
-    const ciphertextHash = await sha256Bytes(existing)
-    const now = Date.now()
-    await args.env.D1_US.prepare(
-      `UPDATE artifact_intake_operations
-       SET status = 'sealed', error_code = NULL, detected_mime_category = ?, ciphertext_sha256 = ?,
-           ciphertext_byte_length = ?,
-           encryption_family = ?, updated_at = ?
-       WHERE tenant_id = ? AND upload_id = ? AND status != 'finalized'`,
-    ).bind(
-      mimeCategory(args.detectedMimeType),
-      ciphertextHash,
-      existing.byteLength,
-      args.family,
-      now,
-      args.row.tenant_id,
-      args.row.upload_id,
-    ).run()
+    const adopted = await adoptUploadedCiphertext({
+      row: args.row, env: args.env, attemptToken: args.attemptToken,
+      detectedMimeType: args.detectedMimeType, family: args.family,
+      ciphertextSha256: await sha256Bytes(existing),
+      ciphertextByteLength: existing.byteLength,
+      adoptedKey: null,
+    })
+    if (!adopted) throw new ArtifactIntakeContractError(ARTIFACT_INTAKE_ERROR.INVALID_STATE)
     return getArtifactIntakeStatus({ tenantId: args.row.tenant_id, uploadId: args.row.upload_id }, args.env)
   } catch (error) {
-    await markUploadFailed(args.env, args.row, error instanceof ArtifactIntakeContractError ? error.code : ARTIFACT_INTAKE_ERROR.CIPHERTEXT_INVALID)
+    if (error instanceof ArtifactIntakeContractError && error.code === ARTIFACT_INTAKE_ERROR.INVALID_STATE) {
+      throw error
+    }
+    await markUploadFailed(
+      args.env, args.row, args.attemptToken,
+      error instanceof ArtifactIntakeContractError ? error.code : ARTIFACT_INTAKE_ERROR.CIPHERTEXT_INVALID,
+    ).catch(() => undefined)
     throw error
   }
 }
@@ -240,41 +323,48 @@ export async function uploadArtifactBytes(args: {
   }
 
   if (row.status === 'finalized') return toReceipt(row)
-  if (await managedArtifactExists(env, row.r2_key)) {
+  if (row.status === 'sealed') return verifySealedReplay(row, plaintextHash, env)
+  if (row.expiry_claim_token || row.finalization_id) {
+    throw new ArtifactIntakeContractError(ARTIFACT_INTAKE_ERROR.INVALID_STATE)
+  }
+
+  const attemptToken = crypto.randomUUID()
+  await claimUploadAttempt(row, attemptToken, env)
+  if (!row.adopted_attempt_token && await managedArtifactExists(env, row.r2_key)) {
     const recovered = await recoverExistingCiphertext({
-      row,
-      env,
-      key: args.key,
-      family: args.encryptionFamily,
-      bytes: args.bytes,
-      detectedMimeType: args.detectedMimeType,
+      row, env, key: args.key, family: args.encryptionFamily,
+      attemptToken, plaintextHash, detectedMimeType: args.detectedMimeType,
     })
     if (recovered) return recovered
   }
 
   const sealed = await sealArtifactBytes(args.bytes, args.key, args.encryptionFamily)
+  const attemptKey = await managedArtifactAttemptR2Key(args.tenantId, args.uploadId, attemptToken)
   try {
-    await putManagedArtifactCiphertext(env, row.r2_key, sealed.envelope)
+    // Each attempt writes only its own immutable key; adopted objects are
+    // never overwritten by any later or slower writer.
+    await putManagedArtifactCiphertext(env, attemptKey, sealed.envelope)
   } catch {
-    await markUploadFailed(env, row, ARTIFACT_INTAKE_ERROR.STORAGE_WRITE_FAILED).catch(() => undefined)
+    await markUploadFailed(env, row, attemptToken, ARTIFACT_INTAKE_ERROR.STORAGE_WRITE_FAILED)
+      .catch(() => undefined)
     throw new ArtifactIntakeContractError(ARTIFACT_INTAKE_ERROR.STORAGE_WRITE_FAILED)
   }
-  await env.D1_US.prepare(
-    `UPDATE artifact_intake_operations
-     SET status = 'sealed', error_code = NULL, detected_mime_category = ?, ciphertext_sha256 = ?,
-         ciphertext_byte_length = ?,
-         encryption_family = ?, updated_at = ?
-     WHERE tenant_id = ? AND upload_id = ? AND status != 'finalized'`,
-  ).bind(
-    mimeCategory(args.detectedMimeType),
-    sealed.ciphertextSha256,
-    sealed.envelope.byteLength,
-    args.encryptionFamily,
-    Date.now(),
-    args.tenantId,
-    args.uploadId,
-  ).run()
-  return getArtifactIntakeStatus({ tenantId: args.tenantId, uploadId: args.uploadId }, env)
+  const adopted = await adoptUploadedCiphertext({
+    row, env, attemptToken, detectedMimeType: args.detectedMimeType,
+    family: args.encryptionFamily, ciphertextSha256: sealed.ciphertextSha256,
+    ciphertextByteLength: sealed.envelope.byteLength, adoptedKey: attemptKey,
+  })
+  if (adopted) {
+    return getArtifactIntakeStatus({ tenantId: args.tenantId, uploadId: args.uploadId }, env)
+  }
+  // Adoption lost: this attempt is stale or raced. Its orphan attempt object
+  // is left for a separately fenced cleanup and can never become canonical.
+  const current = await getArtifactIntakeOperation(env, args.tenantId, args.uploadId)
+  if (current && (current.status === 'sealed' || current.status === 'finalized') &&
+      current.plaintext_sha256 === plaintextHash) {
+    return toReceipt(current)
+  }
+  throw new ArtifactIntakeContractError(ARTIFACT_INTAKE_ERROR.INVALID_STATE)
 }
 
 function uniqueUploadIds(uploadIds: string[]): string[] {

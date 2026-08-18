@@ -7,6 +7,9 @@ export const ARTIFACT_MANIFEST_MAX_AGGREGATE_BYTES = 64 * 1024 * 1024
 export const TELEGRAM_ARTIFACT_MAX_BYTES = 20 * 1024 * 1024
 export const ARTIFACT_DOWNLOAD_TIMEOUT_MS = 20_000
 export const ARTIFACT_UPLOAD_EXPIRY_MS = 15 * 60 * 1000
+// Bounds how long one upload attempt owns the operation. An attempt that
+// outlives its lease can never adopt: adoption CAS re-checks the lease.
+export const ARTIFACT_UPLOAD_ATTEMPT_LEASE_MS = 2 * 60 * 1000
 export const ARTIFACT_FINALIZATION_LEASE_MS = 2 * 60 * 1000
 export const ARTIFACT_FINALIZATION_RECOVERY_MS = 30 * 60 * 1000
 export const ARTIFACT_EXPIRY_CLAIM_LEASE_MS = 2 * 60 * 1000
@@ -49,6 +52,7 @@ export const ARTIFACT_INTAKE_CONFIG = Object.freeze({
     pinResolvedAddressPerRequest: true,
   }),
   uploadExpiryMs: ARTIFACT_UPLOAD_EXPIRY_MS,
+  uploadAttemptLeaseMs: ARTIFACT_UPLOAD_ATTEMPT_LEASE_MS,
   finalization: Object.freeze({
     leaseMs: ARTIFACT_FINALIZATION_LEASE_MS,
     recoveryMs: ARTIFACT_FINALIZATION_RECOVERY_MS,

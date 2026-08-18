@@ -52,6 +52,7 @@ export async function reapExpiredArtifactUploads(
          WHERE tenant_id = ? AND upload_id = ?
            AND status IN ('reserved', 'sealed', 'failed') AND expires_at <= ?
            AND (expiry_claim_token IS NULL OR expiry_claim_expires_at <= ?)
+           AND (upload_attempt_token IS NULL OR upload_attempt_expires_at <= ?)
            AND (finalization_protected_until IS NULL OR finalization_protected_until <= ?)
            AND NOT EXISTS (
              SELECT 1 FROM artifact_intake_finalizations f
@@ -61,7 +62,7 @@ export async function reapExpiredArtifactUploads(
            )`,
       ).bind(
         claimToken, now + ARTIFACT_EXPIRY_CLAIM_LEASE_MS, now,
-        row.tenant_id, row.upload_id, now, now, now, now,
+        row.tenant_id, row.upload_id, now, now, now, now, now,
       ).run()
       if (Number(claimed.meta.changes ?? 0) !== 1) continue
 
@@ -70,6 +71,7 @@ export async function reapExpiredArtifactUploads(
         tenantId: row.tenant_id,
         uploadId: row.upload_id,
         recordedKey: row.r2_key,
+        adoptedAttemptToken: row.adopted_attempt_token,
         expectedCiphertextSha256: row.ciphertext_sha256,
       })
       // Canonical document bodies are never deleted here: an expired artifact

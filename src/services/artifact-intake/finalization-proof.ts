@@ -38,6 +38,7 @@ export async function proveArtifactFinalizationCanonicalSuccess(args: {
     ) return artifactProofMismatch('operation_metadata_mismatch')
     const rawProof = await proveManagedArtifactCiphertext({
       env, tenantId: row.tenant_id, uploadId: row.upload_id, recordedKey: row.r2_key,
+      adoptedAttemptToken: row.adopted_attempt_token,
       expectedCiphertextByteLength: Number(row.ciphertext_byte_length),
       expectedCiphertextSha256: row.ciphertext_sha256,
     })

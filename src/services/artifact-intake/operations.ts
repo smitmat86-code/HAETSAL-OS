@@ -593,6 +593,71 @@ export async function markArtifactOperationsFinalizedForCompletedFinalization(ar
   }
 }
 
+/**
+ * Atomically repairs a proof-backed failed-parent/sealed-child split. One D1
+ * transaction finalizes the exact proven children first and promotes the
+ * parent only when every bound operation is finalized and unclaimed, so the
+ * parent can never become finalized while a child remains reaper-eligible.
+ * If a reaper or another worker owns a child, zero rows change and the caller
+ * must preserve state and retry.
+ */
+export async function repairFailedFinalizationWithProvenChildren(args: {
+  tenantId: string
+  finalizationId: string
+  uploadIds: string[]
+  captureId: string
+  documentId: string
+  operationId: string
+  now: number
+}, env: Env): Promise<'repaired' | 'retry'> {
+  const uploadIds = uniqueUploadIds(args.uploadIds)
+  const placeholders = uploadIds.map(() => '?').join(', ')
+  // postflight-safe: placeholders contains only one parameter marker per validated upload ID.
+  const results = await env.D1_US.batch([
+    env.D1_US.prepare(
+      `UPDATE artifact_intake_operations
+       SET status = 'finalized', error_code = NULL, finalization_protected_until = NULL,
+           expiry_claim_token = NULL, expiry_claim_expires_at = NULL, updated_at = ?
+       WHERE tenant_id = ? AND upload_id IN (${placeholders})
+         AND status IN ('sealed', 'finalized') AND finalization_id = ?
+         AND expiry_claim_token IS NULL
+         AND canonical_capture_id = ? AND canonical_document_id = ? AND canonical_operation_id = ?
+         AND EXISTS (
+           SELECT 1 FROM artifact_intake_finalizations f
+           WHERE f.tenant_id = ? AND f.id = ? AND f.status = 'failed'
+             AND f.expected_operation_count = ?
+         )`,
+    ).bind(
+      args.now, args.tenantId, ...uploadIds, args.finalizationId,
+      args.captureId, args.documentId, args.operationId,
+      args.tenantId, args.finalizationId, uploadIds.length,
+    ),
+    env.D1_US.prepare(
+      `UPDATE artifact_intake_finalizations
+       SET status = 'finalized', error_code = NULL, lease_owner = NULL,
+           lease_expires_at = NULL, recovery_expires_at = NULL, updated_at = ?
+       WHERE tenant_id = ? AND id = ? AND status = 'failed'
+         AND expected_operation_count = ?
+         AND canonical_capture_id = ? AND canonical_document_id = ? AND canonical_operation_id = ?
+         AND NOT EXISTS (
+           SELECT 1 FROM artifact_intake_operations o
+           WHERE o.tenant_id = ? AND o.finalization_id = ?
+             AND (o.status != 'finalized' OR o.expiry_claim_token IS NOT NULL)
+         )
+         AND (
+           SELECT COUNT(*) FROM artifact_intake_operations o
+           WHERE o.tenant_id = ? AND o.finalization_id = ? AND o.status = 'finalized'
+         ) = ?`,
+    ).bind(
+      args.now, args.tenantId, args.finalizationId, uploadIds.length,
+      args.captureId, args.documentId, args.operationId,
+      args.tenantId, args.finalizationId,
+      args.tenantId, args.finalizationId, uploadIds.length,
+    ),
+  ])
+  return changed(results[1]!) === 1 ? 'repaired' : 'retry'
+}
+
 export async function failArtifactFinalizationAndReleaseOperations(args: {
   tenantId: string
   finalizationId: string

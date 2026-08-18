@@ -3,7 +3,8 @@ import type { ChannelMediaJob } from '../../types/channel-media'
 import { ARTIFACT_INTAKE_ERROR } from '../artifact-intake/contracts'
 import type { ArtifactFinalizationRow } from '../artifact-intake/finalize'
 import {
-  markArtifactOperationsFinalizedForCompletedFinalization, type ArtifactIntakeOperationRow,
+  markArtifactOperationsFinalizedForCompletedFinalization,
+  repairFailedFinalizationWithProvenChildren, type ArtifactIntakeOperationRow,
 } from '../artifact-intake/operations'
 import { ARTIFACT_FINALIZATION_RECOVERY_MS } from '../artifact-intake/config'
 import { channelMediaRetrySeconds } from './claim-outcome'
@@ -105,15 +106,19 @@ export async function recoverFinalizedChannelMediaJob(
     }
     finalization = { ...finalization, status: 'finalized' }
   } else if (finalization.status === 'failed') {
-    // Repair only a proof-backed historical split. Parent-first ordering makes
-    // any acknowledgement loss converge toward finalized and protects children.
-    const repaired = await env.D1_US.prepare(
-      `UPDATE artifact_intake_finalizations
-       SET status = 'finalized', error_code = NULL, lease_owner = NULL,
-           lease_expires_at = NULL, recovery_expires_at = NULL, updated_at = ?
-       WHERE tenant_id = ? AND id = ? AND status = 'failed'`,
-    ).bind(now, job.tenantId, finalization.id).run().catch(() => null)
-    if (!repaired || Number(repaired.meta.changes ?? 0) !== 1) {
+    // Repair only a proof-backed historical split, child-first and atomic:
+    // the same transaction finalizes the exact proven child and promotes the
+    // parent, so the parent can never be finalized while the child remains
+    // reaper-eligible. If a reaper or another worker owns the child, state is
+    // preserved and the job retries instead of forcing an outcome.
+    const repaired = await repairFailedFinalizationWithProvenChildren({
+      tenantId: job.tenantId, finalizationId: finalization.id,
+      uploadIds: [operation.upload_id],
+      captureId: finalization.canonical_capture_id,
+      documentId: finalization.canonical_document_id,
+      operationId: finalization.canonical_operation_id, now,
+    }, env).catch(() => 'retry' as const)
+    if (repaired !== 'repaired') {
       return { status: 'in_progress', retryAfterSeconds: 1 }
     }
     finalization = { ...finalization, status: 'finalized' }

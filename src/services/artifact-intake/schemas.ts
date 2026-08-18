@@ -79,6 +79,11 @@ export const finalizeArtifactCaptureSchema = z.object({
     })
   }
 
+  // One manifest invariant shared with finalization proof and recovery:
+  // exactly one source, listed first, and it is the only primary artifact.
+  // Every derivative names an earlier manifest entry as its parent, which
+  // structurally excludes missing parents, self-parents, forward references,
+  // and cycles.
   const ids = new Set<string>()
   let sourceCount = 0
   let primaryCount = 0
@@ -91,17 +96,22 @@ export const finalizeArtifactCaptureSchema = z.object({
     }
     if (artifact.role === 'source') {
       sourceCount += 1
-      if (artifact.parent_upload_id) {
+      if (index !== 0 || artifact.parent_upload_id || !artifact.primary) {
+        ctx.addIssue({ code: 'custom', path: ['artifacts', index], message: ARTIFACT_INTAKE_ERROR.INVALID_MANIFEST })
+      }
+    } else {
+      if (!artifact.parent_upload_id || !ids.has(artifact.parent_upload_id)) {
         ctx.addIssue({ code: 'custom', path: ['artifacts', index, 'parent_upload_id'], message: ARTIFACT_INTAKE_ERROR.INVALID_MANIFEST })
       }
-    } else if (index > 0 && (!artifact.parent_upload_id || !ids.has(artifact.parent_upload_id))) {
-      ctx.addIssue({ code: 'custom', path: ['artifacts', index, 'parent_upload_id'], message: ARTIFACT_INTAKE_ERROR.INVALID_MANIFEST })
+      if (artifact.primary) {
+        ctx.addIssue({ code: 'custom', path: ['artifacts', index, 'primary'], message: ARTIFACT_INTAKE_ERROR.INVALID_MANIFEST })
+      }
     }
-    if (artifact.primary) primaryCount += 1
     ids.add(artifact.upload_id)
+    if (artifact.primary) primaryCount += 1
   }
 
-  if (sourceCount > 1 || primaryCount !== 1) {
+  if (sourceCount !== 1 || primaryCount !== 1) {
     ctx.addIssue({ code: 'custom', path: ['artifacts'], message: ARTIFACT_INTAKE_ERROR.INVALID_MANIFEST })
   }
 

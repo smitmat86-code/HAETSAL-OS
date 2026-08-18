@@ -4,7 +4,6 @@ import { ArtifactIntakeContractError, ARTIFACT_INTAKE_ERROR } from '../artifact-
 import { recoverFinalizedChannelMediaJob } from './canonical-recovery'
 import { channelMediaRetrySeconds } from './claim-outcome'
 import { cleanupChannelMediaHandoff, type ChannelMediaDeliver } from './delivery'
-import { markChannelMediaDeliveryUnknown } from './delivery-state'
 import { getChannelMediaJob } from './jobs'
 import { markChannelMediaFailed, markChannelMediaIntegrityIncident } from './job-transitions'
 import {
@@ -47,7 +46,11 @@ export async function resolveChannelMediaRecovery(args: {
 
   if (job.status === 'finalized' || job.status === 'failed') {
     if (recovery.status === 'inconsistent') {
-      await markChannelMediaDeliveryUnknown(job.tenantId, job.id, args.env)
+      // Artifact integrity failed after the job's capture outcome was
+      // recorded, and no provider call is in doubt here (delivery is still
+      // pending). Record the incident separately; never rewrite capture or
+      // delivery truth into delivery_unknown.
+      await markChannelMediaIntegrityIncident(job.tenantId, job.id, args.env)
       await cleanupChannelMediaHandoff(job, args.env)
       return { status: 'result', result: 'processed' }
     }

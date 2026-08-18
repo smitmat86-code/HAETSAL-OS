@@ -3,6 +3,11 @@ export type ChannelMediaJobStatus =
   | 'accepted' | 'processing' | 'retryable' | 'finalized'
   | 'delivered' | 'failed' | 'delivery_unknown'
 export type ChannelMediaDeliveryStatus = 'pending' | 'claimed' | 'delivered' | 'failed' | 'unknown'
+/**
+ * Artifact integrity is recorded separately from delivery truth: an incident
+ * never rewrites finalized capture or provider delivery history.
+ */
+export type ChannelMediaIntegrityStatus = 'artifact_integrity_incident' | null
 
 export interface ChannelMediaDescriptor {
   version: 1
@@ -24,6 +29,7 @@ export interface ChannelMediaJob {
   leaseToken: string | null
   leaseExpiresAt: number | null
   deliveryStatus: ChannelMediaDeliveryStatus
+  integrityStatus: ChannelMediaIntegrityStatus
   handoffStatus: 'pending' | 'deleted'
   artifactUploadId: string | null
   canonicalCaptureId: string | null

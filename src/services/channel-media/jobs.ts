@@ -19,6 +19,7 @@ interface JobRow {
   error_code: string | null; attempt_count: number; lease_token: string | null
   lease_expires_at: number | null
   delivery_status: ChannelMediaJob['deliveryStatus']; artifact_upload_id: string | null
+  integrity_status: ChannelMediaJob['integrityStatus'] | undefined
   handoff_status: ChannelMediaJob['handoffStatus']
   canonical_capture_id: string | null; canonical_document_id: string | null
   canonical_operation_id: string | null; created_at: number; updated_at: number; expires_at: number
@@ -30,7 +31,8 @@ function toJob(row: JobRow): ChannelMediaJob {
     errorCode: row.error_code, attemptCount: Number(row.attempt_count),
     leaseToken: row.lease_token,
     leaseExpiresAt: row.lease_expires_at === null ? null : Number(row.lease_expires_at),
-    deliveryStatus: row.delivery_status, handoffStatus: row.handoff_status,
+    deliveryStatus: row.delivery_status, integrityStatus: row.integrity_status ?? null,
+    handoffStatus: row.handoff_status,
     artifactUploadId: row.artifact_upload_id,
     canonicalCaptureId: row.canonical_capture_id, canonicalDocumentId: row.canonical_document_id,
     canonicalOperationId: row.canonical_operation_id, createdAt: Number(row.created_at),

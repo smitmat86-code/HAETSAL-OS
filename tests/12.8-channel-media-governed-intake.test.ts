@@ -879,9 +879,12 @@ describe('12.8 governed common channel media intake', () => {
       expect(outcome).toBe('processed')
       expect(messages).toEqual([])
       expect(messages).not.toContain('Captured that photo.')
+      // Artifact integrity is recorded separately; no provider call happened,
+      // so delivery truth must not be rewritten into delivery_unknown.
       expect(await getChannelMediaJob(TENANT_A, job.id, env)).toMatchObject({
-        status: 'delivery_unknown', deliveryStatus: 'unknown', errorCode: ARTIFACT_INTAKE_ERROR.INVALID_STATE,
+        deliveryStatus: 'pending', integrityStatus: 'artifact_integrity_incident',
       })
+      expect((await getChannelMediaJob(TENANT_A, job.id, env))?.status).not.toBe('delivery_unknown')
       const lifecycle = await env.D1_US.prepare(
         `SELECT f.status AS finalization_status, o.status AS operation_status
          FROM artifact_intake_finalizations f
@@ -899,8 +902,8 @@ describe('12.8 governed common channel media intake', () => {
       ).bind(TENANT_A, job.id).run()
       expect(await reapExpiredChannelMediaJobs(env, Date.now(), 100)).toEqual({ reaped: 0 })
       expect(await getChannelMediaJob(TENANT_A, job.id, env)).toMatchObject({
-        status: 'delivery_unknown', deliveryStatus: 'unknown',
-        errorCode: ARTIFACT_INTAKE_ERROR.INVALID_STATE, handoffStatus: 'pending',
+        status: 'finalized', deliveryStatus: 'pending',
+        integrityStatus: 'artifact_integrity_incident', handoffStatus: 'pending',
       })
       expect(await env.R2_ARTIFACTS.head(await channelMediaHandoffKey(TENANT_A, job.id))).not.toBeNull()
       expect(await env.R2_ARTIFACTS.head(await channelMediaRecoveryKey(TENANT_A, job.id))).not.toBeNull()

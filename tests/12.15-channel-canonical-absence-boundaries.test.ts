@@ -85,7 +85,7 @@ async function absentCanonicalSetup(args: {
   const job: ChannelMediaJob = {
     id: jobId, tenantId: TENANT, provider: 'telegram', status: 'processing',
     errorCode: null, attemptCount: 1, leaseToken: null, leaseExpiresAt: null,
-    deliveryStatus: 'pending', handoffStatus: 'pending',
+    deliveryStatus: 'pending', integrityStatus: null, handoffStatus: 'pending',
     artifactUploadId: reserved.uploadId, canonicalCaptureId: null,
     canonicalDocumentId: null, canonicalOperationId: null,
     createdAt: now, updatedAt: now, expiresAt: now + 60_000,

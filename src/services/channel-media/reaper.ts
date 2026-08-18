@@ -14,6 +14,7 @@ interface ExpiredRow {
   tenant_id: string
   status: string
   delivery_status: string
+  integrity_status: string | null
   error_code: string | null
   lease_expires_at: number | null
 }
@@ -24,7 +25,7 @@ export async function reapExpiredChannelMediaJobs(
   limit = 100,
 ): Promise<{ reaped: number }> {
   const rows = await env.D1_US.prepare(
-    `SELECT id, tenant_id, status, delivery_status, error_code, lease_expires_at FROM channel_media_jobs
+    `SELECT id, tenant_id, status, delivery_status, integrity_status, error_code, lease_expires_at FROM channel_media_jobs
      WHERE expires_at <= ? AND handoff_status = 'pending'
      ORDER BY expires_at ASC LIMIT ?`,
   ).bind(now, limit).all<ExpiredRow>()
@@ -46,6 +47,9 @@ export async function reapExpiredChannelMediaJobs(
       row.status === 'processing' && row.lease_expires_at !== null &&
       Number(row.lease_expires_at) > Date.now()
     ) continue
+    // Integrity incidents are protected manual-review state, never reap fuel.
+    // The legacy guard keeps skipping rows marked before migration 1034.
+    if (row.integrity_status !== null && row.integrity_status !== undefined) continue
     if (
       row.status === 'delivery_unknown' && row.delivery_status === 'unknown' &&
       row.error_code === ARTIFACT_INTAKE_ERROR.INVALID_STATE

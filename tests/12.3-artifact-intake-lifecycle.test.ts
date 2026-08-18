@@ -397,7 +397,7 @@ describe('12.3 managed artifact intake lifecycle', () => {
     expect((await getArtifactIntakeStatus({ tenantId: TENANT_A, uploadId: expired.sealed.uploadId }, env)).status).toBe('expired')
   })
 
-  it('reaps both managed ciphertext and the deterministic canonical-body orphan after a permanent canonical failure', async () => {
+  it('reaps managed ciphertext but preserves the canonical document body after a permanent canonical failure', async () => {
     const orphan = await reserveAndUpload({
       idempotencyKey: `canonical-orphan-${SUITE_ID}`,
       text: 'canonical-failure-orphan-secret',
@@ -453,7 +453,9 @@ describe('12.3 managed artifact intake lifecycle', () => {
       `SELECT status FROM artifact_intake_finalizations WHERE tenant_id = ? AND id = ?`,
     ).bind(TENANT_A, finalization!.id).first<{ status: string }>()).toMatchObject({ status: 'failed' })
     expect(await env.R2_ARTIFACTS.head(operation!.r2_key)).toBeNull()
-    expect(await env.R2_ARTIFACTS.head(canonicalBodyKey)).toBeNull()
+    // The artifact operation's canonical pointer is not proof the body is
+    // orphaned; the generic reaper must preserve canonical document bodies.
+    expect(await env.R2_ARTIFACTS.head(canonicalBodyKey)).not.toBeNull()
   })
 
   it('gives expiry ownership the race and aborts finalization before canonical write', async () => {

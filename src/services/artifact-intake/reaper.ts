@@ -1,5 +1,4 @@
 import type { Env } from '../../types/env'
-import { canonicalR2Key } from '../canonical-memory-artifacts'
 import { ARTIFACT_EXPIRY_CLAIM_LEASE_MS } from './config'
 import type { ArtifactIntakeOperationRow } from './operations'
 import { recoverOrFailStaleArtifactFinalizations } from './stale-finalization-recovery'
@@ -73,9 +72,9 @@ export async function reapExpiredArtifactUploads(
         recordedKey: row.r2_key,
         expectedCiphertextSha256: row.ciphertext_sha256,
       })
-      if (row.canonical_document_id && /^[a-f0-9-]{36}$/i.test(row.canonical_document_id)) {
-        await env.R2_ARTIFACTS.delete(canonicalR2Key(row.tenant_id, 'documents', row.canonical_document_id))
-      }
+      // Canonical document bodies are never deleted here: an expired artifact
+      // operation's stale canonical pointer is not proof the body is orphaned.
+      // Orphaned canonical bodies require a separate proof-backed process.
       const expired = await env.D1_US.prepare(
         `UPDATE artifact_intake_operations
          SET status = 'expired', error_code = NULL, expiry_claim_expires_at = NULL, updated_at = ?

@@ -26,12 +26,12 @@ export function verifiedArtifactProof<T>(value: T): ArtifactProofResult<T> {
 
 export function artifactProofMismatch(
   reason: ArtifactProofMismatchReason,
-): ArtifactProofResult<never> {
+): { status: 'authoritative_mismatch'; reason: ArtifactProofMismatchReason } {
   return { status: 'authoritative_mismatch', reason }
 }
 
 export function artifactProofIndeterminate(
   reason: ArtifactProofUnavailableReason,
-): ArtifactProofResult<never> {
+): { status: 'indeterminate'; reason: ArtifactProofUnavailableReason } {
   return { status: 'indeterminate', reason }
 }

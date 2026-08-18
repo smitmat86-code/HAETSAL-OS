@@ -12,7 +12,7 @@ Last updated: 2026-04-18 | Session: 7.1 (Hindsight Projection Adapter)
 
 <!-- AUTO-GENERATED MODULE REGISTRY - DO NOT EDIT -->
 
-*Auto-generated: 2026-08-16*
+*Auto-generated: 2026-08-18*
 
 ### src/
 
@@ -68,7 +68,8 @@ Last updated: 2026-04-18 | Session: 7.1 (Hindsight Projection Adapter)
 | src\services\agents\automation-chat.ts | 77 | AutomationChatRoute | ✅ |
 | src\services\agents\delegation.ts | 71 | DelegationDecision, decideDelegation, DelegationRoute | ✅ |
 | src\services\agents\router.ts | 50 | — | ✅ |
-| src\services\artifact-intake\config.ts | 62 | ARTIFACT_MAX_BYTES, TELEGRAM_ARTIFACT_MAX_BYTES, ARTIFACT_DOWNLOAD_TIMEOUT_MS... | ✅ |
+| src\services\artifact-intake\chatgpt-tool-contract.ts | 38 | CHATGPT_ARTIFACT_FILE_TOOL_CONTRACT | ✅ |
+| src\services\artifact-intake\config.ts | 81 | ARTIFACT_MAX_BYTES, ARTIFACT_MANIFEST_MAX_COUNT, ARTIFACT_MANIFEST_MAX_AGGREGATE_BYTES... | ✅ |
 | src\services\artifact-intake\contracts.ts | 135 | ARTIFACT_INTAKE_ERROR, ArtifactIntakeErrorCode, ArtifactIntakeContractError... | ✅ |
 | src\services\artifact-intake\crypto.ts | 108 | SealedArtifactBytes, detectArtifactEnvelopeFamily | ✅ |
 | src\services\artifact-intake\download-body.ts | 57 | — | ✅ |
@@ -76,21 +77,25 @@ Last updated: 2026-04-18 | Session: 7.1 (Hindsight Projection Adapter)
 | src\services\artifact-intake\download-policy.ts | 117 | normalizeArtifactIpAddress, isBlockedArtifactAddress, assertArtifactResolvedAddressAllowed... | ✅ |
 | src\services\artifact-intake\download-types.ts | 42 | HostedArtifactFileDescriptor, ArtifactDownloadResponse, ArtifactDownloadNetwork... | ✅ |
 | src\services\artifact-intake\download.ts | 150 | — | ✅ |
-| src\services\artifact-intake\finalization-proof.ts | 90 | — | ✅ |
-| src\services\artifact-intake\finalize.ts | 510 | ArtifactFinalizationRow, FinalizeArtifactCaptureFence | ⚠️ OVER LIMIT |
+| src\services\artifact-intake\finalization-proof.ts | 141 | — | ✅ |
+| src\services\artifact-intake\finalize.ts | 563 | ArtifactFinalizationRow, FinalizeArtifactCaptureFence | ⚠️ OVER LIMIT |
 | src\services\artifact-intake\legacy-approval-manifest.ts | 52 | ExactTargetManifestEntry | ✅ |
 | src\services\artifact-intake\legacy-inventory-types.ts | 75 | LegacyChannel, LegacyEnvelopeFamily, LegacyInventoryDisposition... | ✅ |
 | src\services\artifact-intake\legacy-inventory.ts | 147 | classifyLegacyMediaInventory, classifyLegacyMediaObjects | ✅ |
-| src\services\artifact-intake\legacy-managed-replacements.ts | 71 | LEGACY_D1_CANONICAL_REFERENCES_SQL, LEGACY_MANAGED_REPLACEMENT_CANDIDATES_SQL, exactManagedPrimarySourceReplacements | ✅ |
+| src\services\artifact-intake\legacy-managed-replacements.ts | 90 | LEGACY_D1_CANONICAL_REFERENCES_SQL, LEGACY_MANAGED_REPLACEMENT_CANDIDATES_SQL, exactManagedPrimarySourceReplacements | ✅ |
 | src\services\artifact-intake\legacy-reference-evidence.ts | 35 | groupLegacyReferences, legacyReferenceIdentity, canonicalRoleEvidence | ✅ |
 | src\services\artifact-intake\legacy-remediation.ts | 139 | LEGACY_INVENTORY_VERSION, LegacyRemediationCategory, LegacyRemediationPlan... | ✅ |
 | src\services\artifact-intake\manifest-identity.ts | 26 | ArtifactManifestIdentityItem | ✅ |
+| src\services\artifact-intake\migration-overlap-audit.ts | 76 | ArtifactFinalizationOverlapAudit, ArtifactOverlapAuditBoundary, ARTIFACT_FINALIZATION_OVERLAP_AUDIT_SQL | ✅ |
 | src\services\artifact-intake\mime.ts | 41 | detectArtifactMimeType | ✅ |
-| src\services\artifact-intake\operations.ts | 490 | ArtifactIntakeOperationRow | ⚠️ OVER LIMIT |
-| src\services\artifact-intake\reaper.ts | 86 | ArtifactReaperResult | ✅ |
-| src\services\artifact-intake\schemas.ts | 148 | reserveArtifactUploadSchema, openAIFileDescriptorSchema, telegramArtifactFileDescriptorSchema... | ✅ |
-| src\services\artifact-intake\stale-finalization-recovery.ts | 85 | — | ✅ |
-| src\services\artifact-intake\storage.ts | 86 | ManagedArtifactCiphertextProof | ✅ |
+| src\services\artifact-intake\operations.ts | 723 | ArtifactIntakeOperationRow | ⚠️ OVER LIMIT |
+| src\services\artifact-intake\proof-result.ts | 41 | ArtifactProofMismatchReason, ArtifactProofUnavailableReason, ArtifactProofResult... | ✅ |
+| src\services\artifact-intake\reaper.ts | 95 | ArtifactReaperResult | ✅ |
+| src\services\artifact-intake\schemas.ts | 142 | reserveArtifactUploadSchema, openAIFileDescriptorSchema, telegramArtifactFileDescriptorSchema... | ✅ |
+| src\services\artifact-intake\stale-finalization-recovery.ts | 121 | — | ✅ |
+| src\services\artifact-intake\stale-finalization-support.ts | 56 | StaleArtifactFinalizationRecoveryResult, deferOrProtect | ✅ |
+| src\services\artifact-intake\storage-keys.ts | 42 | — | ✅ |
+| src\services\artifact-intake\storage.ts | 132 | ManagedArtifactCiphertextProof | ✅ |
 | src\services\automations\nl-parse.ts | 88 | ParsedAutomation, parseAutomationIntent, AutomationCommand... | ✅ |
 | src\services\automations\recurrence.ts | 84 | RecurrenceKind, RecurrenceSpec, DEFAULT_TZ... | ✅ |
 | src\services\bootstrap\historical-import.ts | 140 | historicalSalienceMultiplier | ✅ |
@@ -130,8 +135,10 @@ Last updated: 2026-04-18 | Session: 7.1 (Hindsight Projection Adapter)
 | src\services\canonical-projection-dispatch.ts | 51 | — | ✅ |
 | src\services\canonical-promotion.ts | 69 | PromoteClaimInput | ✅ |
 | src\services\canonical-source-attribution.ts | 64 | buildCanonicalSourceAttribution, applyCanonicalRoute | ✅ |
-| src\services\channel-media\canonical-proof.ts | 80 | — | ✅ |
-| src\services\channel-media\canonical-recovery.ts | 150 | ChannelMediaCanonicalRecoveryResult | ✅ |
+| src\services\channel-media\canonical-proof.ts | 70 | — | ✅ |
+| src\services\channel-media\canonical-recovery-outcomes.ts | 90 | boundsGuardOutcome | ✅ |
+| src\services\channel-media\canonical-recovery-support.ts | 117 | ChannelMediaCanonicalRecoveryResult | ✅ |
+| src\services\channel-media\canonical-recovery.ts | 128 | — | ✅ |
 | src\services\channel-media\claim-outcome.ts | 97 | ChannelMediaJobClaimOutcome, channelMediaRetrySeconds | ✅ |
 | src\services\channel-media\delivery-state.ts | 127 | ChannelMediaDeliveryClaim | ✅ |
 | src\services\channel-media\delivery.ts | 76 | ChannelMediaDeliveryOutcome, ChannelMediaDeliver | ✅ |
@@ -139,15 +146,15 @@ Last updated: 2026-04-18 | Session: 7.1 (Hindsight Projection Adapter)
 | src\services\channel-media\finalize-job.ts | 150 | channelMediaSearchableBody | ✅ |
 | src\services\channel-media\handoff.ts | 65 | — | ✅ |
 | src\services\channel-media\intake.ts | 32 | — | ✅ |
-| src\services\channel-media\job-transitions.ts | 84 | — | ✅ |
-| src\services\channel-media\jobs.ts | 120 | — | ✅ |
-| src\services\channel-media\orchestrator-recovery.ts | 83 | ChannelMediaRecoveryGate | ✅ |
+| src\services\channel-media\job-transitions.ts | 101 | — | ✅ |
+| src\services\channel-media\jobs.ts | 122 | — | ✅ |
+| src\services\channel-media\orchestrator-recovery.ts | 91 | ChannelMediaRecoveryGate | ✅ |
 | src\services\channel-media\orchestrator-support.ts | 131 | ChannelMediaOrchestratorDependencies, ProcessChannelMediaJobArgs, ChannelMediaProcessResult... | ✅ |
 | src\services\channel-media\orchestrator.ts | 145 | — | ✅ |
 | src\services\channel-media\providers-sendblue.ts | 76 | — | ✅ |
 | src\services\channel-media\providers-telegram.ts | 79 | — | ✅ |
 | src\services\channel-media\providers.ts | 16 | — | ✅ |
-| src\services\channel-media\reaper.ts | 99 | — | ✅ |
+| src\services\channel-media\reaper.ts | 112 | — | ✅ |
 | src\services\channel-media\recovery.ts | 72 | — | ✅ |
 | src\services\chief-of-staff-compiled-context-bundle.ts | 127 | buildCompiledChiefOfStaffBundle | ✅ |
 | src\services\chief-of-staff-compiled-context-gaps.ts | 33 | addSkippedAssetGap, addReadErrorGap | ✅ |
@@ -276,7 +283,7 @@ Last updated: 2026-04-18 | Session: 7.1 (Hindsight Projection Adapter)
 | src\types\canonical-memory-broker.ts | 106 | CanonicalBrokerBranchStatus, CanonicalBrokerOverlap, CanonicalBrokerDetailStatus... | ✅ |
 | src\types\canonical-memory-query.ts | 128 | MemoryQueryMode, MemoryQueryModePreference, CanonicalRetrievalCitation... | ✅ |
 | src\types\canonical-memory.ts | 84 | CanonicalProjectionKind, CanonicalArtifactMode, CanonicalArtifactRef... | ✅ |
-| src\types\channel-media.ts | 52 | ChannelMediaProvider, ChannelMediaJobStatus, ChannelMediaDeliveryStatus... | ✅ |
+| src\types\channel-media.ts | 58 | ChannelMediaProvider, ChannelMediaJobStatus, ChannelMediaDeliveryStatus... | ✅ |
 | src\types\chief-of-staff-context.ts | 81 | ContextBundleIntent, ContextConfidenceLevel, PrepareContextForAgentInput... | ✅ |
 | src\types\cloudflare-env.generated.d.ts | 51 | — | ✅ |
 | src\types\env.ts | 34 | Env | ✅ |

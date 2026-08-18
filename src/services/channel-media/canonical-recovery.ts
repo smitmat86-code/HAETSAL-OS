@@ -4,16 +4,17 @@ import { ARTIFACT_INTAKE_ERROR } from '../artifact-intake/contracts'
 import type { ArtifactFinalizationRow } from '../artifact-intake/finalize'
 import {
   markArtifactOperationsFinalizedForCompletedFinalization,
-  repairFailedFinalizationWithProvenChildren, type ArtifactIntakeOperationRow,
+  repairFailedFinalizationWithProvenChildren,
 } from '../artifact-intake/operations'
-import {
-  ARTIFACT_FINALIZATION_RECOVERY_MS, ARTIFACT_MANIFEST_MAX_COUNT,
-} from '../artifact-intake/config'
+import { ARTIFACT_FINALIZATION_RECOVERY_MS } from '../artifact-intake/config'
 import { channelMediaRetrySeconds } from './claim-outcome'
 import { proveChannelCanonicalSuccess } from './canonical-proof'
 import { repairChannelMediaFinalized } from './job-transitions'
 import {
-  completeReservedFinalization, failStaleFinalization, finalizationFor,
+  authoritativeMismatchOutcome, boundsGuardOutcome, operationSetMismatchOutcome,
+} from './canonical-recovery-outcomes'
+import {
+  completeReservedFinalization, finalizationFor,
   loadChannelFinalizationOperations, type ChannelMediaCanonicalRecoveryResult,
 } from './canonical-recovery-support'
 export type { ChannelMediaCanonicalRecoveryResult } from './canonical-recovery-support'
@@ -45,71 +46,21 @@ export async function recoverFinalizedChannelMediaJob(
   const operations = await loadChannelFinalizationOperations(job, finalization, env)
   if (!operations) return { status: 'in_progress', retryAfterSeconds: 1 }
 
-  const expectedOperationCount = Number(finalization.expected_operation_count)
-  if (!Number.isInteger(expectedOperationCount) ||
-      expectedOperationCount > ARTIFACT_MANIFEST_MAX_COUNT) {
-    // Malformed persisted state is protected for manual review; it must
-    // never drive unbounded proof work or become deletion-eligible.
-    console.error('ARTIFACT_INTEGRITY_INCIDENT', {
-      reason: 'bounds_exceeded', finalizationId: finalization.id,
-    })
-    return {
-      status: 'inconsistent', errorCode: ARTIFACT_INTAKE_ERROR.INVALID_STATE,
-      protectedFinalizedHistory: true,
-    }
-  }
+  const boundsOutcome = boundsGuardOutcome(finalization)
+  if (boundsOutcome) return boundsOutcome
   const operation = operations[0]
-  if (!operation || operations.length !== 1 || operations.length !== expectedOperationCount) {
-    if (finalization.status === 'finalized' || operations.some(row => row.status === 'finalized')) {
-      console.error('ARTIFACT_INTEGRITY_INCIDENT', {
-        reason: 'operation_set_mismatch', finalizationId: finalization.id,
-      })
-      return {
-        status: 'inconsistent', errorCode: ARTIFACT_INTAKE_ERROR.INVALID_STATE,
-        protectedFinalizedHistory: true,
-      }
-    }
-    return finalization.status === 'failed'
-      ? {
-          status: 'failed',
-          errorCode: finalization.error_code ?? ARTIFACT_INTAKE_ERROR.CANONICAL_WRITE_FAILED,
-        }
-      : recoveryDeadline <= now
-        ? failStaleFinalization(finalization, env, now)
-        : { status: 'in_progress', retryAfterSeconds: channelMediaRetrySeconds(recoveryDeadline, now) }
+  if (!operation || operations.length !== 1 ||
+      operations.length !== Number(finalization.expected_operation_count)) {
+    return operationSetMismatchOutcome({ finalization, operations, recoveryDeadline, now, env })
   }
   const proof = await proveChannelCanonicalSuccess({ job, finalization, operation, env })
   if (proof.status === 'indeterminate') {
     return { status: 'in_progress', retryAfterSeconds: 1 }
   }
   if (proof.status === 'authoritative_mismatch') {
-    if (finalization.status === 'finalized' || operation.status === 'finalized') {
-      console.error('ARTIFACT_INTEGRITY_INCIDENT', {
-        reason: proof.reason, finalizationId: finalization.id,
-      })
-      return {
-        status: 'inconsistent', errorCode: ARTIFACT_INTAKE_ERROR.INVALID_STATE,
-        protectedFinalizedHistory: true,
-      }
-    }
-    if (finalization.status === 'failed') return {
-      status: 'failed',
-      errorCode: finalization.error_code ?? ARTIFACT_INTAKE_ERROR.CANONICAL_WRITE_FAILED,
-    }
-    if (proof.reason === 'canonical_record_missing') {
-      // Inside the recovery window the reservation can still acquire a normal
-      // lease, so absence is retryable: data is preserved and the normal
-      // finalize path repairs it. Once the deadline expires, only the guarded
-      // failure below may run — its CAS requires no live lease — so the
-      // reservation never stays permanently bound and raw data is never
-      // released beneath a live canonical writer.
-      return recoveryDeadline > now
-        ? { status: 'stably_absent' }
-        : failStaleFinalization(finalization, env, now)
-    }
-    return recoveryDeadline <= now
-      ? failStaleFinalization(finalization, env, now)
-      : { status: 'in_progress', retryAfterSeconds: channelMediaRetrySeconds(recoveryDeadline, now) }
+    return authoritativeMismatchOutcome({
+      finalization, operation, reason: proof.reason, recoveryDeadline, now, env,
+    })
   }
 
   if (finalization.status === 'reserved') {

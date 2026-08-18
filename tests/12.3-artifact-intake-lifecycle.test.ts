@@ -936,7 +936,9 @@ describe('12.3 managed artifact intake lifecycle', () => {
       plaintext_sha256: 'b'.repeat(64), ciphertext_sha256: cipherHash,
       ciphertext_byte_length: ARTIFACT_MAX_BYTES, encryption_family: 'tmk' as const,
       finalization_id: finalizationId, finalization_protected_until: null,
-      expiry_claim_token: null, expiry_claim_expires_at: null, canonical_capture_id: captureId,
+      expiry_claim_token: null, expiry_claim_expires_at: null,
+      upload_attempt_token: null, upload_attempt_expires_at: null, adopted_attempt_token: null,
+      canonical_capture_id: captureId,
       canonical_document_id: documentId, canonical_operation_id: operationId,
       created_at: 1, updated_at: 1, expires_at: 1,
     }))

@@ -91,7 +91,7 @@ async function expireUploadAttempt(uploadId: string): Promise<void> {
 async function attemptObjectKeys(row: { r2_key: string }): Promise<string[]> {
   const prefix = row.r2_key.replace(/\/[^/]*$/, '/')
   const listed = await env.R2_ARTIFACTS.list({ prefix })
-  return listed.objects.map((object) => object.key)
+  return listed.objects.map((object: { key: string }) => object.key)
 }
 
 describe('12.12 fenced artifact upload ownership', () => {

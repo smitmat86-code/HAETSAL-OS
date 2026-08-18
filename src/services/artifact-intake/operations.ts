@@ -627,8 +627,8 @@ export async function repairFailedFinalizationWithProvenChildren(args: {
 }, env: Env): Promise<'repaired' | 'retry'> {
   const uploadIds = uniqueUploadIds(args.uploadIds)
   const placeholders = uploadIds.map(() => '?').join(', ')
-  // postflight-safe: placeholders contains only one parameter marker per validated upload ID.
   const results = await env.D1_US.batch([
+    // postflight-safe: placeholders contains only one parameter marker per validated upload ID.
     env.D1_US.prepare(
       `UPDATE artifact_intake_operations
        SET status = 'finalized', error_code = NULL, finalization_protected_until = NULL,

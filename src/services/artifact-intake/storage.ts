@@ -1,7 +1,7 @@
 import type { Env } from '../../types/env'
 import { ARTIFACT_MAX_CIPHERTEXT_BYTES } from './config'
 import { ArtifactIntakeContractError, ARTIFACT_INTAKE_ERROR } from './contracts'
-import { sha256Bytes, sha256Text } from './crypto'
+import { sha256Bytes } from './crypto'
 import {
   artifactProofIndeterminate,
   artifactProofMismatch,
@@ -9,42 +9,17 @@ import {
   verifiedArtifactProof,
 } from './proof-result'
 
-const UPLOAD_ID_PATTERN = /^[a-f0-9-]{36}$/i
+import {
+  expectedManagedArtifactKey,
+  managedArtifactAttemptR2Key,
+  managedArtifactR2Key,
+} from './storage-keys'
 
-export async function managedArtifactR2Key(tenantId: string, uploadId: string): Promise<string> {
-  if (!UPLOAD_ID_PATTERN.test(uploadId)) {
-    throw new ArtifactIntakeContractError(ARTIFACT_INTAKE_ERROR.INVALID_MANIFEST)
-  }
-  const tenantScope = (await sha256Text(`haetsal-artifact-tenant:${tenantId}`)).slice(0, 32)
-  return `artifact-intake/v1/${tenantScope}/${uploadId}.enc`
-}
-
-/**
- * Each upload attempt writes to its own immutable key. Attempts never share a
- * mutable object, so a stale writer can never overwrite an adopted ciphertext.
- */
-export async function managedArtifactAttemptR2Key(
-  tenantId: string,
-  uploadId: string,
-  attemptToken: string,
-): Promise<string> {
-  if (!UPLOAD_ID_PATTERN.test(uploadId) || !UPLOAD_ID_PATTERN.test(attemptToken)) {
-    throw new ArtifactIntakeContractError(ARTIFACT_INTAKE_ERROR.INVALID_MANIFEST)
-  }
-  const tenantScope = (await sha256Text(`haetsal-artifact-tenant:${tenantId}`)).slice(0, 32)
-  return `artifact-intake/v1/${tenantScope}/${uploadId}/${attemptToken}.enc`
-}
-
-/** The only key D1 may legitimately record for this operation's ciphertext. */
-export async function expectedManagedArtifactKey(
-  tenantId: string,
-  uploadId: string,
-  adoptedAttemptToken: string | null | undefined,
-): Promise<string> {
-  return adoptedAttemptToken
-    ? await managedArtifactAttemptR2Key(tenantId, uploadId, adoptedAttemptToken)
-    : await managedArtifactR2Key(tenantId, uploadId)
-}
+export {
+  expectedManagedArtifactKey,
+  managedArtifactAttemptR2Key,
+  managedArtifactR2Key,
+} from './storage-keys'
 
 export async function putManagedArtifactCiphertext(
   env: Env,

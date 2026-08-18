@@ -31,12 +31,30 @@ async function loadProofOperations(
       }, env),
     }
   } catch (error) {
-    return {
-      proof: error instanceof ArtifactIntakeContractError
-        ? artifactProofMismatch('operation_set_mismatch')
-        : artifactProofIndeterminate('d1_unavailable'),
+    if (error instanceof ArtifactIntakeContractError) {
+      // Bounds violations are malformed persisted state: protected for
+      // manual review, never classified as deletion-eligible corruption.
+      return {
+        proof: error.code === ARTIFACT_INTAKE_ERROR.BULK_IMPORT_REQUIRED
+          ? artifactProofIndeterminate('bounds_exceeded')
+          : artifactProofMismatch('operation_set_mismatch'),
+      }
     }
+    return { proof: artifactProofIndeterminate('d1_unavailable') }
   }
+}
+
+function deferOrProtect(
+  proof: { status: 'indeterminate'; reason: string },
+  finalizationId: string,
+  result: StaleArtifactFinalizationRecoveryResult,
+): void {
+  if (proof.reason === 'bounds_exceeded') {
+    console.error('ARTIFACT_INTEGRITY_INCIDENT', { reason: 'bounds_exceeded', finalizationId })
+    result.integrityIncidents += 1
+    return
+  }
+  result.deferred += 1
 }
 
 export async function recoverOrFailStaleArtifactFinalizations(
@@ -68,7 +86,7 @@ export async function recoverOrFailStaleArtifactFinalizations(
       finalization, operations, env,
     })
     if (proof.status === 'indeterminate') {
-      result.deferred += 1
+      deferOrProtect(proof, finalization.id, result)
       continue
     }
     if (proof.status === 'authoritative_mismatch') {
@@ -98,7 +116,7 @@ export async function recoverOrFailStaleArtifactFinalizations(
 
     const repeated = await proveArtifactFinalizationCanonicalSuccess({ finalization, operations, env })
     if (repeated.status === 'indeterminate') {
-      result.deferred += 1
+      deferOrProtect(repeated, finalization.id, result)
       continue
     }
     if (repeated.status === 'authoritative_mismatch') {

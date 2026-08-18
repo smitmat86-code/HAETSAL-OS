@@ -14,6 +14,9 @@ export type ArtifactProofUnavailableReason =
   | 'd1_unavailable'
   | 'canonical_store_unavailable'
   | 'crypto_unavailable'
+  // Malformed or oversized persisted state. Protected manual-review
+  // condition: data is preserved and never becomes deletion-eligible.
+  | 'bounds_exceeded'
 
 export type ArtifactProofResult<T = undefined> =
   | { status: 'verified'; value: T }

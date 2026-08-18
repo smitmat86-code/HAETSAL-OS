@@ -1,4 +1,11 @@
 import type { Env } from '../../types/env'
+import {
+  ARTIFACT_CIPHERTEXT_ENVELOPE_OVERHEAD_BYTES,
+  ARTIFACT_MANIFEST_MAX_AGGREGATE_BYTES,
+  ARTIFACT_MANIFEST_MAX_COUNT,
+  ARTIFACT_MAX_BYTES,
+  ARTIFACT_MAX_CIPHERTEXT_BYTES,
+} from './config'
 import { getCanonicalMemoryStore } from '../canonical-postgres'
 import type { ArtifactFinalizationRow } from './finalize'
 import type { ArtifactIntakeOperationRow } from './operations'
@@ -18,13 +25,38 @@ export async function proveArtifactFinalizationCanonicalSuccess(args: {
   env: Env
 }): Promise<ArtifactProofResult> {
   const { finalization, operations, env } = args
+  const expectedCount = Number(finalization.expected_operation_count)
   if (
-    Number(finalization.expected_operation_count) <= 0 ||
+    expectedCount <= 0 ||
     !finalization.artifact_manifest_sha256 ||
-    operations.length !== Number(finalization.expected_operation_count) ||
+    operations.length !== expectedCount ||
     new Set(operations.map(row => row.upload_id)).size !== operations.length ||
     new Set(operations.map(row => row.artifact_id)).size !== operations.length
   ) return artifactProofMismatch('operation_set_mismatch')
+  // Bounds precede every R2 read: malformed or oversized persisted state is a
+  // protected manual-review condition, never proof work and never deletion.
+  if (!Number.isInteger(expectedCount) || expectedCount > ARTIFACT_MANIFEST_MAX_COUNT) {
+    return artifactProofIndeterminate('bounds_exceeded')
+  }
+  let aggregatePlaintext = 0
+  let aggregateCiphertext = 0
+  for (const row of operations) {
+    const plaintextBytes = Number(row.byte_length)
+    const ciphertextBytes = Number(row.ciphertext_byte_length ?? 0)
+    if (
+      !Number.isInteger(plaintextBytes) || plaintextBytes <= 0 || plaintextBytes > ARTIFACT_MAX_BYTES ||
+      !Number.isInteger(ciphertextBytes) || ciphertextBytes <= 0 ||
+      ciphertextBytes > ARTIFACT_MAX_CIPHERTEXT_BYTES
+    ) return artifactProofIndeterminate('bounds_exceeded')
+    aggregatePlaintext += plaintextBytes
+    aggregateCiphertext += ciphertextBytes
+  }
+  const maxAggregateCiphertext = ARTIFACT_MANIFEST_MAX_AGGREGATE_BYTES +
+    ARTIFACT_MANIFEST_MAX_COUNT * ARTIFACT_CIPHERTEXT_ENVELOPE_OVERHEAD_BYTES
+  if (aggregatePlaintext > ARTIFACT_MANIFEST_MAX_AGGREGATE_BYTES ||
+      aggregateCiphertext > maxAggregateCiphertext) {
+    return artifactProofIndeterminate('bounds_exceeded')
+  }
 
   // Sequential proof bounds live ciphertext memory to one object. Never replace
   // this with unbounded Promise.all over manifest entries.

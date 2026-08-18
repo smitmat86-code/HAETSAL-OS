@@ -6,7 +6,9 @@ import {
   markArtifactOperationsFinalizedForCompletedFinalization,
   repairFailedFinalizationWithProvenChildren, type ArtifactIntakeOperationRow,
 } from '../artifact-intake/operations'
-import { ARTIFACT_FINALIZATION_RECOVERY_MS } from '../artifact-intake/config'
+import {
+  ARTIFACT_FINALIZATION_RECOVERY_MS, ARTIFACT_MANIFEST_MAX_COUNT,
+} from '../artifact-intake/config'
 import { channelMediaRetrySeconds } from './claim-outcome'
 import { proveChannelCanonicalSuccess } from './canonical-proof'
 import { repairChannelMediaFinalized } from './job-transitions'
@@ -44,6 +46,18 @@ export async function recoverFinalizedChannelMediaJob(
   if (!operations) return { status: 'in_progress', retryAfterSeconds: 1 }
 
   const expectedOperationCount = Number(finalization.expected_operation_count)
+  if (!Number.isInteger(expectedOperationCount) ||
+      expectedOperationCount > ARTIFACT_MANIFEST_MAX_COUNT) {
+    // Malformed persisted state is protected for manual review; it must
+    // never drive unbounded proof work or become deletion-eligible.
+    console.error('ARTIFACT_INTEGRITY_INCIDENT', {
+      reason: 'bounds_exceeded', finalizationId: finalization.id,
+    })
+    return {
+      status: 'inconsistent', errorCode: ARTIFACT_INTAKE_ERROR.INVALID_STATE,
+      protectedFinalizedHistory: true,
+    }
+  }
   const operation = operations[0]
   if (!operation || operations.length !== 1 || operations.length !== expectedOperationCount) {
     if (finalization.status === 'finalized' || operations.some(row => row.status === 'finalized')) {

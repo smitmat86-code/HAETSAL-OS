@@ -1,4 +1,5 @@
 import type { Env } from '../../types/env'
+import { ARTIFACT_MAX_CIPHERTEXT_BYTES } from './config'
 import { ArtifactIntakeContractError, ARTIFACT_INTAKE_ERROR } from './contracts'
 import { sha256Bytes, sha256Text } from './crypto'
 import {
@@ -78,6 +79,13 @@ export async function proveManagedArtifactCiphertext(args: {
   expectedCiphertextByteLength: number
   expectedCiphertextSha256: string
 }): Promise<ArtifactProofResult<ManagedArtifactCiphertextProof>> {
+  if (
+    !Number.isInteger(args.expectedCiphertextByteLength) ||
+    args.expectedCiphertextByteLength <= 0 ||
+    args.expectedCiphertextByteLength > ARTIFACT_MAX_CIPHERTEXT_BYTES
+  ) {
+    return artifactProofIndeterminate('bounds_exceeded')
+  }
   let expectedKey: string
   try {
     expectedKey = await expectedManagedArtifactKey(args.tenantId, args.uploadId, args.adoptedAttemptToken)
@@ -97,6 +105,11 @@ export async function proveManagedArtifactCiphertext(args: {
     return artifactProofIndeterminate('r2_unavailable')
   }
   if (!object) return artifactProofMismatch('object_missing')
+  // Reject on the recorded object size before materializing any bytes, so a
+  // corrupt oversized object can never be pulled into Worker memory.
+  if (object.size !== args.expectedCiphertextByteLength) {
+    return artifactProofMismatch('ciphertext_byte_length_mismatch')
+  }
   let bytes: Uint8Array
   try {
     bytes = new Uint8Array(await object.arrayBuffer())

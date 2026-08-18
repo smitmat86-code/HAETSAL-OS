@@ -4,6 +4,11 @@ export const ARTIFACT_MAX_BYTES = 25 * 1024 * 1024
 // Worker memory ceiling; larger exact sets must use the bulk-import lane.
 export const ARTIFACT_MANIFEST_MAX_COUNT = 8
 export const ARTIFACT_MANIFEST_MAX_AGGREGATE_BYTES = 64 * 1024 * 1024
+// AES-GCM managed envelopes: five-byte family prefix + twelve-byte IV +
+// sixteen-byte authentication tag.
+export const ARTIFACT_CIPHERTEXT_ENVELOPE_OVERHEAD_BYTES = 33
+export const ARTIFACT_MAX_CIPHERTEXT_BYTES =
+  ARTIFACT_MAX_BYTES + ARTIFACT_CIPHERTEXT_ENVELOPE_OVERHEAD_BYTES
 export const TELEGRAM_ARTIFACT_MAX_BYTES = 20 * 1024 * 1024
 export const ARTIFACT_DOWNLOAD_TIMEOUT_MS = 20_000
 export const ARTIFACT_UPLOAD_EXPIRY_MS = 15 * 60 * 1000

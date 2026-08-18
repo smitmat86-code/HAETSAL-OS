@@ -946,6 +946,7 @@ describe('12.3 managed artifact intake lifecycle', () => {
       ...env,
       R2_ARTIFACTS: {
         get: async () => ({
+          size: ARTIFACT_MAX_BYTES,
           arrayBuffer: async () => {
             active += 1
             maximumActive = Math.max(maximumActive, active)

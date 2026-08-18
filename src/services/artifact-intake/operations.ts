@@ -7,6 +7,7 @@ import type {
 import {
   ARTIFACT_FINALIZATION_LEASE_MS,
   ARTIFACT_FINALIZATION_RECOVERY_MS,
+  ARTIFACT_MANIFEST_MAX_COUNT,
   ARTIFACT_MAX_BYTES,
   ARTIFACT_UPLOAD_ATTEMPT_LEASE_MS,
   ARTIFACT_UPLOAD_EXPIRY_MS,
@@ -384,10 +385,24 @@ export async function loadArtifactOperationsForFinalization(args: {
   finalizationId: string
   expectedOperationCount: number
 }, env: Env): Promise<ArtifactIntakeOperationRow[]> {
+  // Persisted or corrupt state must never drive unbounded D1 or proof work:
+  // the expected count is bounded by the documented manifest maximum and the
+  // query can never return more than one row past it.
+  if (
+    !Number.isInteger(args.expectedOperationCount) ||
+    args.expectedOperationCount < 1 ||
+    args.expectedOperationCount > ARTIFACT_MANIFEST_MAX_COUNT
+  ) {
+    throw new ArtifactIntakeContractError(ARTIFACT_INTAKE_ERROR.BULK_IMPORT_REQUIRED)
+  }
   const rows = await env.D1_US.prepare(
     `SELECT * FROM artifact_intake_operations
-     WHERE tenant_id = ? AND finalization_id = ? ORDER BY upload_id ASC`,
-  ).bind(args.tenantId, args.finalizationId).all<ArtifactIntakeOperationRow>()
+     WHERE tenant_id = ? AND finalization_id = ? ORDER BY upload_id ASC LIMIT ?`,
+  ).bind(args.tenantId, args.finalizationId, ARTIFACT_MANIFEST_MAX_COUNT + 1)
+    .all<ArtifactIntakeOperationRow>()
+  if (rows.results.length > args.expectedOperationCount) {
+    throw new ArtifactIntakeContractError(ARTIFACT_INTAKE_ERROR.BULK_IMPORT_REQUIRED)
+  }
   if (rows.results.length !== args.expectedOperationCount) {
     throw new ArtifactIntakeContractError(ARTIFACT_INTAKE_ERROR.INVALID_STATE)
   }

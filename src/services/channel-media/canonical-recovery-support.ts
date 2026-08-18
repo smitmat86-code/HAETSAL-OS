@@ -1,6 +1,7 @@
 import type { Env } from '../../types/env'
 import type { ChannelMediaJob } from '../../types/channel-media'
 import { ArtifactIntakeContractError, ARTIFACT_INTAKE_ERROR } from '../artifact-intake/contracts'
+import { ARTIFACT_MANIFEST_MAX_COUNT } from '../artifact-intake/config'
 import { sha256Text } from '../artifact-intake/crypto'
 import type { ArtifactFinalizationRow } from '../artifact-intake/finalize'
 import {
@@ -49,10 +50,13 @@ export async function loadChannelFinalizationOperations(
   env: Env,
 ): Promise<ArtifactIntakeOperationRow[] | null> {
   try {
+    // Bounded even against corrupt persisted state: never more than one row
+    // past the documented manifest maximum is materialized.
     const loaded = await env.D1_US.prepare(
       `SELECT * FROM artifact_intake_operations
-       WHERE tenant_id = ? AND finalization_id = ? ORDER BY upload_id ASC`,
-    ).bind(job.tenantId, finalization.id).all<ArtifactIntakeOperationRow>()
+       WHERE tenant_id = ? AND finalization_id = ? ORDER BY upload_id ASC LIMIT ?`,
+    ).bind(job.tenantId, finalization.id, ARTIFACT_MANIFEST_MAX_COUNT + 1)
+      .all<ArtifactIntakeOperationRow>()
     return loaded.results
   } catch {
     return null

@@ -1012,10 +1012,43 @@ describe('12.3 managed artifact intake lifecycle', () => {
       ).bind(captureId, documentId, canonicalOperationId, createdAt, TENANT_B, upload.sealed.uploadId),
     ])
     expect(await auditArtifactFinalizationMigrationOverlap({
-      migrationAppliedAt: start, workerDeployedAt: createdAt + 10,
+      migrationAppliedAt: start, boundary: { kind: 'audit_time', auditedAt: createdAt + 10 },
     }, env)).toMatchObject({
       affectedFinalizationCount: 1, zeroExpectedOperationCount: 1,
       missingManifestHashCount: 1, missingOperationBindingCount: 1,
     })
+  })
+
+  it('finds an old-version write that commits after the Worker deployment timestamp', async () => {
+    const tenant = `test-tenant-straggler-${SUITE_ID}`
+    await ensureTenant(tenant)
+    const migrationAppliedAt = Date.now() - 50
+    const workerDeployedAt = Date.now() - 20
+    // An isolate started before the route switch commits after deployment.
+    const stragglerCommittedAt = workerDeployedAt + 10
+    await env.D1_US.prepare(
+      `INSERT INTO artifact_intake_finalizations
+       (id, tenant_id, idempotency_hash, manifest_sha256, status, error_code,
+        canonical_capture_id, canonical_document_id, canonical_operation_id, created_at, updated_at)
+       VALUES (?, ?, ?, ?, 'reserved', NULL, ?, ?, ?, ?, ?)`,
+    ).bind(
+      crypto.randomUUID(), tenant, crypto.randomUUID(), crypto.randomUUID(),
+      crypto.randomUUID(), crypto.randomUUID(), crypto.randomUUID(),
+      stragglerCommittedAt, stragglerCommittedAt,
+    ).run()
+    // A deployment timestamp is not a drain boundary: bounded there, the
+    // straggler escapes. The durable contract audits through the audit time.
+    const boundedAtDeploy = await auditArtifactFinalizationMigrationOverlap({
+      migrationAppliedAt, boundary: { kind: 'verified_drain', drainVerifiedAt: workerDeployedAt },
+    }, env)
+    expect(boundedAtDeploy.affectedFinalizationCount).toBe(0)
+    const invariantWide = await auditArtifactFinalizationMigrationOverlap({
+      migrationAppliedAt, boundary: { kind: 'audit_time', auditedAt: Date.now() + 1 },
+    }, env)
+    expect(invariantWide.affectedFinalizationCount).toBeGreaterThanOrEqual(1)
+    expect(invariantWide.zeroExpectedOperationCount).toBeGreaterThanOrEqual(1)
+    await expect(auditArtifactFinalizationMigrationOverlap({
+      migrationAppliedAt, boundary: { kind: 'audit_time', auditedAt: migrationAppliedAt },
+    }, env)).rejects.toThrow('boundary invalid')
   })
 })

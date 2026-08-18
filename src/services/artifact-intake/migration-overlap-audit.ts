@@ -8,8 +8,20 @@ export interface ArtifactFinalizationOverlapAudit {
 }
 
 /**
+ * Durable audit upper boundary. A Worker deployment timestamp is NOT a drain
+ * boundary: an isolate or request started before the route switch can commit
+ * after that timestamp. Callers must either audit invariant-wide up to the
+ * moment the audit runs, or supply a boundary they have directly verified no
+ * old-version isolate could write past.
+ */
+export type ArtifactOverlapAuditBoundary =
+  | { kind: 'audit_time'; auditedAt: number }
+  | { kind: 'verified_drain'; drainVerifiedAt: number }
+
+/**
  * Content-free audit for the migration-1032/Worker-deployment overlap. The
- * caller supplies the directly verified migration and deployment boundaries.
+ * caller supplies the directly verified migration application time and an
+ * explicit upper boundary; see ArtifactOverlapAuditBoundary.
  */
 export const ARTIFACT_FINALIZATION_OVERLAP_AUDIT_SQL = `
   WITH interval_finalizations AS (
@@ -36,11 +48,17 @@ export const ARTIFACT_FINALIZATION_OVERLAP_AUDIT_SQL = `
 
 export async function auditArtifactFinalizationMigrationOverlap(args: {
   migrationAppliedAt: number
-  workerDeployedAt: number
+  boundary: ArtifactOverlapAuditBoundary
 }, env: Env): Promise<ArtifactFinalizationOverlapAudit> {
+  const upperBound = args.boundary.kind === 'audit_time'
+    ? args.boundary.auditedAt
+    : args.boundary.drainVerifiedAt
+  if (!Number.isFinite(upperBound) || upperBound <= args.migrationAppliedAt) {
+    throw new Error('artifact finalization overlap audit boundary invalid')
+  }
   const row = await env.D1_US.prepare(ARTIFACT_FINALIZATION_OVERLAP_AUDIT_SQL).bind(
-    args.migrationAppliedAt, args.workerDeployedAt,
-    args.migrationAppliedAt, args.workerDeployedAt,
+    args.migrationAppliedAt, upperBound,
+    args.migrationAppliedAt, upperBound,
   ).first<{
     affected_finalization_count: number | null
     zero_expected_operation_count: number | null

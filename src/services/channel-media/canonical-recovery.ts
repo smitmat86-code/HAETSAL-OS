@@ -96,7 +96,17 @@ export async function recoverFinalizedChannelMediaJob(
       status: 'failed',
       errorCode: finalization.error_code ?? ARTIFACT_INTAKE_ERROR.CANONICAL_WRITE_FAILED,
     }
-    if (proof.reason === 'canonical_record_missing') return { status: 'stably_absent' }
+    if (proof.reason === 'canonical_record_missing') {
+      // Inside the recovery window the reservation can still acquire a normal
+      // lease, so absence is retryable: data is preserved and the normal
+      // finalize path repairs it. Once the deadline expires, only the guarded
+      // failure below may run — its CAS requires no live lease — so the
+      // reservation never stays permanently bound and raw data is never
+      // released beneath a live canonical writer.
+      return recoveryDeadline > now
+        ? { status: 'stably_absent' }
+        : failStaleFinalization(finalization, env, now)
+    }
     return recoveryDeadline <= now
       ? failStaleFinalization(finalization, env, now)
       : { status: 'in_progress', retryAfterSeconds: channelMediaRetrySeconds(recoveryDeadline, now) }

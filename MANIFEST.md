@@ -12,7 +12,7 @@ Last updated: 2026-04-18 | Session: 7.1 (Hindsight Projection Adapter)
 
 <!-- AUTO-GENERATED MODULE REGISTRY - DO NOT EDIT -->
 
-*Auto-generated: 2026-08-18*
+*Auto-generated: 2026-08-19*
 
 ### src/
 
@@ -68,8 +68,9 @@ Last updated: 2026-04-18 | Session: 7.1 (Hindsight Projection Adapter)
 | src\services\agents\automation-chat.ts | 77 | AutomationChatRoute | ✅ |
 | src\services\agents\delegation.ts | 71 | DelegationDecision, decideDelegation, DelegationRoute | ✅ |
 | src\services\agents\router.ts | 50 | — | ✅ |
+| src\services\artifact-intake\attempt-orphans.ts | 150 | AttemptCleanupOutcome, AttemptSweepResult | ✅ |
 | src\services\artifact-intake\chatgpt-tool-contract.ts | 38 | CHATGPT_ARTIFACT_FILE_TOOL_CONTRACT | ✅ |
-| src\services\artifact-intake\config.ts | 81 | ARTIFACT_MAX_BYTES, ARTIFACT_MANIFEST_MAX_COUNT, ARTIFACT_MANIFEST_MAX_AGGREGATE_BYTES... | ✅ |
+| src\services\artifact-intake\config.ts | 87 | ARTIFACT_MAX_BYTES, ARTIFACT_MANIFEST_MAX_COUNT, ARTIFACT_MANIFEST_MAX_AGGREGATE_BYTES... | ✅ |
 | src\services\artifact-intake\contracts.ts | 135 | ARTIFACT_INTAKE_ERROR, ArtifactIntakeErrorCode, ArtifactIntakeContractError... | ✅ |
 | src\services\artifact-intake\crypto.ts | 108 | SealedArtifactBytes, detectArtifactEnvelopeFamily | ✅ |
 | src\services\artifact-intake\download-body.ts | 57 | — | ✅ |
@@ -88,19 +89,22 @@ Last updated: 2026-04-18 | Session: 7.1 (Hindsight Projection Adapter)
 | src\services\artifact-intake\manifest-identity.ts | 26 | ArtifactManifestIdentityItem | ✅ |
 | src\services\artifact-intake\migration-overlap-audit.ts | 76 | ArtifactFinalizationOverlapAudit, ArtifactOverlapAuditBoundary, ARTIFACT_FINALIZATION_OVERLAP_AUDIT_SQL | ✅ |
 | src\services\artifact-intake\mime.ts | 41 | detectArtifactMimeType | ✅ |
-| src\services\artifact-intake\operations.ts | 723 | ArtifactIntakeOperationRow | ⚠️ OVER LIMIT |
+| src\services\artifact-intake\operations.ts | 819 | ArtifactIntakeOperationRow | ⚠️ OVER LIMIT |
 | src\services\artifact-intake\proof-result.ts | 41 | ArtifactProofMismatchReason, ArtifactProofUnavailableReason, ArtifactProofResult... | ✅ |
-| src\services\artifact-intake\reaper.ts | 95 | ArtifactReaperResult | ✅ |
+| src\services\artifact-intake\reaper.ts | 101 | ArtifactReaperResult | ✅ |
 | src\services\artifact-intake\schemas.ts | 142 | reserveArtifactUploadSchema, openAIFileDescriptorSchema, telegramArtifactFileDescriptorSchema... | ✅ |
 | src\services\artifact-intake\stale-finalization-recovery.ts | 121 | — | ✅ |
 | src\services\artifact-intake\stale-finalization-support.ts | 56 | StaleArtifactFinalizationRecoveryResult, deferOrProtect | ✅ |
+| src\services\artifact-intake\storage-delete.ts | 50 | — | ✅ |
 | src\services\artifact-intake\storage-keys.ts | 42 | — | ✅ |
-| src\services\artifact-intake\storage.ts | 132 | ManagedArtifactCiphertextProof | ✅ |
+| src\services\artifact-intake\storage.ts | 130 | ManagedArtifactCiphertextProof | ✅ |
+| src\services\artifact-intake\upload-protocol.ts | 34 | ARTIFACT_UPLOAD_PROTOCOL_FENCED, ArtifactUploadProtocolPhase, artifactUploadProtocolPhase... | ✅ |
 | src\services\automations\nl-parse.ts | 88 | ParsedAutomation, parseAutomationIntent, AutomationCommand... | ✅ |
 | src\services\automations\recurrence.ts | 84 | RecurrenceKind, RecurrenceSpec, DEFAULT_TZ... | ✅ |
 | src\services\bootstrap\historical-import.ts | 140 | historicalSalienceMultiplier | ✅ |
 | src\services\bootstrap\interview.ts | 76 | createInitialState, currentQuestion, currentDomain... | ✅ |
 | src\services\canary\sweep.ts | 104 | CanaryResult | ✅ |
+| src\services\canonical-artifact-manifest.ts | 45 | CanonicalArtifactManifestEntryShape, assertCanonicalArtifactManifestShape | ✅ |
 | src\services\canonical-broker-shadow.ts | 122 | summaryOf, statusOf, traceOf... | ✅ |
 | src\services\canonical-broker-trace-read.ts | 63 | — | ✅ |
 | src\services\canonical-broker-trace-view.ts | 139 | CanonicalBrokerTraceRow, BROKER_TRACE_SELECT, viewFromRow... | ✅ |
@@ -126,10 +130,10 @@ Last updated: 2026-04-18 | Session: 7.1 (Hindsight Projection Adapter)
 | src\services\canonical-memory-schema.ts | 88 | CANONICAL_PROJECTION_KINDS, resolveCanonicalProjectionKinds, normalizeCanonicalBody... | ✅ |
 | src\services\canonical-memory-stats.ts | 39 | — | ✅ |
 | src\services\canonical-memory-status.ts | 74 | — | ✅ |
-| src\services\canonical-memory-types.ts | 79 | CanonicalChunkPlan, CanonicalArtifactPlan, NormalizedCanonicalCapture... | ✅ |
+| src\services\canonical-memory-types.ts | 73 | CanonicalChunkPlan, CanonicalArtifactPlan, NormalizedCanonicalCapture... | ✅ |
 | src\services\canonical-memory.ts | 231 | — | ⚠️ OVER LIMIT |
 | src\services\canonical-postgres-base-ddl.ts | 133 | CANONICAL_BASE_DDL | ✅ |
-| src\services\canonical-postgres-repository.ts | 1065 | CanonicalMemoryStore, InMemoryCanonicalMemoryStore, PostgresCanonicalMemoryStore | ⚠️ OVER LIMIT |
+| src\services\canonical-postgres-repository.ts | 1062 | CanonicalMemoryStore, InMemoryCanonicalMemoryStore, PostgresCanonicalMemoryStore | ⚠️ OVER LIMIT |
 | src\services\canonical-postgres-schema.ts | 299 | CanonicalGraphIdentityKind, CanonicalGraphIdentityMapping, CANONICAL_POSTGRES_SCHEMA... | ⚠️ OVER LIMIT |
 | src\services\canonical-postgres.ts | 34 | installCanonicalMemoryStore, installCanonicalMemoryTestStore, getCanonicalMemoryStore | ✅ |
 | src\services\canonical-projection-dispatch.ts | 51 | — | ✅ |
@@ -146,7 +150,7 @@ Last updated: 2026-04-18 | Session: 7.1 (Hindsight Projection Adapter)
 | src\services\channel-media\finalize-job.ts | 150 | channelMediaSearchableBody | ✅ |
 | src\services\channel-media\handoff.ts | 65 | — | ✅ |
 | src\services\channel-media\intake.ts | 32 | — | ✅ |
-| src\services\channel-media\job-transitions.ts | 101 | — | ✅ |
+| src\services\channel-media\job-transitions.ts | 106 | — | ✅ |
 | src\services\channel-media\jobs.ts | 122 | — | ✅ |
 | src\services\channel-media\orchestrator-recovery.ts | 91 | ChannelMediaRecoveryGate | ✅ |
 | src\services\channel-media\orchestrator-support.ts | 131 | ChannelMediaOrchestratorDependencies, ProcessChannelMediaJobArgs, ChannelMediaProcessResult... | ✅ |
@@ -286,7 +290,7 @@ Last updated: 2026-04-18 | Session: 7.1 (Hindsight Projection Adapter)
 | src\types\channel-media.ts | 58 | ChannelMediaProvider, ChannelMediaJobStatus, ChannelMediaDeliveryStatus... | ✅ |
 | src\types\chief-of-staff-context.ts | 81 | ContextBundleIntent, ContextConfidenceLevel, PrepareContextForAgentInput... | ✅ |
 | src\types\cloudflare-env.generated.d.ts | 51 | — | ✅ |
-| src\types\env.ts | 34 | Env | ✅ |
+| src\types\env.ts | 39 | Env | ✅ |
 | src\types\external-brain.ts | 89 | BrainSurfaceId, BrainSurfaceStatus, BrainRiskLevel... | ✅ |
 | src\types\external-client-memory.ts | 73 | ExternalClientCaptureMode, BrainMemorySurfaceProfile, ExternalClientCaptureInput... | ✅ |
 | src\types\google-source-read.ts | 29 | GoogleSourceKind, GoogleSourceRef, GoogleSourceReadAttribution... | ✅ |

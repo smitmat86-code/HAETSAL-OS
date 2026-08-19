@@ -30,4 +30,9 @@ export interface Env extends Cloudflare.Env {
 
   // Optional local/runtime configuration not emitted by wrangler types.
   CANONICAL_MEMORY_SHADOW_WRITES?: string
+
+  // Artifact upload ownership rollout phase ("compat" | "active"); see
+  // migration 1033 and src/services/artifact-intake/upload-protocol.ts.
+  // Unset defaults to "compat".
+  ARTIFACT_UPLOAD_PROTOCOL_PHASE?: string
 }

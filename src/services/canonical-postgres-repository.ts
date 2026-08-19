@@ -1,4 +1,5 @@
 import { CANONICAL_POSTGRES_SCHEMA } from './canonical-postgres-schema'
+import { assertCanonicalArtifactManifestShape } from './canonical-artifact-manifest'
 import { CANONICAL_BASE_DDL } from './canonical-postgres-base-ddl'
 import { CANONICAL_GOVERNANCE_DDL } from './canonical-governance-ddl'
 import type { PostgresSql } from './postgres-sql'
@@ -141,10 +142,6 @@ function assertValidCanonicalCaptureWrite(input: CanonicalCaptureWrite): void {
   if (input.capture.artifact_id && !ids.has(input.capture.artifact_id)) {
     throw new Error('Canonical primary artifact is absent from manifest')
   }
-  if (input.artifacts.filter(artifact => artifact.role === 'source').length > 1) {
-    throw new Error('Canonical artifact manifest has multiple sources')
-  }
-  const ordinalById = new Map(input.artifacts.map(artifact => [artifact.id, artifact.ordinal]))
   if (new Set(input.artifacts.map(artifact => artifact.ordinal)).size !== input.artifacts.length) {
     throw new Error('Canonical artifact manifest has duplicate ordinals')
   }
@@ -152,16 +149,16 @@ function assertValidCanonicalCaptureWrite(input: CanonicalCaptureWrite): void {
     if (artifact.tenant_id !== input.capture.tenant_id || artifact.capture_id !== input.capture.id) {
       throw new Error('Canonical artifact tenant/capture mismatch')
     }
-    if (artifact.parent_artifact_id && !ids.has(artifact.parent_artifact_id)) {
-      throw new Error('Canonical artifact parent is absent from manifest')
-    }
-    if (artifact.parent_artifact_id && (ordinalById.get(artifact.parent_artifact_id) ?? artifact.ordinal) >= artifact.ordinal) {
-      throw new Error('Canonical artifact parent must precede its derivative')
-    }
-    if (artifact.role === 'source' && artifact.parent_artifact_id) {
-      throw new Error('Canonical source artifact cannot have a parent')
-    }
   }
+  // Shared structural contract with capture normalization and the
+  // artifact-intake finalization schema (canonical-artifact-manifest.ts).
+  const ordered = [...input.artifacts].sort((first, second) => first.ordinal - second.ordinal)
+  assertCanonicalArtifactManifestShape(ordered.map(artifact => ({
+    id: artifact.id,
+    role: artifact.role,
+    parentId: artifact.parent_artifact_id,
+    primary: artifact.id === input.capture.artifact_id,
+  })))
 }
 
 const NUMERIC_DB_FIELDS = new Set([

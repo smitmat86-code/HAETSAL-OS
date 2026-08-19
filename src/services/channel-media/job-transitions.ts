@@ -71,20 +71,25 @@ export async function repairChannelMediaFinalized(args: {
 }
 
 /**
- * Records an authoritative artifact integrity incident without touching
- * capture or delivery truth: status, delivery_status, and error_code are
- * preserved exactly. delivery_unknown remains reserved for genuine provider
- * ambiguity, where a provider call may have occurred but its outcome cannot
- * be determined.
+ * Records an authoritative artifact integrity incident fully orthogonally to
+ * capture and delivery truth: status, delivery_status, error_code,
+ * lease_token, lease_expires_at, and updated_at are all preserved exactly, so
+ * a live processing or delivery claim can still finish and the updated_at
+ * delivery-ambiguity boundary is never disturbed. The audit timestamp lives
+ * in integrity_recorded_at and is first-writer-wins, so repeated recording is
+ * idempotent. Returns whether the job row was found and now carries the
+ * incident.
  */
 export async function markChannelMediaIntegrityIncident(
   tenantId: string, operationId: string, env: Env,
-): Promise<void> {
-  await env.D1_US.prepare(
-    `UPDATE channel_media_jobs SET integrity_status = 'artifact_integrity_incident',
-     lease_token = NULL, lease_expires_at = NULL, updated_at = ?
+): Promise<boolean> {
+  const result = await env.D1_US.prepare(
+    `UPDATE channel_media_jobs
+     SET integrity_status = 'artifact_integrity_incident',
+         integrity_recorded_at = COALESCE(integrity_recorded_at, ?)
      WHERE tenant_id = ? AND id = ?`,
   ).bind(Date.now(), tenantId, operationId).run()
+  return Number(result.meta.changes ?? 0) === 1
 }
 
 export async function markChannelMediaFailed(

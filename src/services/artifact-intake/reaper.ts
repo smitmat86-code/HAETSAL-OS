@@ -1,4 +1,5 @@
 import type { Env } from '../../types/env'
+import { sweepAbandonedArtifactUploadAttempts } from './attempt-orphans'
 import { ARTIFACT_EXPIRY_CLAIM_LEASE_MS } from './config'
 import type { ArtifactIntakeOperationRow } from './operations'
 import { recoverOrFailStaleArtifactFinalizations } from './stale-finalization-recovery'
@@ -11,6 +12,7 @@ export interface ArtifactReaperResult {
   failed: number
   deferred: number
   integrityIncidents: number
+  orphanAttemptsDeleted: number
 }
 
 export async function reapExpiredArtifactUploads(
@@ -25,7 +27,10 @@ export async function reapExpiredArtifactUploads(
     failed: 0,
     deferred: 0,
     integrityIncidents: 0,
+    orphanAttemptsDeleted: 0,
   }
+  const orphanSweep = await sweepAbandonedArtifactUploadAttempts(env, now, limit)
+  result.orphanAttemptsDeleted += orphanSweep.deleted
   const stale = await recoverOrFailStaleArtifactFinalizations(env, now, limit)
   result.failed += stale.failed
   result.repairedFinalized += stale.repairedFinalized
@@ -73,6 +78,7 @@ export async function reapExpiredArtifactUploads(
         recordedKey: row.r2_key,
         adoptedAttemptToken: row.adopted_attempt_token,
         expectedCiphertextSha256: row.ciphertext_sha256,
+        expectedCiphertextByteLength: row.ciphertext_byte_length,
       })
       // Canonical document bodies are never deleted here: an expired artifact
       // operation's stale canonical pointer is not proof the body is orphaned.

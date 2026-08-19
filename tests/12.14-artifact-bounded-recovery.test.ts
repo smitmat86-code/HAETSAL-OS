@@ -80,6 +80,7 @@ function operationRow(overrides: Partial<ArtifactIntakeOperationRow>): ArtifactI
     finalization_id: 'finalization-id', finalization_protected_until: null,
     expiry_claim_token: null, expiry_claim_expires_at: null,
     upload_attempt_token: null, upload_attempt_expires_at: null, adopted_attempt_token: null,
+    upload_protocol: null,
     canonical_capture_id: 'capture-id', canonical_document_id: 'document-id',
     canonical_operation_id: 'operation-id',
     created_at: 1, updated_at: 1, expires_at: Date.now() + 60_000,

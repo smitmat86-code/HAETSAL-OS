@@ -15,6 +15,11 @@ export const ARTIFACT_UPLOAD_EXPIRY_MS = 15 * 60 * 1000
 // Bounds how long one upload attempt owns the operation. An attempt that
 // outlives its lease can never adopt: adoption CAS re-checks the lease.
 export const ARTIFACT_UPLOAD_ATTEMPT_LEASE_MS = 2 * 60 * 1000
+// A stale writer's R2 put can land at most one full Worker request lifetime
+// after its attempt lease lapsed. Orphan sweeping waits out the lease plus
+// this grace window, so it can never delete an attempt that could still be
+// writing and can safely retire journal rows whose put never landed.
+export const ARTIFACT_UPLOAD_ATTEMPT_ORPHAN_GRACE_MS = 15 * 60 * 1000
 export const ARTIFACT_FINALIZATION_LEASE_MS = 2 * 60 * 1000
 export const ARTIFACT_FINALIZATION_RECOVERY_MS = 30 * 60 * 1000
 export const ARTIFACT_EXPIRY_CLAIM_LEASE_MS = 2 * 60 * 1000
@@ -58,6 +63,7 @@ export const ARTIFACT_INTAKE_CONFIG = Object.freeze({
   }),
   uploadExpiryMs: ARTIFACT_UPLOAD_EXPIRY_MS,
   uploadAttemptLeaseMs: ARTIFACT_UPLOAD_ATTEMPT_LEASE_MS,
+  uploadAttemptOrphanGraceMs: ARTIFACT_UPLOAD_ATTEMPT_ORPHAN_GRACE_MS,
   finalization: Object.freeze({
     leaseMs: ARTIFACT_FINALIZATION_LEASE_MS,
     recoveryMs: ARTIFACT_FINALIZATION_RECOVERY_MS,

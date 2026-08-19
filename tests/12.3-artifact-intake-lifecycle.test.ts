@@ -938,6 +938,7 @@ describe('12.3 managed artifact intake lifecycle', () => {
       finalization_id: finalizationId, finalization_protected_until: null,
       expiry_claim_token: null, expiry_claim_expires_at: null,
       upload_attempt_token: null, upload_attempt_expires_at: null, adopted_attempt_token: null,
+      upload_protocol: null,
       canonical_capture_id: captureId,
       canonical_document_id: documentId, canonical_operation_id: operationId,
       created_at: 1, updated_at: 1, expires_at: 1,
@@ -1025,10 +1026,23 @@ describe('12.3 managed artifact intake lifecycle', () => {
   it('finds an old-version write that commits after the Worker deployment timestamp', async () => {
     const tenant = `test-tenant-straggler-${SUITE_ID}`
     await ensureTenant(tenant)
-    const migrationAppliedAt = Date.now() - 50
-    const workerDeployedAt = Date.now() - 20
-    // An isolate started before the route switch commits after deployment.
+    // Deterministic ancient interval: every other fixture in this suite
+    // timestamps rows near Date.now(), so nothing else can fall inside this
+    // window and the assertions stay exact without weakening the
+    // intentionally tenant-global production audit SQL. Baselines captured
+    // before the insert additionally cancel any unrelated rows, so both the
+    // exclusion and the inclusion below are proven as exact deltas.
+    const migrationAppliedAt = 1_000_000
+    const workerDeployedAt = migrationAppliedAt + 30
     const stragglerCommittedAt = workerDeployedAt + 10
+    const auditUpperBound = workerDeployedAt + 1_000
+    const boundedBefore = await auditArtifactFinalizationMigrationOverlap({
+      migrationAppliedAt, boundary: { kind: 'verified_drain', drainVerifiedAt: workerDeployedAt },
+    }, env)
+    const invariantBefore = await auditArtifactFinalizationMigrationOverlap({
+      migrationAppliedAt, boundary: { kind: 'audit_time', auditedAt: auditUpperBound },
+    }, env)
+    // An isolate started before the route switch commits after deployment.
     await env.D1_US.prepare(
       `INSERT INTO artifact_intake_finalizations
        (id, tenant_id, idempotency_hash, manifest_sha256, status, error_code,
@@ -1044,12 +1058,19 @@ describe('12.3 managed artifact intake lifecycle', () => {
     const boundedAtDeploy = await auditArtifactFinalizationMigrationOverlap({
       migrationAppliedAt, boundary: { kind: 'verified_drain', drainVerifiedAt: workerDeployedAt },
     }, env)
+    expect(boundedAtDeploy).toEqual(boundedBefore)
     expect(boundedAtDeploy.affectedFinalizationCount).toBe(0)
     const invariantWide = await auditArtifactFinalizationMigrationOverlap({
-      migrationAppliedAt, boundary: { kind: 'audit_time', auditedAt: Date.now() + 1 },
+      migrationAppliedAt, boundary: { kind: 'audit_time', auditedAt: auditUpperBound },
     }, env)
-    expect(invariantWide.affectedFinalizationCount).toBeGreaterThanOrEqual(1)
-    expect(invariantWide.zeroExpectedOperationCount).toBeGreaterThanOrEqual(1)
+    expect(invariantWide.affectedFinalizationCount)
+      .toBe(invariantBefore.affectedFinalizationCount + 1)
+    expect(invariantWide.zeroExpectedOperationCount)
+      .toBe(invariantBefore.zeroExpectedOperationCount + 1)
+    expect(invariantWide.missingManifestHashCount)
+      .toBe(invariantBefore.missingManifestHashCount + 1)
+    expect(invariantWide.missingOperationBindingCount)
+      .toBe(invariantBefore.missingOperationBindingCount)
     await expect(auditArtifactFinalizationMigrationOverlap({
       migrationAppliedAt, boundary: { kind: 'audit_time', auditedAt: migrationAppliedAt },
     }, env)).rejects.toThrow('boundary invalid')

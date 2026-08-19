@@ -5,6 +5,7 @@ import type {
   ArtifactUploadState,
 } from '../../types/artifact-intake'
 import {
+  ARTIFACT_CIPHERTEXT_ENVELOPE_OVERHEAD_BYTES,
   ARTIFACT_FINALIZATION_LEASE_MS,
   ARTIFACT_FINALIZATION_RECOVERY_MS,
   ARTIFACT_MANIFEST_MAX_COUNT,
@@ -19,12 +20,19 @@ import {
 } from './contracts'
 import { sealArtifactBytes, sha256Bytes, sha256Text, unsealArtifactBytes } from './crypto'
 import {
+  cleanupLosingUploadAttempt,
+  clearUploadAttemptIntent,
+  recordUploadAttemptIntent,
+} from './attempt-orphans'
+import {
   managedArtifactAttemptR2Key,
   managedArtifactExists,
   managedArtifactR2Key,
+  proveManagedArtifactCiphertext,
   putManagedArtifactCiphertext,
   readManagedArtifactCiphertext,
 } from './storage'
+import { isFencedUploadProtocol, reservedUploadProtocol } from './upload-protocol'
 
 export interface ArtifactIntakeOperationRow {
   id: string
@@ -49,6 +57,7 @@ export interface ArtifactIntakeOperationRow {
   upload_attempt_token: string | null
   upload_attempt_expires_at: number | null
   adopted_attempt_token: string | null
+  upload_protocol: string | null
   canonical_capture_id: string | null
   canonical_document_id: string | null
   canonical_operation_id: string | null
@@ -134,8 +143,8 @@ export async function reserveArtifactUpload(args: {
      (id, tenant_id, upload_id, idempotency_hash, status, error_code, artifact_id, r2_key,
       declared_mime_category, detected_mime_category, byte_length, plaintext_sha256,
       ciphertext_sha256, encryption_family, canonical_capture_id, canonical_document_id,
-      canonical_operation_id, created_at, updated_at, expires_at)
-     VALUES (?, ?, ?, ?, 'reserved', NULL, ?, ?, ?, NULL, ?, ?, NULL, NULL, NULL, NULL, NULL, ?, ?, ?)`,
+      canonical_operation_id, upload_protocol, created_at, updated_at, expires_at)
+     VALUES (?, ?, ?, ?, 'reserved', NULL, ?, ?, ?, NULL, ?, ?, NULL, NULL, NULL, NULL, NULL, ?, ?, ?, ?)`,
   ).bind(
     operationId,
     args.tenantId,
@@ -146,6 +155,7 @@ export async function reserveArtifactUpload(args: {
     mimeCategory(args.declaredMimeType),
     args.byteLength,
     args.plaintextSha256.toLowerCase(),
+    reservedUploadProtocol(env),
     now,
     now,
     now + ARTIFACT_UPLOAD_EXPIRY_MS,
@@ -168,22 +178,28 @@ export async function getArtifactIntakeStatus(args: {
 }
 
 /**
- * Attempt-fenced failure. Only the live attempt owner may record failure, and
- * a sealed, finalized, bound, or expiry-claimed operation is never downgraded.
+ * Attempt-fenced failure. Only the exact live attempt owner of an unexpired,
+ * unclaimed, unbound reserved/failed operation may record failure. Exactly
+ * one row must change; a stale writer is told it lost ownership and must not
+ * report that it changed state.
  */
-async function markUploadFailed(
+export async function markUploadFailed(
   env: Env,
   row: ArtifactIntakeOperationRow,
   attemptToken: string,
   errorCode: string,
-): Promise<void> {
-  await env.D1_US.prepare(
+): Promise<'failed_recorded' | 'ownership_lost'> {
+  const now = Date.now()
+  const result = await env.D1_US.prepare(
     `UPDATE artifact_intake_operations
      SET status = 'failed', error_code = ?, upload_attempt_token = NULL,
          upload_attempt_expires_at = NULL, updated_at = ?
      WHERE tenant_id = ? AND upload_id = ? AND status IN ('reserved', 'failed')
-       AND upload_attempt_token = ? AND expiry_claim_token IS NULL AND finalization_id IS NULL`,
-  ).bind(errorCode, Date.now(), row.tenant_id, row.upload_id, attemptToken).run()
+       AND upload_attempt_token = ? AND upload_attempt_expires_at > ?
+       AND expires_at > ?
+       AND expiry_claim_token IS NULL AND finalization_id IS NULL`,
+  ).bind(errorCode, now, row.tenant_id, row.upload_id, attemptToken, now, now).run()
+  return changed(result) === 1 ? 'failed_recorded' : 'ownership_lost'
 }
 
 interface AdoptCiphertextArgs {
@@ -223,7 +239,14 @@ async function adoptUploadedCiphertext(args: AdoptCiphertextArgs): Promise<boole
   return changed(result) === 1
 }
 
-/** Verifies an idempotent replay against the adopted ciphertext, mutating nothing. */
+/**
+ * Verifies an idempotent replay or an adoption-loss acknowledgement against
+ * the exact adopted identity, mutating nothing. A receipt is returned only
+ * after the recorded key is re-derived from the operation's adopted/legacy
+ * identity and the object's existence, size, and ciphertext hash are proven.
+ * An authoritative mismatch never returns success; indeterminate proof fails
+ * safely without changing state so the caller may retry.
+ */
 async function verifySealedReplay(
   row: ArtifactIntakeOperationRow,
   plaintextHash: string,
@@ -232,11 +255,21 @@ async function verifySealedReplay(
   if (plaintextHash !== row.plaintext_sha256 || !row.ciphertext_sha256) {
     throw new ArtifactIntakeContractError(ARTIFACT_INTAKE_ERROR.HASH_MISMATCH)
   }
-  const existing = await readManagedArtifactCiphertext(env, row.r2_key)
-  if (!existing || await sha256Bytes(existing) !== row.ciphertext_sha256) {
-    throw new ArtifactIntakeContractError(ARTIFACT_INTAKE_ERROR.INVALID_STATE)
-  }
-  return toReceipt(row)
+  const proof = await proveManagedArtifactCiphertext({
+    env,
+    tenantId: row.tenant_id,
+    uploadId: row.upload_id,
+    recordedKey: row.r2_key,
+    adoptedAttemptToken: row.adopted_attempt_token,
+    expectedCiphertextByteLength: Number(row.ciphertext_byte_length),
+    expectedCiphertextSha256: row.ciphertext_sha256,
+  })
+  if (proof.status === 'verified') return toReceipt(row)
+  throw new ArtifactIntakeContractError(
+    proof.status === 'authoritative_mismatch'
+      ? ARTIFACT_INTAKE_ERROR.CIPHERTEXT_INVALID
+      : ARTIFACT_INTAKE_ERROR.INVALID_STATE,
+  )
 }
 
 async function claimUploadAttempt(
@@ -269,9 +302,16 @@ async function recoverExistingCiphertext(args: {
   env: Env
   detectedMimeType: string
 }): Promise<ArtifactUploadReceipt | null> {
-  const existing = await readManagedArtifactCiphertext(args.env, args.row.r2_key)
-  if (!existing) return null
   try {
+    // The legacy per-upload object, if genuine, is exactly this operation's
+    // recorded plaintext length plus the sealed-envelope overhead; anything
+    // else is rejected before a single body byte is materialized.
+    const existing = await readManagedArtifactCiphertext(
+      args.env,
+      args.row.r2_key,
+      Number(args.row.byte_length) + ARTIFACT_CIPHERTEXT_ENVELOPE_OVERHEAD_BYTES,
+    )
+    if (!existing) return null
     const plaintext = await unsealArtifactBytes(existing, args.key, args.family)
     if (await sha256Bytes(plaintext) !== args.plaintextHash) {
       throw new ArtifactIntakeContractError(ARTIFACT_INTAKE_ERROR.HASH_MISMATCH)
@@ -339,33 +379,89 @@ export async function uploadArtifactBytes(args: {
     if (recovered) return recovered
   }
 
+  // Legacy rows keep writing the legacy per-upload key so an overlapping
+  // pre-ownership Worker and this Worker always agree on one object per
+  // operation. Attempt keys are enabled only on rows reserved under the
+  // activated protocol, which no old writer can ever hold (migration 1033).
+  const fenced = isFencedUploadProtocol(row.upload_protocol)
   const sealed = await sealArtifactBytes(args.bytes, args.key, args.encryptionFamily)
-  const attemptKey = await managedArtifactAttemptR2Key(args.tenantId, args.uploadId, attemptToken)
+  const targetKey = fenced
+    ? await managedArtifactAttemptR2Key(args.tenantId, args.uploadId, attemptToken)
+    : row.r2_key
+  if (fenced) {
+    const now = Date.now()
+    await recordUploadAttemptIntent(env, {
+      tenantId: args.tenantId, uploadId: args.uploadId, attemptToken,
+      leaseExpiresAt: now + ARTIFACT_UPLOAD_ATTEMPT_LEASE_MS, now,
+    })
+  }
   try {
-    // Each attempt writes only its own immutable key; adopted objects are
-    // never overwritten by any later or slower writer.
-    await putManagedArtifactCiphertext(env, attemptKey, sealed.envelope)
+    // Each fenced attempt writes only its own immutable key; adopted objects
+    // are never overwritten by any later or slower writer.
+    await putManagedArtifactCiphertext(env, targetKey, sealed.envelope)
   } catch {
     await markUploadFailed(env, row, attemptToken, ARTIFACT_INTAKE_ERROR.STORAGE_WRITE_FAILED)
       .catch(() => undefined)
     throw new ArtifactIntakeContractError(ARTIFACT_INTAKE_ERROR.STORAGE_WRITE_FAILED)
   }
-  const adopted = await adoptUploadedCiphertext({
-    row, env, attemptToken, detectedMimeType: args.detectedMimeType,
-    family: args.encryptionFamily, ciphertextSha256: sealed.ciphertextSha256,
-    ciphertextByteLength: sealed.envelope.byteLength, adoptedKey: attemptKey,
-  })
+  let adopted: boolean
+  try {
+    adopted = await adoptUploadedCiphertext({
+      row, env, attemptToken, detectedMimeType: args.detectedMimeType,
+      family: args.encryptionFamily, ciphertextSha256: sealed.ciphertextSha256,
+      ciphertextByteLength: sealed.envelope.byteLength,
+      adoptedKey: fenced ? targetKey : null,
+    })
+  } catch (error) {
+    // The adoption response is ambiguous: it may or may not have committed.
+    // Cleanup deletes this attempt's unique object only when authoritative D1
+    // state proves the attempt was decided against; on any uncertainty the
+    // object and its journal row stay for the crash-safe sweeper.
+    if (fenced) {
+      const outcome = await cleanupLosingUploadAttempt(env, {
+        tenantId: args.tenantId, uploadId: args.uploadId, attemptToken, mode: 'ambiguous',
+      })
+      if (outcome === 'kept_adopted') {
+        return acknowledgeAdoptedOperation(env, args.tenantId, args.uploadId, plaintextHash)
+      }
+    }
+    throw error
+  }
   if (adopted) {
+    if (fenced) {
+      await clearUploadAttemptIntent(env, args.tenantId, args.uploadId, attemptToken)
+        .catch(() => undefined)
+    }
     return getArtifactIntakeStatus({ tenantId: args.tenantId, uploadId: args.uploadId }, env)
   }
-  // Adoption lost: this attempt is stale or raced. Its orphan attempt object
-  // is left for a separately fenced cleanup and can never become canonical.
-  const current = await getArtifactIntakeOperation(env, args.tenantId, args.uploadId)
-  if (current && (current.status === 'sealed' || current.status === 'finalized') &&
-      current.plaintext_sha256 === plaintextHash) {
-    return toReceipt(current)
+  // Adoption definitively lost: this attempt's object can never become
+  // canonical, so its unique key is deleted immediately, and the winner is
+  // acknowledged only after exact proof of the adopted identity.
+  if (fenced) {
+    await cleanupLosingUploadAttempt(env, {
+      tenantId: args.tenantId, uploadId: args.uploadId, attemptToken, mode: 'lost',
+    })
   }
-  throw new ArtifactIntakeContractError(ARTIFACT_INTAKE_ERROR.INVALID_STATE)
+  return acknowledgeAdoptedOperation(env, args.tenantId, args.uploadId, plaintextHash)
+}
+
+/**
+ * Post-loss acknowledgement. Success requires rereading the operation and
+ * proving its recorded key, adopted token, object existence, ciphertext size,
+ * and ciphertext hash; an authoritative mismatch or indeterminate proof never
+ * acknowledges and never mutates state (see verifySealedReplay).
+ */
+async function acknowledgeAdoptedOperation(
+  env: Env,
+  tenantId: string,
+  uploadId: string,
+  plaintextHash: string,
+): Promise<ArtifactUploadReceipt> {
+  const current = await getArtifactIntakeOperation(env, tenantId, uploadId)
+  if (!current || (current.status !== 'sealed' && current.status !== 'finalized')) {
+    throw new ArtifactIntakeContractError(ARTIFACT_INTAKE_ERROR.INVALID_STATE)
+  }
+  return verifySealedReplay(current, plaintextHash, env)
 }
 
 function uniqueUploadIds(uploadIds: string[]): string[] {

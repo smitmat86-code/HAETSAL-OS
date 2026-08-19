@@ -20,6 +20,7 @@ export {
   managedArtifactAttemptR2Key,
   managedArtifactR2Key,
 } from './storage-keys'
+export { deleteProvenManagedArtifact } from './storage-delete'
 
 export async function putManagedArtifactCiphertext(
   env: Env,
@@ -29,9 +30,30 @@ export async function putManagedArtifactCiphertext(
   await env.R2_ARTIFACTS.put(key, ciphertext)
 }
 
-export async function readManagedArtifactCiphertext(env: Env, key: string): Promise<Uint8Array | null> {
+/**
+ * Bounded ciphertext read: the caller must supply the exact expected byte
+ * length, and no object is ever materialized before its recorded size is
+ * proven. Size mismatch is an authoritative integrity error; R2 read errors
+ * propagate unchanged so callers can distinguish unavailability.
+ */
+export async function readManagedArtifactCiphertext(
+  env: Env,
+  key: string,
+  expectedByteLength: number,
+): Promise<Uint8Array | null> {
+  if (
+    !Number.isInteger(expectedByteLength) ||
+    expectedByteLength <= 0 ||
+    expectedByteLength > ARTIFACT_MAX_CIPHERTEXT_BYTES
+  ) {
+    throw new ArtifactIntakeContractError(ARTIFACT_INTAKE_ERROR.INVALID_STATE)
+  }
   const object = await env.R2_ARTIFACTS.get(key)
-  return object ? new Uint8Array(await object.arrayBuffer()) : null
+  if (!object) return null
+  if (object.size !== expectedByteLength) {
+    throw new ArtifactIntakeContractError(ARTIFACT_INTAKE_ERROR.CIPHERTEXT_INVALID)
+  }
+  return new Uint8Array(await object.arrayBuffer())
 }
 
 export async function managedArtifactExists(env: Env, key: string): Promise<boolean> {
@@ -104,28 +126,4 @@ export async function proveManagedArtifactCiphertext(args: {
     return artifactProofMismatch('ciphertext_hash_mismatch')
   }
   return verifiedArtifactProof({ key: expectedKey, byteLength: bytes.byteLength, ciphertextSha256 })
-}
-
-export async function deleteProvenManagedArtifact(args: {
-  env: Env
-  tenantId: string
-  uploadId: string
-  recordedKey: string
-  adoptedAttemptToken?: string | null
-  expectedCiphertextSha256?: string | null
-}): Promise<boolean> {
-  const expectedKey = await expectedManagedArtifactKey(args.tenantId, args.uploadId, args.adoptedAttemptToken)
-  if (args.recordedKey !== expectedKey) {
-    throw new ArtifactIntakeContractError(ARTIFACT_INTAKE_ERROR.INVALID_STATE)
-  }
-  const object = await args.env.R2_ARTIFACTS.get(expectedKey)
-  if (!object) return false
-  if (args.expectedCiphertextSha256) {
-    const actualHash = await sha256Bytes(await object.arrayBuffer())
-    if (actualHash !== args.expectedCiphertextSha256) {
-      throw new ArtifactIntakeContractError(ARTIFACT_INTAKE_ERROR.HASH_MISMATCH)
-    }
-  }
-  await args.env.R2_ARTIFACTS.delete(expectedKey)
-  return true
 }

@@ -111,7 +111,8 @@ describe('12.12 fenced artifact upload ownership', () => {
     expect(adopted?.r2_key.endsWith(`/${adopted?.adopted_attempt_token}.enc`)).toBe(true)
 
     // The stale writer resumes: it may only write its own immutable attempt
-    // key, its adoption loses, and the idempotent replay reports the winner.
+    // key, its adoption loses, and it acknowledges the winner only after
+    // exact proof of the adopted key, token, object, size, and hash.
     gate.release.resolve()
     const staleReceipt = await stale
     expect(staleReceipt.ciphertextSha256).toBe(adopted!.ciphertext_sha256)
@@ -127,12 +128,10 @@ describe('12.12 fenced artifact upload ownership', () => {
     expect(object).not.toBeNull()
     expect(await sha256Bytes(new Uint8Array(await object!.arrayBuffer())))
       .toBe(final!.ciphertext_sha256)
-    // Both attempts produced objects; exactly one is adopted, the loser is a
-    // never-canonical orphan at a different immutable key.
+    // Exactly one adopted object survives: the loser proved it was not
+    // adopted and deleted its own never-canonical orphan immediately.
     const keys = await attemptObjectKeys(final!)
-    expect(keys).toHaveLength(2)
-    expect(keys).toContain(final!.r2_key)
-    expect(keys.filter((key) => key !== final!.r2_key)).toHaveLength(1)
+    expect(keys).toEqual([final!.r2_key])
   })
 
   it('rejects a stale writer after its lease expired and cannot resurrect reaped state', async () => {
@@ -228,10 +227,11 @@ describe('12.12 fenced artifact upload ownership', () => {
     ).bind(forgedHash, bytes.byteLength + 33, forgedKey, TENANT, reserved.uploadId).run()
 
     gate.release.resolve()
-    // Adoption changes zero rows; the idempotent replay reports current state
-    // without rewriting the sealed, bound identity.
-    const receipt = await stale
-    expect(receipt.ciphertextSha256).toBe(forgedHash)
+    // Adoption changes zero rows, and the loser must not acknowledge the
+    // forged identity: the recorded key does not derive from this operation
+    // and no object backs the recorded hash, so exact proof fails closed as
+    // an integrity rejection while the sealed row is left untouched.
+    await expect(stale).rejects.toMatchObject({ code: 'ciphertext_invalid' })
     const row = await getArtifactIntakeOperation(env, TENANT, reserved.uploadId)
     expect(row).toMatchObject({
       status: 'sealed', r2_key: forgedKey,

@@ -193,3 +193,6 @@ WORKER_DOMAIN = "haetsalos.specialdarksystems.com"
 TELNYX_FROM_NUMBER = "+13236785761"
 AI_GATEWAY_ID = "haetsal-brain-gateway"
 AI_GATEWAY_ACCOUNT_ID = "d3f0a1c579945862edc9c6f6e36e448a"
+# Artifact upload ownership rollout phase; flip to "active" only after the
+# verified drain gate in migrations/1033_artifact_upload_ownership.sql.
+ARTIFACT_UPLOAD_PROTOCOL_PHASE = "compat"

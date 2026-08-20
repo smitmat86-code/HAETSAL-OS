@@ -1,8 +1,8 @@
-# Artifact upload ownership rollout (migrations 1033/1035/1036, fenced_v2)
+# Artifact upload ownership rollout (migrations 1033–1037, fenced_v2)
 
 Status: NOT executed. Production remains on Worker version
 `bc5b4e08-6344-4df7-b7ae-a451371486a2` (old Worker, 1e4d3a6 behavior).
-Migrations 1033, 1034, 1035, and 1036 are pending and were not applied
+Migrations 1033, 1034, 1035, 1036, and 1037 are pending and were not applied
 remotely.
 
 ## The actual safety guarantee (no request-lifetime assumption)
@@ -12,7 +12,7 @@ the client stays connected, so NO deployment timestamp, version-analytics
 reading, or fixed wait proves an old request is dead. This rollout therefore
 does not depend on request death at all. Safety rests on four mechanisms:
 
-1. **Plaintext-verified sealed-identity convergence**
+1. **Plaintext-verified convergence and immutable finalization**
    (`src/services/artifact-intake/sealed-convergence.ts`). Every writer — old
    and new — proves the row's exact plaintext hash before writing, so any
    genuine object at an operation's one legitimate key decrypts to the same
@@ -21,18 +21,19 @@ does not depend on request death at all. Safety rests on four mechanisms:
    unconditional D1 seal interleaved with a new writer on the shared legacy
    key — in either order), the new Worker re-reads the bounded object, proves
    the plaintext identity, and CAS-repairs D1 onto the object's actual
-   ciphertext identity. A split can therefore exist only transiently between
-   proofs; it can never finalize (finalization re-proves the exact ciphertext
-   before and after canonical write), can never converge onto wrong content,
-   and resolves even if an old request resumes arbitrarily later. Fenced rows
-   are covered too: their adopted attempt object is immutable, so a clobbered
-   D1 hash is restored from the true object.
+   ciphertext identity. Before canonical write, every legacy envelope is
+   plaintext-proved, copied to a unique attempt key, and atomically adopted.
+   The terminal D1 update then CAS-checks the exact key, adopted token, hash,
+   length, and family. A late old D1 seal makes finalization retry, while a
+   late old R2 put can touch only the retired legacy key. No finalized
+   canonical artifact remains on a shared mutable key.
 2. **Fenced attempt keys** (migration 1033): activation-phase reserves record
    `upload_protocol = 'fenced_v2'`; each attempt writes its own immutable key
    and exactly one attempt is CAS-adopted. New writers never share a mutable
    key with each other.
-3. **Finalized monotonicity**: the old Worker's mutations are guarded by
-   `status != 'finalized'`, so finalized rows are immune to it forever.
+3. **Finalized monotonicity and immutable raw identity**: the old Worker's D1
+   mutation is guarded by `status != 'finalized'`, and its unbounded R2 put
+   knows only the retired legacy key.
 4. **Operator upload-admission gate** (migration 1036,
    `src/services/artifact-intake/upload-admission.ts`): a content-free D1 row
    the protocol-aware Worker checks before EVERY reserve/upload mutation.
@@ -45,22 +46,36 @@ does not depend on request death at all. Safety rests on four mechanisms:
 Deterministic proof: `tests/12.20-artifact-shared-key-split-convergence.test.ts`
 separates each writer's R2 put from its D1 mutation and replays the exact
 split-producing interleaving (old put → compat put → old D1 seal → compat
-adoption loss), its reverse, and a fenced-row clobber; all converge with zero
-D1/R2 disagreement. `tests/12.17-artifact-mixed-version-rollout.test.ts`
+   adoption loss), its reverse, a fenced-row clobber, immutable promotion, a
+   post-finalization old put, and a post-proof D1 seal; all converge or retry
+   with zero finalized disagreement. `tests/12.17-artifact-mixed-version-rollout.test.ts`
 still proves the serial orderings and protocol dispatch;
 `tests/12.23-artifact-upload-admission.test.ts` proves the gate refuses,
 fails closed, and reopens.
 
-## Executable sequence (expand → compat → gate → activate → reopen → enforce)
+## Executable sequence (audit → enforce → compat → gate → activate → reopen)
 
-1. **EXPAND** — apply pending migrations (safe under the old Worker: nullable
-   columns, a content-free journal table, and a gate table it never reads):
+1. **PREFLIGHT** — require zero managed operations where
+   `adopted_attempt_token IS NULL AND (finalization_id IS NOT NULL OR
+   status = 'finalized')`. Any result is an in-flight old binding or a
+   pre-existing mutable canonical artifact and requires a separately reviewed
+   repair; stop. This read is operator visibility, not the race-free gate.
+
+2. **EXPAND + ENFORCE** — apply pending migrations. Migration 1037 repeats
+   the preflight invariant inside the migration transaction and aborts the
+   entire migration if an old mutable binding or finalized legacy row exists;
+   this closes the query/install race. It then installs the content-free
+   retired-key tombstone table plus D1 triggers requiring an adopted immutable
+   identity before binding and exact new-code authorization before terminal
+   finalization. From this boundary, an indefinitely delayed old finalization
+   fails closed before canonical side effects and can be retried after the
+   compatibility Worker promotes its object:
 
    ```
    npx wrangler d1 migrations apply brain-us --remote
    ```
 
-2. **COMPATIBILITY deploy (atomic, not gradual)** — deploy this codebase with
+3. **COMPATIBILITY deploy (atomic, not gradual)** — deploy this codebase with
    `ARTIFACT_UPLOAD_PROTOCOL_PHASE = "compat"` (the committed wrangler.toml
    value) as a normal 100% deploy. Do NOT use gradual percentage deployment
    for this cutover: gradual routing keeps *starting* new old-version
@@ -68,7 +83,7 @@ fails closed, and reopens.
    in flight — whose interleavings convergence resolves. Verify:
    `npx wrangler deployments status` shows the new version at 100%.
 
-3. **CLOSE the admission gate** — operator D1 write:
+4. **CLOSE the admission gate** — operator D1 write:
 
    ```
    npx wrangler d1 execute brain-us --remote --command \
@@ -80,7 +95,7 @@ fails closed, and reopens.
    (retryable; channel-media jobs are delayed and retried by their queue
    protocol, and interactive clients simply retry after reopening).
 
-4. **QUIESCENCE check (read-only, evidence-based)** — confirm no new-writer
+5. **QUIESCENCE check (read-only, evidence-based)** — confirm no new-writer
    mutation is pending admission side effects:
 
    ```
@@ -93,24 +108,25 @@ fails closed, and reopens.
    request can still act later and is handled by convergence. If the count
    does not reach zero, investigate; do not proceed on elapsed time alone.
 
-5. **ACTIVATE** — atomic redeploy with
+6. **ACTIVATE** — atomic redeploy with
    `ARTIFACT_UPLOAD_PROTOCOL_PHASE = "active"`. Both builds dispatch the
    upload path on the row's recorded `upload_protocol`, never on their own
    phase; only activation-phase reserves create `fenced_v2` rows. Because the
    gate is closed, no new-writer mutation occurs anywhere in this boundary.
 
-6. **REOPEN the gate** — operator D1 write setting `state = 'open'` (or
+7. **REOPEN the gate** — operator D1 write setting `state = 'open'` (or
    deleting the row). Verify a reserve/upload round-trip succeeds and records
    `upload_protocol = 'fenced_v2'` with an adopted attempt key.
 
-7. **ENFORCE (later audit)** — after every legacy row is terminal, audit that
-   newly sealed rows carry `adopted_attempt_token`. Legacy sealed rows keep
-   `adopted_attempt_token NULL` and continue to prove against the legacy key.
+8. **AUDIT** — verify every finalized managed operation has a non-null
+   `adopted_attempt_token` and exact immutable attempt key. Compat-phase sealed
+   rows may remain legacy only until finalization promotes them.
 
 **Rollback** at any step: set the gate `closed`, atomically redeploy the
-previous compat build (or the old build before step 5), then reopen. Fenced
+previous compat build, then reopen. Do not roll back to code that cannot
+promote under the immutable-finalization trigger. Fenced
 rows already adopted remain valid under any protocol-aware build; migrations
-are expand-only and never need reverting. Existing uploads, sealed objects,
+are forward-only and never need reverting. Existing uploads, sealed objects,
 and canonical captures are never mutated by the rollout itself.
 
 ## Orphan attempt retention and cleanup (tombstone protocol)
@@ -136,6 +152,15 @@ not a one-shot record. Governance (`attempt-orphans.ts`, `attempt-sweep.ts`):
   object has ever been observed, the row is stamped (`swept_at`,
   `sweep_count`) and RETAINED — absence during one check is never proof the
   put is dead, so a late put is always found and deleted by a later sweep.
+- **Delayed-adoption fence.** Before deleting an expired attempt object, the
+  sweeper atomically clears the exact D1 ownership token and rereads it. An
+  adoption issued while the lease was live but executed later must therefore
+  change zero rows; uncertainty retains both object and tombstone.
+- **Retired legacy-key tombstone.** Promotion records the deterministic shared
+  key before switching D1. This content-free pointer is never automatically
+  retired: the scheduled sweeper repeatedly deletes old puts landing on the
+  abandoned key and refuses deletion until D1 proves an adopted key is
+  canonical.
 - **Retention policy.** Unresolved tombstones are content-free, tiny, and
   bounded by attempt volume; they are retained indefinitely and re-checked in
   bounded batches (oldest-swept first, so no row starves). They may be bulk

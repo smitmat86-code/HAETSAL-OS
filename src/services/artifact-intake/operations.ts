@@ -60,6 +60,7 @@ export interface ArtifactIntakeOperationRow {
   upload_attempt_expires_at: number | null
   adopted_attempt_token: string | null
   upload_protocol: string | null
+  immutable_finalize_authorized: number
   canonical_capture_id: string | null
   canonical_document_id: string | null
   canonical_operation_id: string | null
@@ -495,6 +496,22 @@ function uniqueUploadIds(uploadIds: string[]): string[] {
   return unique
 }
 
+function exactOperationIdentitySql(operations: ArtifactIntakeOperationRow[], alias = ''): string {
+  const prefix = alias ? `${alias}.` : ''
+  return operations.map(() => `(
+    ${prefix}upload_id = ? AND ${prefix}r2_key = ? AND ${prefix}adopted_attempt_token IS ?
+    AND ${prefix}ciphertext_sha256 = ? AND ${prefix}ciphertext_byte_length = ?
+    AND ${prefix}encryption_family = ?
+  )`).join(' OR ')
+}
+
+function exactOperationIdentityBindings(operations: ArtifactIntakeOperationRow[]): unknown[] {
+  return operations.flatMap(row => [
+    row.upload_id, row.r2_key, row.adopted_attempt_token,
+    row.ciphertext_sha256, row.ciphertext_byte_length, row.encryption_family,
+  ])
+}
+
 function changed(result: D1Result<unknown>): number {
   return Number(result.meta.changes ?? 0)
 }
@@ -651,28 +668,34 @@ export async function markArtifactOperationsFinalized(args: {
   tenantId: string
   finalizationId: string
   leaseOwner: string
-  uploadIds: string[]
+  operations: ArtifactIntakeOperationRow[]
   captureId: string
   documentId: string
   operationId: string
   now: number
 }, env: Env): Promise<void> {
-  const uploadIds = uniqueUploadIds(args.uploadIds)
+  const uploadIds = uniqueUploadIds(args.operations.map(row => row.upload_id))
   const placeholders = uploadIds.map(() => '?').join(', ')
+  const exactIdentity = exactOperationIdentitySql(args.operations)
+  const exactIdentityBindings = exactOperationIdentityBindings(args.operations)
   const ownership = `tenant_id = ? AND upload_id IN (${placeholders})
     AND status IN ('sealed', 'finalized') AND finalization_id = ? AND expiry_claim_token IS NULL
-    AND canonical_capture_id = ? AND canonical_document_id = ? AND canonical_operation_id = ?`
+    AND canonical_capture_id = ? AND canonical_document_id = ? AND canonical_operation_id = ?
+    AND (${exactIdentity})`
   const ownershipBindings = [
     args.tenantId, ...uploadIds, args.finalizationId,
     args.captureId, args.documentId, args.operationId,
+    ...exactIdentityBindings,
   ]
   const finalizeSql = `UPDATE artifact_intake_operations
-     SET status = 'finalized', error_code = NULL, finalization_protected_until = NULL,
+     SET status = 'finalized', immutable_finalize_authorized = 1,
+         error_code = NULL, finalization_protected_until = NULL,
          expiry_claim_token = NULL, expiry_claim_expires_at = NULL, updated_at = ?
      WHERE tenant_id = ? AND upload_id IN (${placeholders})
        AND (SELECT COUNT(*) FROM artifact_intake_operations WHERE ${ownership}) = ?
-       AND finalization_id = ? AND expiry_claim_token IS NULL
-       AND canonical_capture_id = ? AND canonical_document_id = ? AND canonical_operation_id = ?
+        AND finalization_id = ? AND expiry_claim_token IS NULL
+        AND canonical_capture_id = ? AND canonical_document_id = ? AND canonical_operation_id = ?
+        AND (${exactIdentity})
        AND EXISTS (
          SELECT 1 FROM artifact_intake_finalizations f
          WHERE f.tenant_id = ? AND f.id = ? AND f.status = 'reserved'
@@ -682,6 +705,7 @@ export async function markArtifactOperationsFinalized(args: {
     args.now, args.tenantId, ...uploadIds,
     ...ownershipBindings, uploadIds.length,
     args.finalizationId, args.captureId, args.documentId, args.operationId,
+    ...exactIdentityBindings,
     args.tenantId, args.finalizationId, uploadIds.length, args.leaseOwner, args.now,
   ).run()
   if (changed(result) !== uploadIds.length) {
@@ -696,22 +720,27 @@ export async function markArtifactOperationsFinalized(args: {
 export async function markArtifactOperationsFinalizedForCompletedFinalization(args: {
   tenantId: string
   finalizationId: string
-  uploadIds: string[]
+  operations: ArtifactIntakeOperationRow[]
   captureId: string
   documentId: string
   operationId: string
   now: number
 }, env: Env): Promise<void> {
-  const uploadIds = uniqueUploadIds(args.uploadIds)
+  const uploadIds = uniqueUploadIds(args.operations.map(row => row.upload_id))
   const placeholders = uploadIds.map(() => '?').join(', ')
+  const exactIdentity = exactOperationIdentitySql(args.operations)
+  const exactIdentityBindings = exactOperationIdentityBindings(args.operations)
   // postflight-safe: placeholders contains only one parameter marker per validated upload ID.
   const result = await env.D1_US.prepare(
     `UPDATE artifact_intake_operations
-     SET status = 'finalized', error_code = NULL, finalization_protected_until = NULL,
+     SET status = 'finalized', immutable_finalize_authorized = 1,
+         error_code = NULL, finalization_protected_until = NULL,
          expiry_claim_token = NULL, expiry_claim_expires_at = NULL, updated_at = ?
      WHERE tenant_id = ? AND upload_id IN (${placeholders})
        AND status IN ('sealed', 'finalized') AND finalization_id = ? AND expiry_claim_token IS NULL
+       AND adopted_attempt_token IS NOT NULL
        AND canonical_capture_id = ? AND canonical_document_id = ? AND canonical_operation_id = ?
+       AND (${exactIdentity})
        AND EXISTS (
          SELECT 1 FROM artifact_intake_finalizations f
          WHERE f.tenant_id = ? AND f.id = ? AND f.status = 'finalized'
@@ -720,6 +749,7 @@ export async function markArtifactOperationsFinalizedForCompletedFinalization(ar
   ).bind(
     args.now, args.tenantId, ...uploadIds, args.finalizationId,
     args.captureId, args.documentId, args.operationId,
+    ...exactIdentityBindings,
     args.tenantId, args.finalizationId, uploadIds.length,
   ).run()
   if (changed(result) !== uploadIds.length) {
@@ -738,24 +768,30 @@ export async function markArtifactOperationsFinalizedForCompletedFinalization(ar
 export async function repairFailedFinalizationWithProvenChildren(args: {
   tenantId: string
   finalizationId: string
-  uploadIds: string[]
+  operations: ArtifactIntakeOperationRow[]
   captureId: string
   documentId: string
   operationId: string
   now: number
 }, env: Env): Promise<'repaired' | 'retry'> {
-  const uploadIds = uniqueUploadIds(args.uploadIds)
+  const uploadIds = uniqueUploadIds(args.operations.map(row => row.upload_id))
   const placeholders = uploadIds.map(() => '?').join(', ')
+  const exactIdentity = exactOperationIdentitySql(args.operations)
+  const exactAliasedIdentity = exactOperationIdentitySql(args.operations, 'o')
+  const exactIdentityBindings = exactOperationIdentityBindings(args.operations)
   const results = await env.D1_US.batch([
     // postflight-safe: placeholders contains only one parameter marker per validated upload ID.
     env.D1_US.prepare(
       `UPDATE artifact_intake_operations
-       SET status = 'finalized', error_code = NULL, finalization_protected_until = NULL,
+       SET status = 'finalized', immutable_finalize_authorized = 1,
+           error_code = NULL, finalization_protected_until = NULL,
            expiry_claim_token = NULL, expiry_claim_expires_at = NULL, updated_at = ?
        WHERE tenant_id = ? AND upload_id IN (${placeholders})
-         AND status IN ('sealed', 'finalized') AND finalization_id = ?
+          AND status IN ('sealed', 'finalized') AND finalization_id = ?
+          AND adopted_attempt_token IS NOT NULL
          AND expiry_claim_token IS NULL
          AND canonical_capture_id = ? AND canonical_document_id = ? AND canonical_operation_id = ?
+         AND (${exactIdentity})
          AND EXISTS (
            SELECT 1 FROM artifact_intake_finalizations f
            WHERE f.tenant_id = ? AND f.id = ? AND f.status = 'failed'
@@ -764,8 +800,10 @@ export async function repairFailedFinalizationWithProvenChildren(args: {
     ).bind(
       args.now, args.tenantId, ...uploadIds, args.finalizationId,
       args.captureId, args.documentId, args.operationId,
+      ...exactIdentityBindings,
       args.tenantId, args.finalizationId, uploadIds.length,
     ),
+    // postflight-safe: exactAliasedIdentity contains only fixed SQL and parameter markers.
     env.D1_US.prepare(
       `UPDATE artifact_intake_finalizations
        SET status = 'finalized', error_code = NULL, lease_owner = NULL,
@@ -781,12 +819,18 @@ export async function repairFailedFinalizationWithProvenChildren(args: {
          AND (
            SELECT COUNT(*) FROM artifact_intake_operations o
            WHERE o.tenant_id = ? AND o.finalization_id = ? AND o.status = 'finalized'
+         ) = ?
+         AND (
+           SELECT COUNT(*) FROM artifact_intake_operations o
+           WHERE o.tenant_id = ? AND o.finalization_id = ?
+             AND (${exactAliasedIdentity})
          ) = ?`,
     ).bind(
       args.now, args.tenantId, args.finalizationId, uploadIds.length,
       args.captureId, args.documentId, args.operationId,
       args.tenantId, args.finalizationId,
       args.tenantId, args.finalizationId, uploadIds.length,
+      args.tenantId, args.finalizationId, ...exactIdentityBindings, uploadIds.length,
     ),
   ])
   return changed(results[1]!) === 1 ? 'repaired' : 'retry'

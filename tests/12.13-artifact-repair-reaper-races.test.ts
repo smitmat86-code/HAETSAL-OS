@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { env } from 'cloudflare:test'
 import {
   getArtifactIntakeOperation,
+  markArtifactOperationsFinalizedForCompletedFinalization,
   repairFailedFinalizationWithProvenChildren,
   reserveArtifactUpload,
   uploadArtifactBytes,
@@ -86,10 +87,12 @@ async function finalizationStatus(finalizationId: string): Promise<string | unde
   return row?.status
 }
 
-function repairArgs(split: Split) {
+async function repairArgs(split: Split) {
+  const operation = await getArtifactIntakeOperation(env, TENANT, split.uploadId)
+  if (!operation) throw new Error('missing repair operation')
   return {
     tenantId: TENANT, finalizationId: split.finalizationId,
-    uploadIds: [split.uploadId], captureId: split.captureId,
+    operations: [operation], captureId: split.captureId,
     documentId: split.documentId, operationId: split.operationId, now: Date.now(),
   }
 }
@@ -97,7 +100,7 @@ function repairArgs(split: Split) {
 describe('12.13 reaper-safe failed-parent/sealed-child repair', () => {
   it('atomically finalizes the child with the parent on a clean split', async () => {
     const split = await failedParentSealedChild(`clean-${SUITE_ID}`)
-    expect(await repairFailedFinalizationWithProvenChildren(repairArgs(split), env)).toBe('repaired')
+    expect(await repairFailedFinalizationWithProvenChildren(await repairArgs(split), env)).toBe('repaired')
     expect(await finalizationStatus(split.finalizationId)).toBe('finalized')
     const child = await getArtifactIntakeOperation(env, TENANT, split.uploadId)
     expect(child).toMatchObject({
@@ -112,7 +115,7 @@ describe('12.13 reaper-safe failed-parent/sealed-child repair', () => {
        SET expiry_claim_token = ?, expiry_claim_expires_at = ?
        WHERE tenant_id = ? AND upload_id = ?`,
     ).bind(crypto.randomUUID(), Date.now() + 60_000, TENANT, split.uploadId).run()
-    expect(await repairFailedFinalizationWithProvenChildren(repairArgs(split), env)).toBe('retry')
+    expect(await repairFailedFinalizationWithProvenChildren(await repairArgs(split), env)).toBe('retry')
     // Nothing was forced: the parent stays failed and the claimed child keeps
     // its sealed state and claim for the owning reaper.
     expect(await finalizationStatus(split.finalizationId)).toBe('failed')
@@ -131,9 +134,37 @@ describe('12.13 reaper-safe failed-parent/sealed-child repair', () => {
     // object is deleted before the repair races in.
     expect((await reapExpiredArtifactUploads(env, Date.now(), 100)).reaped).toBeGreaterThanOrEqual(1)
     expect(await env.R2_ARTIFACTS.head(child!.r2_key)).toBeNull()
-    expect(await repairFailedFinalizationWithProvenChildren(repairArgs(split), env)).toBe('retry')
+    expect(await repairFailedFinalizationWithProvenChildren(await repairArgs(split), env)).toBe('retry')
     expect(await finalizationStatus(split.finalizationId)).toBe('failed')
     expect((await getArtifactIntakeOperation(env, TENANT, split.uploadId))?.status).toBe('expired')
+  })
+
+  it('rejects failed-parent repair if child identity changes after proof', async () => {
+    const split = await failedParentSealedChild(`failed-cas-${SUITE_ID}`)
+    const proven = await repairArgs(split)
+    await env.D1_US.prepare(
+      `UPDATE artifact_intake_operations SET ciphertext_sha256 = ?
+       WHERE tenant_id = ? AND upload_id = ?`,
+    ).bind('b'.repeat(64), TENANT, split.uploadId).run()
+    expect(await repairFailedFinalizationWithProvenChildren(proven, env)).toBe('retry')
+    expect(await finalizationStatus(split.finalizationId)).toBe('failed')
+  })
+
+  it('rejects completed-parent repair if child identity changes after proof', async () => {
+    const split = await failedParentSealedChild(`completed-cas-${SUITE_ID}`)
+    const proven = await repairArgs(split)
+    await env.D1_US.prepare(
+      `UPDATE artifact_intake_finalizations SET status = 'finalized'
+       WHERE tenant_id = ? AND id = ?`,
+    ).bind(TENANT, split.finalizationId).run()
+    await env.D1_US.prepare(
+      `UPDATE artifact_intake_operations SET ciphertext_sha256 = ?
+       WHERE tenant_id = ? AND upload_id = ?`,
+    ).bind('c'.repeat(64), TENANT, split.uploadId).run()
+    await expect(markArtifactOperationsFinalizedForCompletedFinalization({
+      ...proven,
+    }, env)).rejects.toMatchObject({ code: 'invalid_state' })
+    expect((await getArtifactIntakeOperation(env, TENANT, split.uploadId))?.status).toBe('sealed')
   })
 
   it('generic reaper preserves an existing canonical document body on metadata mismatch', async () => {

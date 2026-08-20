@@ -41,6 +41,28 @@ export async function readAttemptOwnership(
   ).bind(tenantId, uploadId).first<AttemptOwnershipRow>()
 }
 
+/**
+ * Atomically revokes an expired attempt before cleanup touches R2. Adoption
+ * statements bind their wall-clock predicate before D1 executes; clearing the
+ * exact token is therefore the durable fence that makes even a delayed
+ * adoption change zero rows.
+ */
+export async function fenceExpiredAttemptForCleanup(env: Env, args: {
+  tenantId: string
+  uploadId: string
+  attemptToken: string
+  now: number
+}): Promise<AttemptOwnershipRow | null> {
+  await env.D1_US.prepare(
+    `UPDATE artifact_intake_operations
+     SET upload_attempt_token = NULL, upload_attempt_expires_at = NULL, updated_at = ?
+     WHERE tenant_id = ? AND upload_id = ? AND status IN ('reserved', 'failed', 'sealed')
+       AND upload_attempt_token = ? AND upload_attempt_expires_at <= ?
+       AND adopted_attempt_token IS NULL`,
+  ).bind(args.now, args.tenantId, args.uploadId, args.attemptToken, args.now).run()
+  return readAttemptOwnership(env, args.tenantId, args.uploadId)
+}
+
 export type AttemptCleanupOutcome = 'deleted' | 'kept_adopted' | 'kept_live' | 'kept_indeterminate'
 
 /**

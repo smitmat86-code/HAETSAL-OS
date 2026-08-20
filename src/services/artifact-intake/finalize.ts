@@ -28,6 +28,7 @@ import { artifactManifestIdentitySha256 } from './manifest-identity'
 import { finalizeArtifactCaptureSchema } from './schemas'
 import { proveManagedArtifactCiphertext } from './storage'
 import { proveArtifactFinalizationCanonicalSuccess } from './finalization-proof'
+import { stabilizeArtifactForFinalization } from './finalization-promotion'
 import {
   artifactProofIndeterminate,
   artifactProofMismatch,
@@ -63,6 +64,8 @@ export interface FinalizeArtifactCaptureFence {
   beforeCanonicalSideEffects?: () => void | Promise<void>
   /** Deterministic crash/race hook used after all operations are protected. */
   afterOperationsProtected?: () => void | Promise<void>
+  /** Deterministic race hook after the final proofs but before the D1 finalize CAS. */
+  afterFinalRawProof?: () => void | Promise<void>
 }
 
 async function manifestFingerprint(input: FinalizeArtifactCaptureInput): Promise<string> {
@@ -266,7 +269,7 @@ function receiptFor(
 
 async function markFinalizationComplete(
   row: ArtifactFinalizationRow,
-  uploadIds: string[],
+  operations: Map<string, ArtifactIntakeOperationRow>,
   leaseOwner: string,
   env: Env,
 ): Promise<void> {
@@ -275,7 +278,7 @@ async function markFinalizationComplete(
     tenantId: row.tenant_id,
     finalizationId: row.id,
     leaseOwner,
-    uploadIds,
+    operations: [...operations.values()],
     captureId: row.canonical_capture_id,
     documentId: row.canonical_document_id,
     operationId: row.canonical_operation_id,
@@ -419,7 +422,8 @@ export async function finalizeArtifactCapture(
     )
     if ([...operations.values()].some(row => row.status !== 'finalized')) {
       await markArtifactOperationsFinalizedForCompletedFinalization({
-        tenantId: input.tenantId, finalizationId: finalization.id, uploadIds,
+        tenantId: input.tenantId, finalizationId: finalization.id,
+        operations: [...operations.values()],
         captureId: finalization.canonical_capture_id,
         documentId: finalization.canonical_document_id,
         operationId: finalization.canonical_operation_id, now: Date.now(),
@@ -455,6 +459,14 @@ export async function finalizeArtifactCapture(
     }, env)
 
     const eligible = await loadSealedOperations(input, finalization, env)
+    // Promote before binding: migration 1037 blocks every legacy binding, so
+    // even an indefinitely delayed old finalizer fails before canonical side
+    // effects. Sequential work preserves the Worker memory bound.
+    for (const row of eligible.values()) {
+      await stabilizeArtifactForFinalization({
+        env, row, finalizationId: finalization.id, leaseOwner, key: contentKey,
+      })
+    }
     await markArtifactOperationsForFinalize({
       tenantId: input.tenantId, finalizationId: finalization.id, leaseOwner, uploadIds,
       captureId: finalization.canonical_capture_id,
@@ -519,7 +531,8 @@ export async function finalizeArtifactCapture(
     await assertFinalizationLease(finalization, leaseOwner, env)
     requireVerifiedProof(await proveRawOperations(operations, env))
     requireVerifiedProof(await assertCanonicalProof({ input, finalization, manifest, operations, env }))
-    await markFinalizationComplete(finalization, uploadIds, leaseOwner, env)
+    await fence.afterFinalRawProof?.()
+    await markFinalizationComplete(finalization, operations, leaseOwner, env)
     return receiptFor(finalization, manifest, input)
   } catch (error) {
     if (operations) {
@@ -534,14 +547,15 @@ export async function finalizeArtifactCapture(
           ).bind(input.tenantId, finalization.id).first<ArtifactFinalizationRow>()
           if (current?.status === 'finalized') {
             await markArtifactOperationsFinalizedForCompletedFinalization({
-              tenantId: input.tenantId, finalizationId: finalization.id, uploadIds,
+              tenantId: input.tenantId, finalizationId: finalization.id,
+              operations: [...operations.values()],
               captureId: finalization.canonical_capture_id,
               documentId: finalization.canonical_document_id,
               operationId: finalization.canonical_operation_id, now: Date.now(),
             }, env)
             return receiptFor(finalization, buildManifest(input, operations), input)
           }
-          await markFinalizationComplete(finalization, uploadIds, leaseOwner, env)
+          await markFinalizationComplete(finalization, operations, leaseOwner, env)
           return receiptFor(finalization, buildManifest(input, operations), input)
         } catch {
           // Exact success is already durable. Preserve the recoverable split;

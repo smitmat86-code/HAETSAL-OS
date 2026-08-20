@@ -2,6 +2,7 @@ import type { Env } from '../../types/env'
 import { ARTIFACT_UPLOAD_ATTEMPT_ORPHAN_GRACE_MS } from './config'
 import {
   clearUploadAttemptIntent,
+  fenceExpiredAttemptForCleanup,
   readAttemptOwnership,
 } from './attempt-orphans'
 import { managedArtifactAttemptR2Key } from './storage-keys'
@@ -70,7 +71,7 @@ async function sweepOneAttempt(
   now: number,
   result: AttemptSweepResult,
 ): Promise<void> {
-  const ownership = await readAttemptOwnership(env, row.tenant_id, row.upload_id)
+  let ownership = await readAttemptOwnership(env, row.tenant_id, row.upload_id)
   if (!ownership) {
     result.indeterminate += 1
     return
@@ -85,6 +86,27 @@ async function sweepOneAttempt(
     Number(ownership.upload_attempt_expires_at ?? 0) > now
   ) {
     result.keptLive += 1
+    return
+  }
+  ownership = await fenceExpiredAttemptForCleanup(env, {
+    tenantId: row.tenant_id,
+    uploadId: row.upload_id,
+    attemptToken: row.attempt_token,
+    now,
+  })
+  if (!ownership) {
+    result.indeterminate += 1
+    return
+  }
+  if (ownership.adopted_attempt_token === row.attempt_token) {
+    await clearUploadAttemptIntent(env, row.tenant_id, row.upload_id, row.attempt_token)
+    result.keptAdopted += 1
+    return
+  }
+  // If the exact expired token is still present, the fencing write did not
+  // become authoritative. Keep both object and tombstone on uncertainty.
+  if (ownership.upload_attempt_token === row.attempt_token) {
+    result.indeterminate += 1
     return
   }
   const key = await managedArtifactAttemptR2Key(row.tenant_id, row.upload_id, row.attempt_token)

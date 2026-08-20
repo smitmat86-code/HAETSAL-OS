@@ -2305,3 +2305,17 @@
 **Validation.** Focused artifact/rollout/orphan/scheduling lane: 28 passed across 6 files. Full suite twice from clean processes: run 1 — 109 files passed, 708 passed / 1 skipped (709); run 2 — identical counts. `npm run postflight`: passed. `npx wrangler deploy --dry-run`: passed. `git diff --check c50b0cb..HEAD`: clean. TypeScript: no new source diagnostics; the only new entries are the four new test files' pre-existing environmental `cloudflare:test` module error shared by every test file.
 
 **Production state (read-only).** No deployment, remote migration, R2 lifecycle change, provider message, or remediation was performed. Migrations 1033–1036 remain pending.
+
+---
+
+## 2026-08-20 — Session 5 terminal concurrency correction
+
+**Status:** Implemented and verified locally on `codex/session5-final-correction`; production remains unchanged.
+
+- Legacy shared-key artifacts are plaintext-proved and promoted to immutable attempt keys before canonical write. The terminal D1 transition CAS-checks the exact key, adopted token, ciphertext hash/length, and encryption family, so a late old D1 mutation cannot slip between final proof and finalization.
+- Expired attempt cleanup atomically revokes the exact upload token before deleting R2 and rereads ownership. A delayed adoption statement that bound an earlier timestamp therefore changes zero rows.
+- Migration 1037 atomically aborts if any mutable operation is already bound or finalized, then blocks old legacy binding before canonical side effects and requires exact new-code authorization for terminal finalization. Permanent content-free tombstones repeatedly clean abandoned legacy keys and later old puts.
+- Normal completion, completed-parent repair, stale/channel recovery, and failed-parent repair all CAS-check the proven key, adopted token, ciphertext hash/length, and encryption family. An R2 promotion put that throws ambiguously retains both its D1 token and durable cleanup journal.
+- Regression tests cover a late old put after finalization, an old D1 seal after final proof with repair-on-retry, delayed adoption after cleanup fencing, identity changes between proof and recovery, and commit-then-throw promotion ambiguity.
+- Validation: focused affected lane 75/75; full suite 109 files, 715 passed / 1 skipped; postflight clean; deploy dry-run clean; no diagnostics in modified source files (repository TypeScript baseline still exits 2). Independent final review: APPROVE, no HIGH/CRITICAL blockers.
+- Stop boundary: migrations 1033–1037 remain pending; no deployment, remote migration, provider message, remediation, approval, or merge.

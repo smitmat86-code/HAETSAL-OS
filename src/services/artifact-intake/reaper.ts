@@ -4,6 +4,7 @@ import { ARTIFACT_EXPIRY_CLAIM_LEASE_MS } from './config'
 import { getArtifactIntakeOperation, type ArtifactIntakeOperationRow } from './operations'
 import { recoverOrFailStaleArtifactFinalizations } from './stale-finalization-recovery'
 import { deleteProvenManagedArtifact } from './storage'
+import { sweepRetiredLegacyArtifactKeys } from './legacy-key-sweep'
 
 export interface ArtifactReaperResult {
   inspected: number
@@ -31,6 +32,8 @@ export async function reapExpiredArtifactUploads(
   }
   const orphanSweep = await sweepAbandonedArtifactUploadAttempts(env, now, limit)
   result.orphanAttemptsDeleted += orphanSweep.deleted
+  const legacySweep = await sweepRetiredLegacyArtifactKeys(env, now, limit)
+  result.orphanAttemptsDeleted += legacySweep.deleted
   const stale = await recoverOrFailStaleArtifactFinalizations(env, now, limit)
   result.failed += stale.failed
   result.repairedFinalized += stale.repairedFinalized

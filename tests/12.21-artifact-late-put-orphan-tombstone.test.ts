@@ -72,6 +72,41 @@ async function journalCount(uploadId: string): Promise<number> {
 const wellPastGrace = () => Date.now() + ARTIFACT_UPLOAD_ATTEMPT_ORPHAN_GRACE_MS * 4
 
 describe('12.21 late R2 puts can never become permanently untracked', () => {
+  it('fences an expired attempt before deletion so a delayed adoption cannot commit afterward', async () => {
+    const { bytes, reserved } = await reserveOperation('delayed-adoption', `delayed-adopt-${SUITE_ID}`)
+    const attempt = await journalOnly(reserved.uploadId, 2)
+    await latePut(attempt.key, bytes)
+    await env.D1_US.prepare(
+      `UPDATE artifact_intake_operations
+       SET upload_attempt_token = ?, upload_attempt_expires_at = ?
+       WHERE tenant_id = ? AND upload_id = ?`,
+    ).bind(attempt.attemptToken, 2, TENANT, reserved.uploadId).run()
+
+    // This statement represents an adoption request issued while the lease
+    // was live but delayed inside D1 until after cleanup. Its bound timestamp
+    // remains old, so only clearing the ownership token can make it lose.
+    const delayedAdoption = env.D1_US.prepare(
+      `UPDATE artifact_intake_operations
+       SET status = 'sealed', ciphertext_sha256 = ?, ciphertext_byte_length = ?,
+           encryption_family = 'tmk', r2_key = ?, adopted_attempt_token = ?,
+           upload_attempt_token = NULL, upload_attempt_expires_at = NULL
+       WHERE tenant_id = ? AND upload_id = ? AND status IN ('reserved', 'failed')
+         AND upload_attempt_token = ? AND upload_attempt_expires_at > ?`,
+    ).bind(
+      'a'.repeat(64), bytes.byteLength + 33, attempt.key, attempt.attemptToken,
+      TENANT, reserved.uploadId, attempt.attemptToken, 1,
+    )
+
+    const swept = await sweepAbandonedArtifactUploadAttempts(env as Env, wellPastGrace(), 100)
+    expect(swept.deleted).toBe(1)
+    const adoption = await delayedAdoption.run()
+    expect(Number(adoption.meta.changes ?? 0)).toBe(0)
+    const row = await getArtifactIntakeOperation(env, TENANT, reserved.uploadId)
+    expect(row?.status).toBe('reserved')
+    expect(row?.upload_attempt_token).toBeNull()
+    expect(await env.R2_ARTIFACTS.head(attempt.key)).toBeNull()
+  })
+
   it('keeps the journal pointer through an absent-object sweep and deletes the late put on a later sweep', async () => {
     const { bytes, reserved } = await reserveOperation('late-put-after-sweep', `late-${SUITE_ID}`)
     const attempt = await journalOnly(reserved.uploadId, Date.now() - 1)

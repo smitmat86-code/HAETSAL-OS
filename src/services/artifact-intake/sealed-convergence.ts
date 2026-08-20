@@ -26,9 +26,10 @@ export async function convergeSealedCiphertextIdentity(
   row: ArtifactIntakeOperationRow,
   key: CryptoKey,
   family: 'tmk' | 'kek',
+  allowedFinalizationId: string | null = null,
 ): Promise<boolean> {
   if (
-    row.status !== 'sealed' || row.finalization_id !== null ||
+    row.status !== 'sealed' || row.finalization_id !== allowedFinalizationId ||
     row.expiry_claim_token !== null || !row.ciphertext_sha256
   ) {
     return false
@@ -57,10 +58,11 @@ export async function convergeSealedCiphertextIdentity(
        SET ciphertext_sha256 = ?, ciphertext_byte_length = ?, encryption_family = ?, updated_at = ?
        WHERE tenant_id = ? AND upload_id = ? AND status = 'sealed'
          AND ciphertext_sha256 = ? AND r2_key = ?
-         AND finalization_id IS NULL AND expiry_claim_token IS NULL`,
+         AND finalization_id IS ? AND expiry_claim_token IS NULL`,
     ).bind(
       actualCiphertextSha256, envelope.byteLength, family, now,
       row.tenant_id, row.upload_id, row.ciphertext_sha256, row.r2_key,
+      allowedFinalizationId,
     ).run()
     return Number(result.meta.changes ?? 0) === 1
   } catch {

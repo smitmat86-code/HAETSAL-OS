@@ -68,10 +68,10 @@ Last updated: 2026-04-18 | Session: 7.1 (Hindsight Projection Adapter)
 | src\services\agents\automation-chat.ts | 77 | AutomationChatRoute | ✅ |
 | src\services\agents\delegation.ts | 71 | DelegationDecision, decideDelegation, DelegationRoute | ✅ |
 | src\services\agents\router.ts | 50 | — | ✅ |
-| src\services\artifact-intake\attempt-orphans.ts | 84 | AttemptOwnershipRow, AttemptCleanupOutcome | ✅ |
-| src\services\artifact-intake\attempt-sweep.ts | 127 | AttemptSweepResult | ✅ |
+| src\services\artifact-intake\attempt-orphans.ts | 106 | AttemptOwnershipRow, AttemptCleanupOutcome | ✅ |
+| src\services\artifact-intake\attempt-sweep.ts | 149 | AttemptSweepResult | ✅ |
 | src\services\artifact-intake\chatgpt-tool-contract.ts | 38 | CHATGPT_ARTIFACT_FILE_TOOL_CONTRACT | ✅ |
-| src\services\artifact-intake\config.ts | 87 | ARTIFACT_MAX_BYTES, ARTIFACT_MANIFEST_MAX_COUNT, ARTIFACT_MANIFEST_MAX_AGGREGATE_BYTES... | ✅ |
+| src\services\artifact-intake\config.ts | 89 | ARTIFACT_MAX_BYTES, ARTIFACT_MANIFEST_MAX_COUNT, ARTIFACT_MANIFEST_MAX_AGGREGATE_BYTES... | ✅ |
 | src\services\artifact-intake\contracts.ts | 136 | ARTIFACT_INTAKE_ERROR, ArtifactIntakeErrorCode, ArtifactIntakeContractError... | ✅ |
 | src\services\artifact-intake\crypto.ts | 108 | SealedArtifactBytes, detectArtifactEnvelopeFamily | ✅ |
 | src\services\artifact-intake\download-body.ts | 57 | — | ✅ |
@@ -79,28 +79,32 @@ Last updated: 2026-04-18 | Session: 7.1 (Hindsight Projection Adapter)
 | src\services\artifact-intake\download-policy.ts | 117 | normalizeArtifactIpAddress, isBlockedArtifactAddress, assertArtifactResolvedAddressAllowed... | ✅ |
 | src\services\artifact-intake\download-types.ts | 42 | HostedArtifactFileDescriptor, ArtifactDownloadResponse, ArtifactDownloadNetwork... | ✅ |
 | src\services\artifact-intake\download.ts | 150 | — | ✅ |
+| src\services\artifact-intake\finalization-immutable-proof.ts | 41 | — | ✅ |
+| src\services\artifact-intake\finalization-promotion.ts | 150 | — | ✅ |
 | src\services\artifact-intake\finalization-proof.ts | 141 | — | ✅ |
-| src\services\artifact-intake\finalize.ts | 563 | ArtifactFinalizationRow, FinalizeArtifactCaptureFence | ⚠️ OVER LIMIT |
+| src\services\artifact-intake\finalize.ts | 577 | ArtifactFinalizationRow, FinalizeArtifactCaptureFence | ⚠️ OVER LIMIT |
 | src\services\artifact-intake\legacy-approval-manifest.ts | 52 | ExactTargetManifestEntry | ✅ |
 | src\services\artifact-intake\legacy-inventory-types.ts | 75 | LegacyChannel, LegacyEnvelopeFamily, LegacyInventoryDisposition... | ✅ |
 | src\services\artifact-intake\legacy-inventory.ts | 147 | classifyLegacyMediaInventory, classifyLegacyMediaObjects | ✅ |
+| src\services\artifact-intake\legacy-key-sweep.ts | 81 | LegacyKeySweepResult | ✅ |
 | src\services\artifact-intake\legacy-managed-replacements.ts | 90 | LEGACY_D1_CANONICAL_REFERENCES_SQL, LEGACY_MANAGED_REPLACEMENT_CANDIDATES_SQL, exactManagedPrimarySourceReplacements | ✅ |
 | src\services\artifact-intake\legacy-reference-evidence.ts | 35 | groupLegacyReferences, legacyReferenceIdentity, canonicalRoleEvidence | ✅ |
 | src\services\artifact-intake\legacy-remediation.ts | 139 | LEGACY_INVENTORY_VERSION, LegacyRemediationCategory, LegacyRemediationPlan... | ✅ |
 | src\services\artifact-intake\manifest-identity.ts | 26 | ArtifactManifestIdentityItem | ✅ |
 | src\services\artifact-intake\migration-overlap-audit.ts | 76 | ArtifactFinalizationOverlapAudit, ArtifactOverlapAuditBoundary, ARTIFACT_FINALIZATION_OVERLAP_AUDIT_SQL | ✅ |
 | src\services\artifact-intake\mime.ts | 41 | detectArtifactMimeType | ✅ |
-| src\services\artifact-intake\operations.ts | 840 | ArtifactIntakeOperationRow | ⚠️ OVER LIMIT |
+| src\services\artifact-intake\operations.ts | 886 | ArtifactIntakeOperationRow | ⚠️ OVER LIMIT |
+| src\services\artifact-intake\promotion-cleanup.ts | 25 | — | ✅ |
 | src\services\artifact-intake\proof-result.ts | 41 | ArtifactProofMismatchReason, ArtifactProofUnavailableReason, ArtifactProofResult... | ✅ |
-| src\services\artifact-intake\reaper.ts | 112 | ArtifactReaperResult | ✅ |
+| src\services\artifact-intake\reaper.ts | 115 | ArtifactReaperResult | ✅ |
 | src\services\artifact-intake\schemas.ts | 142 | reserveArtifactUploadSchema, openAIFileDescriptorSchema, telegramArtifactFileDescriptorSchema... | ✅ |
-| src\services\artifact-intake\sealed-convergence.ts | 70 | — | ✅ |
+| src\services\artifact-intake\sealed-convergence.ts | 74 | — | ✅ |
 | src\services\artifact-intake\stale-finalization-recovery.ts | 121 | — | ✅ |
 | src\services\artifact-intake\stale-finalization-support.ts | 56 | StaleArtifactFinalizationRecoveryResult, deferOrProtect | ✅ |
 | src\services\artifact-intake\storage-delete.ts | 50 | — | ✅ |
 | src\services\artifact-intake\storage-keys.ts | 42 | — | ✅ |
 | src\services\artifact-intake\storage.ts | 130 | ManagedArtifactCiphertextProof | ✅ |
-| src\services\artifact-intake\upload-admission.ts | 31 | — | ✅ |
+| src\services\artifact-intake\upload-admission.ts | 39 | — | ✅ |
 | src\services\artifact-intake\upload-protocol.ts | 34 | ARTIFACT_UPLOAD_PROTOCOL_FENCED, ArtifactUploadProtocolPhase, artifactUploadProtocolPhase... | ✅ |
 | src\services\automations\nl-parse.ts | 88 | ParsedAutomation, parseAutomationIntent, AutomationCommand... | ✅ |
 | src\services\automations\recurrence.ts | 84 | RecurrenceKind, RecurrenceSpec, DEFAULT_TZ... | ✅ |

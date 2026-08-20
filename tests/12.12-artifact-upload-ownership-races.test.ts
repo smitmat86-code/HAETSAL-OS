@@ -195,6 +195,7 @@ describe('12.12 fenced artifact upload ownership', () => {
       `UPDATE artifact_intake_operations
        SET status = 'sealed', error_code = NULL, ciphertext_sha256 = ?,
            ciphertext_byte_length = ?, encryption_family = 'tmk',
+           adopted_attempt_token = 'competing-adoption',
            finalization_id = 'finalization-binding', upload_attempt_token = NULL,
            upload_attempt_expires_at = NULL
        WHERE tenant_id = ? AND upload_id = ?`,
@@ -221,6 +222,7 @@ describe('12.12 fenced artifact upload ownership', () => {
       `UPDATE artifact_intake_operations
        SET status = 'sealed', error_code = NULL, ciphertext_sha256 = ?,
            ciphertext_byte_length = ?, encryption_family = 'tmk', r2_key = ?,
+           adopted_attempt_token = 'forged-adoption',
            finalization_id = 'finalization-binding', upload_attempt_token = NULL,
            upload_attempt_expires_at = NULL
        WHERE tenant_id = ? AND upload_id = ?`,
@@ -236,7 +238,7 @@ describe('12.12 fenced artifact upload ownership', () => {
     expect(row).toMatchObject({
       status: 'sealed', r2_key: forgedKey,
       ciphertext_sha256: forgedHash, finalization_id: 'finalization-binding',
-      adopted_attempt_token: null,
+      adopted_attempt_token: 'forged-adoption',
     })
   })
 })

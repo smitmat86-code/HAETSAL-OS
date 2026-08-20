@@ -84,12 +84,12 @@ Because every writer proves an operation's exact plaintext hash before
 writing, any genuine object at the operation's one legitimate key decrypts to
 the same plaintext; a sealed row whose recorded ciphertext identity
 authoritatively disagrees with that object is repaired by plaintext-verified
-convergence — a bounded re-read, plaintext-hash proof, and CAS onto the
-object's actual ciphertext identity — never onto different content, never on
-finalized, bound, or expiry-claimed rows. A shared-key split between an
-overlapping old and new writer is therefore transient in every ordering,
-cannot finalize (finalization re-proves ciphertext before and after canonical
-write), and resolves even if an old request resumes arbitrarily later. A
+ convergence — a bounded re-read, plaintext-hash proof, and CAS onto the
+ object's actual ciphertext identity — never onto different content or an
+ expiry-claimed row. Before canonical write, finalization promotes every
+ legacy envelope to a unique immutable attempt key. Its terminal D1 update
+ CAS-checks that exact identity, so late old metadata causes a retry and late
+ old R2 writes touch only the retired legacy key. A
 content-free operator admission gate (migration 1036) additionally refuses
 every new reserve/upload mutation during the cutover boundary, fails closed
 when unreadable, and the cutover uses atomic (non-gradual) deploys so old
@@ -109,6 +109,24 @@ The artifact reaper is production-scheduled: the 15-minute cron slot invokes
 `reapExpiredArtifactUploads` through `ctx.waitUntil` with failure isolation
 and bounded batches, and expiry deletion re-reads the claimed row under its
 claim token so deletion always uses authoritative post-claim metadata.
+Attempt cleanup also revokes the exact expired upload token before R2
+deletion, fencing adoption statements that execute with an earlier bound
+timestamp.
+
+### 2026-08-20 immutable finalization enforcement
+
+Every legacy shared-key envelope is plaintext-proved and promoted to a unique
+attempt key before binding or canonical write. All normal and recovery final
+status transitions CAS-check the exact key, adopted token, ciphertext hash,
+length, and encryption family that was proven. Migration 1037 first aborts
+atomically if any mutable operation is already bound or finalized, then blocks
+old legacy binding before canonical side effects and requires explicit
+new-code authorization for terminal finalization. Thus even an indefinitely
+delayed old Worker finalization fails closed. A promotion put that returns an
+ambiguous R2 error retains its exact D1 token and durable attempt journal.
+Promotion also records a permanent content-free legacy-key tombstone; the
+scheduled sweeper repeatedly deletes later old puts from the abandoned key and never retires
+the pointer based on elapsed time or absence.
 
 ### Session 5 legacy remediation approval contract
 

@@ -88,7 +88,7 @@ export async function recoverFinalizedChannelMediaJob(
     // preserved and the job retries instead of forcing an outcome.
     const repaired = await repairFailedFinalizationWithProvenChildren({
       tenantId: job.tenantId, finalizationId: finalization.id,
-      uploadIds: [operation.upload_id],
+      operations: [operation],
       captureId: finalization.canonical_capture_id,
       documentId: finalization.canonical_document_id,
       operationId: finalization.canonical_operation_id, now,
@@ -103,7 +103,7 @@ export async function recoverFinalizedChannelMediaJob(
     try {
       await markArtifactOperationsFinalizedForCompletedFinalization({
         tenantId: job.tenantId, finalizationId: finalization.id,
-        uploadIds: [operation.upload_id],
+        operations: [operation],
         captureId: finalization.canonical_capture_id,
         documentId: finalization.canonical_document_id,
         operationId: finalization.canonical_operation_id, now: Date.now(),

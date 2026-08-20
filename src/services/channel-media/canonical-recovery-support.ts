@@ -92,7 +92,7 @@ export async function completeReservedFinalization(args: {
     const completionNow = Date.now()
     await markArtifactOperationsFinalized({
       tenantId: args.job.tenantId, finalizationId: args.finalization.id, leaseOwner,
-      uploadIds: [args.operation.upload_id], captureId: args.finalization.canonical_capture_id,
+      operations: [args.operation], captureId: args.finalization.canonical_capture_id,
       documentId: args.finalization.canonical_document_id,
       operationId: args.finalization.canonical_operation_id, now: completionNow,
     }, args.env)

@@ -88,7 +88,7 @@ export async function recoverOrFailStaleArtifactFinalizations(
     try {
       await markArtifactOperationsFinalized({
         tenantId: finalization.tenant_id, finalizationId: finalization.id, leaseOwner,
-        uploadIds: operations.map(row => row.upload_id),
+        operations,
         captureId: finalization.canonical_capture_id,
         documentId: finalization.canonical_document_id,
         operationId: finalization.canonical_operation_id, now,

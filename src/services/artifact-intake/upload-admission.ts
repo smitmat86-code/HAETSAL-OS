@@ -18,10 +18,18 @@ export async function requireArtifactUploadAdmission(env: Env): Promise<void> {
       `SELECT state FROM artifact_intake_admission WHERE id = 1 LIMIT 1`,
     ).first<{ state: string }>()
     state = row?.state ?? null
-  } catch (error) {
-    // Pre-migration schemas have no gate table; that is a deterministic
-    // "no gate configured" state, not an unreadable gate.
-    if (error instanceof Error && /no such table/i.test(error.message)) return
+  } catch {
+    // Pre-migration schemas have no gate table; a successful schema read
+    // proving the table's absence is a deterministic "no gate configured"
+    // state, not an unreadable gate. Any other failure refuses admission.
+    try {
+      const table = await env.D1_US.prepare(
+        `SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'artifact_intake_admission' LIMIT 1`,
+      ).first<{ name: string }>()
+      if (!table) return
+    } catch {
+      // fall through to fail closed
+    }
     throw new ArtifactIntakeContractError(ARTIFACT_INTAKE_ERROR.UPLOAD_ADMISSION_CLOSED)
   }
   if (state === 'closed') {

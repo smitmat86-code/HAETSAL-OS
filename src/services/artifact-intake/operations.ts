@@ -279,6 +279,8 @@ async function verifySealedReplay(
     if (repaired) {
       const current = await getArtifactIntakeOperation(env, row.tenant_id, row.upload_id)
       if (current && current.status === 'sealed') {
+        // The converge argument is intentionally omitted so the recursion is
+        // bounded to depth 1: the second pass may only verify, never repair.
         return verifySealedReplay(current, plaintextHash, env)
       }
     }

@@ -41,6 +41,8 @@ export async function convergeSealedCiphertextIdentity(
     // Both writers sealed the identical plaintext, so a genuine object is
     // exactly the plaintext length plus the sealed-envelope overhead;
     // anything else is rejected before a single body byte is materialized.
+    // Peak transient allocation is one bounded ciphertext plus its plaintext
+    // (~2x ARTIFACT_MAX_BYTES), sequential with the upload path's own body.
     const envelope = await readManagedArtifactCiphertext(
       env, expectedKey,
       Number(row.byte_length) + ARTIFACT_CIPHERTEXT_ENVELOPE_OVERHEAD_BYTES,

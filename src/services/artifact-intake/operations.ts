@@ -33,6 +33,8 @@ import {
   readManagedArtifactCiphertext,
 } from './storage'
 import { isFencedUploadProtocol, reservedUploadProtocol } from './upload-protocol'
+import { requireArtifactUploadAdmission } from './upload-admission'
+import { convergeSealedCiphertextIdentity } from './sealed-convergence'
 
 export interface ArtifactIntakeOperationRow {
   id: string
@@ -132,6 +134,7 @@ export async function reserveArtifactUpload(args: {
   if (!/^[a-f0-9]{64}$/i.test(args.plaintextSha256) || args.idempotencyKey.length < 16 || args.idempotencyKey.length > 200) {
     throw new ArtifactIntakeContractError(ARTIFACT_INTAKE_ERROR.INVALID_MANIFEST)
   }
+  await requireArtifactUploadAdmission(env)
   const now = args.now ?? Date.now()
   const idempotencyHash = await sha256Text(args.idempotencyKey)
   const uploadId = crypto.randomUUID()
@@ -251,6 +254,7 @@ async function verifySealedReplay(
   row: ArtifactIntakeOperationRow,
   plaintextHash: string,
   env: Env,
+  converge?: { key: CryptoKey; family: 'tmk' | 'kek' },
 ): Promise<ArtifactUploadReceipt> {
   if (plaintextHash !== row.plaintext_sha256 || !row.ciphertext_sha256) {
     throw new ArtifactIntakeContractError(ARTIFACT_INTAKE_ERROR.HASH_MISMATCH)
@@ -265,6 +269,20 @@ async function verifySealedReplay(
     expectedCiphertextSha256: row.ciphertext_sha256,
   })
   if (proof.status === 'verified') return toReceipt(row)
+  if (proof.status === 'authoritative_mismatch' && converge && row.status === 'sealed') {
+    // Mixed old/new rollout: an overlapping shipped-old writer's put and
+    // unconditional D1 seal are separate unbounded operations, so the
+    // recorded identity can disagree with the object at the one legitimate
+    // key. Plaintext-verified convergence repairs D1 onto the actual stored
+    // ciphertext instead of stranding the operation in a split.
+    const repaired = await convergeSealedCiphertextIdentity(env, row, converge.key, converge.family)
+    if (repaired) {
+      const current = await getArtifactIntakeOperation(env, row.tenant_id, row.upload_id)
+      if (current && current.status === 'sealed') {
+        return verifySealedReplay(current, plaintextHash, env)
+      }
+    }
+  }
   throw new ArtifactIntakeContractError(
     proof.status === 'authoritative_mismatch'
       ? ARTIFACT_INTAKE_ERROR.CIPHERTEXT_INVALID
@@ -346,6 +364,7 @@ export async function uploadArtifactBytes(args: {
   encryptionFamily: 'tmk' | 'kek'
   key: CryptoKey
 }, env: Env): Promise<ArtifactUploadReceipt> {
+  await requireArtifactUploadAdmission(env)
   const row = await getArtifactIntakeOperation(env, args.tenantId, args.uploadId)
   if (!row) throw new ArtifactIntakeContractError(ARTIFACT_INTAKE_ERROR.NOT_FOUND)
   if (row.status === 'expired' || (row.status !== 'finalized' && Number(row.expires_at) <= Date.now())) {
@@ -363,8 +382,9 @@ export async function uploadArtifactBytes(args: {
     throw new ArtifactIntakeContractError(ARTIFACT_INTAKE_ERROR.MIME_MISMATCH)
   }
 
+  const converge = { key: args.key, family: args.encryptionFamily }
   if (row.status === 'finalized') return toReceipt(row)
-  if (row.status === 'sealed') return verifySealedReplay(row, plaintextHash, env)
+  if (row.status === 'sealed') return verifySealedReplay(row, plaintextHash, env, converge)
   if (row.expiry_claim_token || row.finalization_id) {
     throw new ArtifactIntakeContractError(ARTIFACT_INTAKE_ERROR.INVALID_STATE)
   }
@@ -422,7 +442,7 @@ export async function uploadArtifactBytes(args: {
         tenantId: args.tenantId, uploadId: args.uploadId, attemptToken, mode: 'ambiguous',
       })
       if (outcome === 'kept_adopted') {
-        return acknowledgeAdoptedOperation(env, args.tenantId, args.uploadId, plaintextHash)
+        return acknowledgeAdoptedOperation(env, args.tenantId, args.uploadId, plaintextHash, converge)
       }
     }
     throw error
@@ -442,7 +462,7 @@ export async function uploadArtifactBytes(args: {
       tenantId: args.tenantId, uploadId: args.uploadId, attemptToken, mode: 'lost',
     })
   }
-  return acknowledgeAdoptedOperation(env, args.tenantId, args.uploadId, plaintextHash)
+  return acknowledgeAdoptedOperation(env, args.tenantId, args.uploadId, plaintextHash, converge)
 }
 
 /**
@@ -456,12 +476,13 @@ async function acknowledgeAdoptedOperation(
   tenantId: string,
   uploadId: string,
   plaintextHash: string,
+  converge?: { key: CryptoKey; family: 'tmk' | 'kek' },
 ): Promise<ArtifactUploadReceipt> {
   const current = await getArtifactIntakeOperation(env, tenantId, uploadId)
   if (!current || (current.status !== 'sealed' && current.status !== 'finalized')) {
     throw new ArtifactIntakeContractError(ARTIFACT_INTAKE_ERROR.INVALID_STATE)
   }
-  return verifySealedReplay(current, plaintextHash, env)
+  return verifySealedReplay(current, plaintextHash, env, converge)
 }
 
 function uniqueUploadIds(uploadIds: string[]): string[] {

@@ -3,8 +3,8 @@ import { env } from 'cloudflare:test'
 import {
   cleanupLosingUploadAttempt,
   recordUploadAttemptIntent,
-  sweepAbandonedArtifactUploadAttempts,
 } from '../src/services/artifact-intake/attempt-orphans'
+import { sweepAbandonedArtifactUploadAttempts } from '../src/services/artifact-intake/attempt-sweep'
 import {
   getArtifactIntakeOperation,
   markUploadFailed,
@@ -89,6 +89,11 @@ describe('12.18 crash-safe orphan attempt governance', () => {
     )
     expect(late.deleted).toBe(1)
     expect(await env.R2_ARTIFACTS.head(crashed.key)).toBeNull()
+    // The tombstone survives until a later sweep confirms the deletion stuck.
+    expect(await journalCount(reserved.uploadId)).toBe(1)
+    await sweepAbandonedArtifactUploadAttempts(
+      env as Env, Date.now() + ARTIFACT_UPLOAD_ATTEMPT_ORPHAN_GRACE_MS + 1, 100,
+    )
     expect(await journalCount(reserved.uploadId)).toBe(0)
   })
 
@@ -106,6 +111,9 @@ describe('12.18 crash-safe orphan attempt governance', () => {
     )
     expect(sweep.deleted).toBe(1)
     expect(await env.R2_ARTIFACTS.head(stale.key)).toBeNull()
+    await sweepAbandonedArtifactUploadAttempts(
+      env as Env, Date.now() + ARTIFACT_UPLOAD_ATTEMPT_ORPHAN_GRACE_MS + 1, 100,
+    )
     expect(await journalCount(reserved.uploadId)).toBe(0)
   })
 

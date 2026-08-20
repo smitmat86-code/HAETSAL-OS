@@ -1,7 +1,7 @@
 import type { Env } from '../../types/env'
-import { sweepAbandonedArtifactUploadAttempts } from './attempt-orphans'
+import { sweepAbandonedArtifactUploadAttempts } from './attempt-sweep'
 import { ARTIFACT_EXPIRY_CLAIM_LEASE_MS } from './config'
-import type { ArtifactIntakeOperationRow } from './operations'
+import { getArtifactIntakeOperation, type ArtifactIntakeOperationRow } from './operations'
 import { recoverOrFailStaleArtifactFinalizations } from './stale-finalization-recovery'
 import { deleteProvenManagedArtifact } from './storage'
 
@@ -71,14 +71,25 @@ export async function reapExpiredArtifactUploads(
       ).run()
       if (Number(claimed.meta.changes ?? 0) !== 1) continue
 
+      // Deletion must use the authoritative post-claim row, never the row
+      // selected before the claim: another writer may have adopted a new
+      // attempt identity in between, and deleting from stale metadata could
+      // target the wrong key or prove against the wrong ciphertext identity.
+      const claimedRow = await getArtifactIntakeOperation(env, row.tenant_id, row.upload_id)
+      if (
+        !claimedRow || claimedRow.expiry_claim_token !== claimToken ||
+        claimedRow.status === 'finalized'
+      ) {
+        throw new Error('artifact expiry claim lost')
+      }
       await deleteProvenManagedArtifact({
         env,
-        tenantId: row.tenant_id,
-        uploadId: row.upload_id,
-        recordedKey: row.r2_key,
-        adoptedAttemptToken: row.adopted_attempt_token,
-        expectedCiphertextSha256: row.ciphertext_sha256,
-        expectedCiphertextByteLength: row.ciphertext_byte_length,
+        tenantId: claimedRow.tenant_id,
+        uploadId: claimedRow.upload_id,
+        recordedKey: claimedRow.r2_key,
+        adoptedAttemptToken: claimedRow.adopted_attempt_token,
+        expectedCiphertextSha256: claimedRow.ciphertext_sha256,
+        expectedCiphertextByteLength: claimedRow.ciphertext_byte_length,
       })
       // Canonical document bodies are never deleted here: an expired artifact
       // operation's stale canonical pointer is not proof the body is orphaned.

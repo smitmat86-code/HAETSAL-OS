@@ -77,6 +77,39 @@ Uploads follow an attempt-ownership protocol. Every mutation of an unfinalized o
 
 One manifest contract is enforced everywhere: exactly one source, listed first, the only primary; every derivative names an earlier manifest entry as parent, excluding missing parents, self-parents, forward references, and cycles. Malformed manifests are rejected before any reservation exists. Persisted state is bounded before proof: expected counts outside 1..8, per-object bytes beyond 25 MiB plaintext / envelope-bounded ciphertext, or aggregates beyond 64 MiB classify as a protected `bounds_exceeded` manual-review condition — never deletion-eligible corruption — and operation loads never query more than one row past the manifest maximum. Failed-parent/sealed-child repair is atomic and child-first: one transaction finalizes the proven children and promotes the parent only when every bound operation is finalized and unclaimed, so the parent can never be finalized while a child remains reaper-eligible. Canonical absence on a reserved finalization is retryable inside the recovery window and becomes a guarded, lease-checked failure only after the deadline. The generic artifact reaper never deletes canonical document bodies from an operation's stale pointer; canonical-body orphan cleanup requires a separate proof-backed process. Artifact integrity incidents are recorded in a content-free `integrity_status` on channel jobs without touching capture status, delivery status, or error codes; `delivery_unknown` is reserved for genuine provider ambiguity. The durable migration-overlap audit takes an explicit boundary — invariant-wide audit time or a verified drain boundary — because a deployment timestamp is not a drain boundary.
 
+### 2026-08-19 rollout-boundary, orphan-tombstone, and scheduling correction
+
+The mixed-version rollout no longer assumes any Worker request lifetime.
+Because every writer proves an operation's exact plaintext hash before
+writing, any genuine object at the operation's one legitimate key decrypts to
+the same plaintext; a sealed row whose recorded ciphertext identity
+authoritatively disagrees with that object is repaired by plaintext-verified
+convergence — a bounded re-read, plaintext-hash proof, and CAS onto the
+object's actual ciphertext identity — never onto different content, never on
+finalized, bound, or expiry-claimed rows. A shared-key split between an
+overlapping old and new writer is therefore transient in every ordering,
+cannot finalize (finalization re-proves ciphertext before and after canonical
+write), and resolves even if an old request resumes arbitrarily later. A
+content-free operator admission gate (migration 1036) additionally refuses
+every new reserve/upload mutation during the cutover boundary, fails closed
+when unreadable, and the cutover uses atomic (non-gradual) deploys so old
+request starts end at deploy time. fenced_v2 rows are still created only by
+activation-phase reserves, behind the closed gate.
+
+Orphan attempt journals are tombstones. A journal row is retired only when
+its attempt was adopted, or when an object at the exact key was actually
+observed and deleted and a later sweep re-confirms absence; absence during a
+single check never retires the durable pointer, so an R2 put that lands
+arbitrarily late is always found and deleted by a later bounded sweep. Sweep
+state (`swept_at`, `sweep_count`, `resolved_at`) is content-free; unresolved
+tombstones are retained indefinitely pending a separately gated R2 lifecycle
+rule.
+
+The artifact reaper is production-scheduled: the 15-minute cron slot invokes
+`reapExpiredArtifactUploads` through `ctx.waitUntil` with failure isolation
+and bounded batches, and expiry deletion re-reads the claimed row under its
+claim token so deletion always uses authoritative post-claim metadata.
+
 ### Session 5 legacy remediation approval contract
 
 Phase 1 inventories the union of legacy R2 keys, Neon references, and D1 compatibility references. Neon contributes the explicit canonical artifact role; D1 contributes source provenance only when both capture and document primary pointers select the same artifact, otherwise its role evidence is unknown. Missing R2 objects, unknown or unreadable envelopes, incomplete object identity evidence, any non-singleton authoritative Neon reference set, duplicate D1 references, multi-owner references, multiple legacy artifacts in one capture, D1/Neon ownership disagreements, role disagreements, and every derivative, missing, or unknown legacy role are ambiguous and deletion-ineligible. Only zero Neon and zero D1 references can begin as an orphan. “Already migrated” requires exactly one role=`source` legacy artifact in the capture and exactly one managed role=`source` primary selected by both capture and document pointers; a second legacy artifact, mixed source/derivative rows, duplicate primary candidate, or unrelated artifact fails closed as ambiguous. The public approval packet contains aggregates only. Its digest commits to the explicitly named remediation categories and a sorted private exact-target manifest whose entries bind HMAC-obscured object and owner identities, bytes, object version, full object hash, ETag, channel, disposition, reconciliation state, inventory version/time, canonical-content fingerprint, and executor commit. Execution requires both the exact digest and the exact named category set; any same-count/same-byte target substitution or category change invalidates approval.

@@ -12,7 +12,7 @@ Last updated: 2026-04-18 | Session: 7.1 (Hindsight Projection Adapter)
 
 <!-- AUTO-GENERATED MODULE REGISTRY - DO NOT EDIT -->
 
-*Auto-generated: 2026-08-19*
+*Auto-generated: 2026-08-20*
 
 ### src/
 
@@ -68,10 +68,11 @@ Last updated: 2026-04-18 | Session: 7.1 (Hindsight Projection Adapter)
 | src\services\agents\automation-chat.ts | 77 | AutomationChatRoute | ✅ |
 | src\services\agents\delegation.ts | 71 | DelegationDecision, decideDelegation, DelegationRoute | ✅ |
 | src\services\agents\router.ts | 50 | — | ✅ |
-| src\services\artifact-intake\attempt-orphans.ts | 150 | AttemptCleanupOutcome, AttemptSweepResult | ✅ |
+| src\services\artifact-intake\attempt-orphans.ts | 84 | AttemptOwnershipRow, AttemptCleanupOutcome | ✅ |
+| src\services\artifact-intake\attempt-sweep.ts | 127 | AttemptSweepResult | ✅ |
 | src\services\artifact-intake\chatgpt-tool-contract.ts | 38 | CHATGPT_ARTIFACT_FILE_TOOL_CONTRACT | ✅ |
 | src\services\artifact-intake\config.ts | 87 | ARTIFACT_MAX_BYTES, ARTIFACT_MANIFEST_MAX_COUNT, ARTIFACT_MANIFEST_MAX_AGGREGATE_BYTES... | ✅ |
-| src\services\artifact-intake\contracts.ts | 135 | ARTIFACT_INTAKE_ERROR, ArtifactIntakeErrorCode, ArtifactIntakeContractError... | ✅ |
+| src\services\artifact-intake\contracts.ts | 136 | ARTIFACT_INTAKE_ERROR, ArtifactIntakeErrorCode, ArtifactIntakeContractError... | ✅ |
 | src\services\artifact-intake\crypto.ts | 108 | SealedArtifactBytes, detectArtifactEnvelopeFamily | ✅ |
 | src\services\artifact-intake\download-body.ts | 57 | — | ✅ |
 | src\services\artifact-intake\download-network.ts | 80 | DEFAULT_ARTIFACT_DOWNLOAD_NETWORK | ✅ |
@@ -89,15 +90,17 @@ Last updated: 2026-04-18 | Session: 7.1 (Hindsight Projection Adapter)
 | src\services\artifact-intake\manifest-identity.ts | 26 | ArtifactManifestIdentityItem | ✅ |
 | src\services\artifact-intake\migration-overlap-audit.ts | 76 | ArtifactFinalizationOverlapAudit, ArtifactOverlapAuditBoundary, ARTIFACT_FINALIZATION_OVERLAP_AUDIT_SQL | ✅ |
 | src\services\artifact-intake\mime.ts | 41 | detectArtifactMimeType | ✅ |
-| src\services\artifact-intake\operations.ts | 819 | ArtifactIntakeOperationRow | ⚠️ OVER LIMIT |
+| src\services\artifact-intake\operations.ts | 840 | ArtifactIntakeOperationRow | ⚠️ OVER LIMIT |
 | src\services\artifact-intake\proof-result.ts | 41 | ArtifactProofMismatchReason, ArtifactProofUnavailableReason, ArtifactProofResult... | ✅ |
-| src\services\artifact-intake\reaper.ts | 101 | ArtifactReaperResult | ✅ |
+| src\services\artifact-intake\reaper.ts | 112 | ArtifactReaperResult | ✅ |
 | src\services\artifact-intake\schemas.ts | 142 | reserveArtifactUploadSchema, openAIFileDescriptorSchema, telegramArtifactFileDescriptorSchema... | ✅ |
+| src\services\artifact-intake\sealed-convergence.ts | 70 | — | ✅ |
 | src\services\artifact-intake\stale-finalization-recovery.ts | 121 | — | ✅ |
 | src\services\artifact-intake\stale-finalization-support.ts | 56 | StaleArtifactFinalizationRecoveryResult, deferOrProtect | ✅ |
 | src\services\artifact-intake\storage-delete.ts | 50 | — | ✅ |
 | src\services\artifact-intake\storage-keys.ts | 42 | — | ✅ |
 | src\services\artifact-intake\storage.ts | 130 | ManagedArtifactCiphertextProof | ✅ |
+| src\services\artifact-intake\upload-admission.ts | 31 | — | ✅ |
 | src\services\artifact-intake\upload-protocol.ts | 34 | ARTIFACT_UPLOAD_PROTOCOL_FENCED, ArtifactUploadProtocolPhase, artifactUploadProtocolPhase... | ✅ |
 | src\services\automations\nl-parse.ts | 88 | ParsedAutomation, parseAutomationIntent, AutomationCommand... | ✅ |
 | src\services\automations\recurrence.ts | 84 | RecurrenceKind, RecurrenceSpec, DEFAULT_TZ... | ✅ |
@@ -347,7 +350,7 @@ Last updated: 2026-04-18 | Session: 7.1 (Hindsight Projection Adapter)
 | src\workers\mcpagent\routes\settings.ts | 73 | settings | ✅ |
 | src\workers\mcpagent\routes\system-telegram.ts | 62 | WEBHOOK_HOSTS, systemTelegram | ✅ |
 | src\workers\mcpagent\routes\system.ts | 89 | system | ✅ |
-| src\workers\mcpagent\runtime.ts | 50 | — | ✅ |
+| src\workers\mcpagent\runtime.ts | 55 | — | ✅ |
 | src\workers\mcpagent\self-registration.ts | 39 | — | ✅ |
 | src\workflows\action-approval.ts | 49 | ActionApprovalParams, ActionApprovalWorkflow | ✅ |
 | src\workflows\bootstrap.ts | 110 | BootstrapWorkflow | ✅ |

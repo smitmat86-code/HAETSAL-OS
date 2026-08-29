@@ -102,11 +102,19 @@ describe('12.6 Session 3 MCP and local binary transport', () => {
       'reserve_artifact_upload',
       'capture_artifact_file',
       'prepare_artifact_file_capture',
+      'artifact_immutable_rollout_status',
+      'repair_artifact_immutable_rollout',
       'finalize_artifact_capture',
       'artifact_intake_status',
     ])
     expect(reg.annotations.get('reserve_artifact_upload')).toEqual({
       readOnlyHint: false, destructiveHint: false, openWorldHint: false,
+    })
+    expect(reg.annotations.get('artifact_immutable_rollout_status')).toEqual({
+      readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false,
+    })
+    expect(reg.annotations.get('repair_artifact_immutable_rollout')).toEqual({
+      readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: false,
     })
     expect(reg.annotations.get('artifact_intake_status')?.readOnlyHint).toBe(true)
     expect(reg.metadata.get('capture_artifact_file')).toEqual({

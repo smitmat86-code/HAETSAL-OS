@@ -53,23 +53,35 @@ still proves the serial orderings and protocol dispatch;
 `tests/12.23-artifact-upload-admission.test.ts` proves the gate refuses,
 fails closed, and reopens.
 
-## Executable sequence (audit → enforce → compat → gate → activate → reopen)
+## Executable sequence (audit → quarantine → compat → gate → promote → activate → reopen)
 
-1. **PREFLIGHT** — require zero managed operations where
-   `adopted_attempt_token IS NULL AND (finalization_id IS NOT NULL OR
-   status = 'finalized')`. Any result is an in-flight old binding or a
-   pre-existing mutable canonical artifact and requires a separately reviewed
-   repair; stop. This read is operator visibility, not the race-free gate.
+1. **PREFLIGHT** — before migration 1033 exists, do not query
+   `adopted_attempt_token`. Inventory existing managed operations using only
+   the deployed schema. Stop for any bound non-finalized row or any finalized
+   row missing finalization ID, ciphertext hash/length, encryption family, or
+   canonical capture/document/operation IDs. Well-formed finalized rows are
+   exact repair candidates, not an automatic migration abort. For the first
+   production rollout, the separately approved inventory is exactly:
 
-2. **EXPAND + ENFORCE** — apply pending migrations. Migration 1037 repeats
-   the preflight invariant inside the migration transaction and aborts the
-   entire migration if an old mutable binding or finalized legacy row exists;
-   this closes the query/install race. It then installs the content-free
-   retired-key tombstone table plus D1 triggers requiring an adopted immutable
-   identity before binding and exact new-code authorization before terminal
-   finalization. From this boundary, an indefinitely delayed old finalization
-   fails closed before canonical side effects and can be retried after the
-   compatibility Worker promotes its object:
+   - category: `immutable_managed_finalized_v1`
+   - targets: `9`
+   - digest: `fd8a286120fdec799bea0dfb622f6a4ff84a7fecb62974a1212ee64cc7425314`
+
+   Any count, identity, or digest change invalidates that approval and requires
+   a new explicit approval. This read is operator visibility, not the
+   race-free gate.
+
+2. **EXPAND + ENFORCE** — apply pending migrations. Migration 1037 atomically
+   snapshots every well-formed finalized legacy row into
+   `artifact_immutable_rollout_repairs`, then repeats the preflight invariant
+   and aborts for any bound non-finalized row or incomplete finalized row. It
+   then installs the content-free retired-key tombstone table plus D1 triggers
+   requiring an adopted immutable identity before binding and exact new-code
+   authorization before terminal finalization. This closes the
+   query/install race without silently blessing old mutable canonical keys.
+   From this boundary, an indefinitely delayed old finalization fails closed
+   before canonical side effects and can be retried after the compatibility
+   Worker promotes its object:
 
    ```
    npx wrangler d1 migrations apply brain-us --remote
@@ -108,19 +120,46 @@ fails closed, and reopens.
    request can still act later and is handled by convergence. If the count
    does not reach zero, investigate; do not proceed on elapsed time alone.
 
-6. **ACTIVATE** — atomic redeploy with
+6. **APPROVED IMMUTABLE PROMOTION** — while the gate remains closed, call
+   `artifact_immutable_rollout_status` through an authenticated tenant session
+   and require the exact approved category, target count, and digest above.
+   Record that approval in the content-free quarantine rows with an operator D1
+   update, then repeat status and require `approved_count = 9`. A null or
+   different stored approval digest fails closed. Then call
+   `repair_artifact_immutable_rollout` with those same three values.
+
+   ```sql
+   UPDATE artifact_immutable_rollout_repairs
+      SET approval_digest = '<approved_digest>', updated_at = <now_ms>
+    WHERE tenant_id = '<approved_tenant_id>' AND approval_digest IS NULL;
+   ```
+
+   Require exactly nine changed rows. Never overwrite a non-null different
+   digest; that is a hard stop requiring investigation.
+   The repair plaintext-proves the original encrypted object, copies the exact
+   ciphertext envelope to the deterministic immutable attempt key, conditionally
+   advances the Neon canonical pointer and D1 identity, and verifies both stores.
+   It is retry-safe across a Neon-to-D1 interruption. The original R2 object is
+   retained and no retired-key tombstone is created for these approved rows.
+   Stop if status reports any pending repair after the call or any approval
+   digest differs.
+
+7. **ACTIVATE** — atomic redeploy with
    `ARTIFACT_UPLOAD_PROTOCOL_PHASE = "active"`. Both builds dispatch the
    upload path on the row's recorded `upload_protocol`, never on their own
    phase; only activation-phase reserves create `fenced_v2` rows. Because the
    gate is closed, no new-writer mutation occurs anywhere in this boundary.
 
-7. **REOPEN the gate** — operator D1 write setting `state = 'open'` (or
+8. **REOPEN the gate** — operator D1 write setting `state = 'open'` (or
    deleting the row). Verify a reserve/upload round-trip succeeds and records
    `upload_protocol = 'fenced_v2'` with an adopted attempt key.
 
-8. **AUDIT** — verify every finalized managed operation has a non-null
+9. **AUDIT** — verify every finalized managed operation has a non-null
    `adopted_attempt_token` and exact immutable attempt key. Compat-phase sealed
-   rows may remain legacy only until finalization promotes them.
+   rows may remain legacy only until finalization promotes them. For the
+   approved nine-row repair, also require `repair_state = 'completed'`, the
+   approved digest on every repair row, exact D1/Neon identity agreement, and
+   continued existence of every original R2 object.
 
 **Rollback** at any step: set the gate `closed`, atomically redeploy the
 previous compat build, then reopen. Do not roll back to code that cannot

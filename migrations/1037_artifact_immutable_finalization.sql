@@ -110,6 +110,6 @@ WHEN (
 )
 BEGIN
   SELECT RAISE(ABORT, 'authorized immutable artifact identity required');
--- Keep `end` lowercase: Wrangler's D1 splitter must preserve this trigger's
--- terminal semicolon when sending the migration to remote D1.
-end;
+-- Remote D1's trigger splitter is case- and line-ending-sensitive. Keep the
+-- compound keywords uppercase and enforce LF through .gitattributes.
+END;

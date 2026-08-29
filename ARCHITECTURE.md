@@ -20,9 +20,10 @@ composed) running against canonical tables and pgvector, not a Graphiti
 projection. Historical D1 tables (`hindsight_operations`, `hindsight_bank_config`,
 `tenants.hindsight_tenant_id`) remain in the schema as inert history - do not
 write to them and do not treat their presence as evidence Hindsight is still
-live. Consolidation passes 1-4 and weekly synthesis are parked pending the
-Phase 8 dream cycle; Law 3 (Agents Write Facts - Crons Write Patterns) is
-unchanged and still governs that work once it resumes.
+live. The dream cycle reads authorized canonical Neon chunks and writes its
+governed report through the canonical capture path; compiled wiki pages remain
+regenerable projections rather than dream-cycle input. Law 3 (Agents Write
+Facts - Crons Write Patterns) is unchanged and governs that work.
 
 ---
 

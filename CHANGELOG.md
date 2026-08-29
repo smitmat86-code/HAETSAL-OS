@@ -2,7 +2,7 @@
 
 ## 0.1.0 - 2026-08-29
 
-- Added governed raw-artifact intake shared by coding agents, ChatGPT, Telegram, and Sendblue.
-- Added encrypted R2 source and derivative retention with canonical Neon extraction, manifests, and exact receipts.
-- Added idempotent lifecycle and recovery handling, channel-convergence checks, and legacy inventory and remediation tooling.
-- Added content-free lifecycle telemetry, a synthetic artifact canary, canonical dream-cycle reads, and operations runbooks.
+- Capture files once from coding agents, ChatGPT, Telegram, or Sendblue through the same governed intake flow.
+- Retain encrypted exact originals and declared derivatives in R2 while keeping searchable extraction, manifests, and provenance canonical in Neon.
+- Recover safely from retries, interrupted uploads, and mixed-version rollouts without duplicating or losing artifacts.
+- Monitor intake with content-free lifecycle events and a synthetic canary, while the dream cycle reads canonical Neon content rather than raw files or compiled wiki pages.

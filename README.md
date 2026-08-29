@@ -63,7 +63,7 @@ Enforced structurally in `brain_v1_retain` middleware - not by prompt.
 | Session state | Cloudflare Durable Objects (McpAgent) |
 | Operational metadata | Cloudflare D1 |
 | Semantic search | Postgres pgvector (T1) via the 7-mode retrieval broker; Vectorize binding present but unused |
-| Artifact storage | Cloudflare R2 |
+| Artifact storage | Cloudflare R2 (governed, encrypted exact originals and declared derivatives) |
 | Async jobs | Cloudflare Queues + Workflows |
 | AI routing | Cloudflare AI Gateway (haetsal-brain-gateway) |
 | Web UI | Cloudflare Pages |
@@ -90,10 +90,11 @@ Embeddings: Workers AI @cf/baai/bge-base-en-v1.5 via AI Gateway (collectLog: fal
 
 Historical D1 tables (`hindsight_operations`, `hindsight_bank_config`,
 `tenants.hindsight_tenant_id`) remain in the schema as inert history and are
-not written to. Consolidation passes and weekly synthesis are parked pending
-the Phase 8 dream cycle. See `ARCHITECTURE.md` for the full migration note
-and `LESSONS.md` for historical Hindsight-era lessons (retained for
-archaeology, no longer operative).
+not written to. The dream cycle reads authorized canonical Neon chunks and
+writes its governed report back through the canonical capture path; compiled
+wiki pages remain regenerable projections, not dream-cycle input. See
+`ARCHITECTURE.md` for the full migration note and `LESSONS.md` for historical
+Hindsight-era lessons (retained for archaeology, no longer operative).
 
 ---
 
@@ -112,11 +113,14 @@ npm run dev           # Local development (wrangler dev)
 
 ## Build Sequence
 
-See `docs/build-sequence.md` for the full Phase 1-5 spec roadmap.
+`docs/build-sequence.md` preserves the original Phase 1-5 roadmap. The current
+mission and its live completion gates are tracked in `HAETSAL_MISSION.md`.
 
-**Current phase:** Phase 1 - Foundation
-**Last completed:** Session 1.1 - Infrastructure Bedrock
-**Next spec:** Session 1.2 - McpAgent Worker + auth + TMK derivation
+**Current phase:** Phase 13 hardening and final cutover
+**Last completed:** Governed artifact intake Sessions 1-6, including recovery,
+telemetry, canary coverage, and canonical dream-cycle integration
+**Next gate:** Session 7 production migration, compatibility rollout, active
+cutover, rollback proof, and live channel evidence
 
 ---
 

@@ -38,6 +38,7 @@ export interface CanonicalMemoryStore {
   vectorSearchAvailable(): Promise<boolean>
   getCapture(tenantId: string, captureId: string): Promise<CanonicalCaptureRecord | null>
   getCaptureBodyKey(tenantId: string, captureId: string): Promise<string | null>
+  promoteArtifactStorageIdentity(input: CanonicalArtifactStoragePromotion): Promise<CanonicalArtifactStoragePromotionResult>
   listRecentDocuments(tenantId: string, scope: string | null, limit: number): Promise<CanonicalListRow[]>
   getDocument(tenantId: string, documentId: string): Promise<CanonicalDocumentLookupRow | null>
   getOperationById(tenantId: string, operationId: string): Promise<CanonicalOperationLookupRow | null>
@@ -63,6 +64,20 @@ export interface CanonicalMemoryStore {
   ): Promise<string[]>
   getStats(tenantId: string): Promise<CanonicalStatsRow>
 }
+
+export interface CanonicalArtifactStoragePromotion {
+  tenantId: string
+  captureId: string
+  artifactId: string
+  originalR2Key: string
+  targetR2Key: string
+  plaintextSha256: string
+  ciphertextSha256: string
+  byteLength: number
+  encryptionFamily: 'tmk' | 'kek'
+}
+
+export type CanonicalArtifactStoragePromotionResult = 'updated' | 'already_target' | 'mismatch'
 
 function compareProjectionResults(
   left: Pick<CanonicalProjectionResultRecord, 'updated_at' | 'created_at' | 'id'>,
@@ -344,6 +359,20 @@ export class InMemoryCanonicalMemoryStore implements CanonicalMemoryStore {
 
   async getCaptureBodyKey(tenantId: string, captureId: string): Promise<string | null> {
     return (await this.getCapture(tenantId, captureId))?.body_r2_key ?? null
+  }
+
+  async promoteArtifactStorageIdentity(
+    input: CanonicalArtifactStoragePromotion,
+  ): Promise<CanonicalArtifactStoragePromotionResult> {
+    const row = this.artifactRows.get(input.artifactId)
+    if (!row || row.tenant_id !== input.tenantId || row.capture_id !== input.captureId ||
+      row.sha256 !== input.plaintextSha256 || row.cipher_sha256 !== input.ciphertextSha256 ||
+      row.byte_length !== input.byteLength || row.storage_kind !== 'managed_r2' ||
+      row.encryption_family !== input.encryptionFamily) return 'mismatch'
+    if (row.r2_key === input.targetR2Key) return 'already_target'
+    if (row.r2_key !== input.originalR2Key) return 'mismatch'
+    this.artifactRows.set(row.id, { ...row, r2_key: input.targetR2Key })
+    return 'updated'
   }
 
   async listRecentDocuments(tenantId: string, scope: string | null, limit: number): Promise<CanonicalListRow[]> {
@@ -826,6 +855,33 @@ export class PostgresCanonicalMemoryStore implements CanonicalMemoryStore {
 
   async getCaptureBodyKey(tenantId: string, captureId: string): Promise<string | null> {
     return (await this.getCapture(tenantId, captureId))?.body_r2_key ?? null
+  }
+
+  async promoteArtifactStorageIdentity(
+    input: CanonicalArtifactStoragePromotion,
+  ): Promise<CanonicalArtifactStoragePromotionResult> {
+    const updated = await this.sql`
+      UPDATE haetsal_canonical.canonical_artifacts
+      SET r2_key = ${input.targetR2Key}
+      WHERE id = ${input.artifactId} AND tenant_id = ${input.tenantId}
+        AND capture_id = ${input.captureId} AND r2_key = ${input.originalR2Key}
+        AND sha256 = ${input.plaintextSha256}
+        AND cipher_sha256 = ${input.ciphertextSha256}
+        AND byte_length = ${input.byteLength}
+        AND storage_kind = 'managed_r2'
+        AND encryption_family = ${input.encryptionFamily}
+      RETURNING id`
+    if (updated.length === 1) return 'updated'
+    const current = await this.first<CanonicalArtifactRecord>(this.sql`
+      SELECT * FROM haetsal_canonical.canonical_artifacts
+      WHERE id = ${input.artifactId} AND tenant_id = ${input.tenantId}
+        AND capture_id = ${input.captureId}`)
+    return current?.r2_key === input.targetR2Key &&
+      current.sha256 === input.plaintextSha256 &&
+      current.cipher_sha256 === input.ciphertextSha256 &&
+      current.byte_length === input.byteLength && current.storage_kind === 'managed_r2' &&
+      current.encryption_family === input.encryptionFamily
+      ? 'already_target' : 'mismatch'
   }
 
   async listRecentDocuments(tenantId: string, scope: string | null, limit: number): Promise<CanonicalListRow[]> {

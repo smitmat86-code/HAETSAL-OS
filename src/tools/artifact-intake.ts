@@ -26,6 +26,7 @@ import {
 } from './artifact-intake-tool-support'
 import { registerChatGptArtifactTool } from './artifact-intake-chatgpt'
 import { registerChatGptArtifactCaptureUi } from './artifact-intake-chatgpt-ui'
+import { registerArtifactIntakeRolloutTools } from './artifact-intake-rollout'
 
 export * from './artifact-intake-tool-contracts'
 
@@ -60,6 +61,7 @@ export function registerArtifactIntakeTools(server: McpServer, ctx: ArtifactInta
 
   registerChatGptArtifactTool(server, ctx)
   registerChatGptArtifactCaptureUi(server, ctx)
+  registerArtifactIntakeRolloutTools(server, ctx)
 
   server.tool(
     'finalize_artifact_capture',

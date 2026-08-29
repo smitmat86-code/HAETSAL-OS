@@ -1,9 +1,16 @@
 # Artifact upload ownership rollout (migrations 1033–1038, fenced_v2)
 
-Status: NOT executed. Production remains on Worker version
-`bc5b4e08-6344-4df7-b7ae-a451371486a2` (old Worker, 1e4d3a6 behavior).
-Migrations 1033, 1034, 1035, 1036, 1037, and 1038 are pending and were not applied
-remotely.
+Status: SHIPPED and verified on 2026-08-29. Production is on Worker version
+`112facd4-4903-464e-986a-7cfe4af2635a` at 100% with
+`ARTIFACT_UPLOAD_PROTOCOL_PHASE = "active"`. Migrations 1033–1038 are applied,
+the upload-admission gate is open, and the built-in canary is healthy at 7/7.
+
+The approved `immutable_managed_finalized_v1` repair completed all nine targets
+under digest `fd8a286120fdec799bea0dfb622f6a4ff84a7fecb62974a1212ee64cc7425314`.
+All nine original R2 ciphertext objects were re-read and matched their exact
+recorded length and SHA-256 after promotion. The first active-phase canary then
+created a tenth managed artifact; all ten finalized managed rows have valid
+`fenced_v2` attempt identities.
 
 ## The actual safety guarantee (no request-lifetime assumption)
 

@@ -96,22 +96,20 @@ ALTER TABLE artifact_intake_operations
   ADD COLUMN immutable_finalize_authorized INTEGER NOT NULL DEFAULT 0
   CHECK (immutable_finalize_authorized IN (0, 1));
 
--- Old finalization binds operations before any canonical write. Reject a
--- legacy binding at that boundary, before Neon can observe a mutable key.
-CREATE TRIGGER require_immutable_artifact_before_binding
-BEFORE UPDATE OF finalization_id ON artifact_intake_operations
-WHEN NEW.finalization_id IS NOT NULL AND NEW.adopted_attempt_token IS NULL
-BEGIN
-  SELECT RAISE(ABORT, 'immutable artifact identity required before binding');
-END;
-
--- The shipped old Worker cannot name this new authorization column. New code
--- sets it only inside the exact-identity terminal CAS.
-CREATE TRIGGER require_authorized_immutable_artifact_finalize
-BEFORE UPDATE OF status ON artifact_intake_operations
-WHEN NEW.status = 'finalized' AND (
-  NEW.adopted_attempt_token IS NULL OR NEW.immutable_finalize_authorized != 1
+-- Old finalization binds operations before any canonical write. The shipped
+-- old Worker also cannot name the new authorization column. One trigger covers
+-- both transition boundaries atomically with the quarantine snapshot.
+CREATE TRIGGER require_authorized_immutable_artifact_transition
+BEFORE UPDATE OF finalization_id, status ON artifact_intake_operations
+WHEN (
+  NEW.finalization_id IS NOT NULL AND NEW.adopted_attempt_token IS NULL
+) OR (
+  NEW.status = 'finalized' AND (
+    NEW.adopted_attempt_token IS NULL OR NEW.immutable_finalize_authorized != 1
+  )
 )
 BEGIN
-  SELECT RAISE(ABORT, 'authorized immutable artifact required before finalization');
-END;
+  SELECT RAISE(ABORT, 'authorized immutable artifact identity required');
+-- Keep `end` lowercase: Wrangler's D1 splitter must preserve this trigger's
+-- terminal semicolon when sending the migration to remote D1.
+end;

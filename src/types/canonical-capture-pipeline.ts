@@ -14,6 +14,7 @@ export interface CanonicalPipelineCaptureInput {
   body: string
   bodyEncrypted?: string | null
   artifactRef?: CanonicalArtifactRef | null
+  artifactRefs?: CanonicalArtifactRef[] | null
   capturedAt?: number | null
   memoryType?: 'episodic' | 'semantic' | 'world'
   provenance?: string | null
@@ -46,6 +47,7 @@ export interface CanonicalCapturePipelineResult {
     captureId: string
     documentId: string
     artifactId: string | null
+    artifactIds: string[]
     chunkIds: string[]
     operationId: string
     projectionJobIds: string[]

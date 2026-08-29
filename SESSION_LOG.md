@@ -5,6 +5,37 @@
 
 -------
 
+## Session 5 final correction continuation — rollout safety, orphan governance, exact proofs - 2026-08-18
+
+**Scope:** Implementation-and-local-validation only, on `codex/session5-final-correction` in the dedicated worktree, starting HEAD `e518817`. Implementation + tests commit: `b0b29fd`; docs commit: `e6dcd1a` (+ this evidence annotation). Migrations changed/added: `1033` (adds `upload_protocol`, rollout contract), `1034` (adds `integrity_recorded_at`), `1035` (new `artifact_upload_attempts` journal) — all expand-only, none applied remotely. NOTHING WAS DEPLOYED: production remains on Worker version `bc5b4e08-6344-4df7-b7ae-a451371486a2`; migrations 1033/1034/1035 were NOT applied remotely; no provider (Telegram/Sendblue) message was sent; no legacy remediation or digest approval occurred; nothing was merged. Session 5 is NOT claimed complete. Final independent approval belongs to the original review session.
+**A — Safe mixed-version rollout:** the old Worker's upload mutations are guarded only by `status != 'finalized'`, so no D1 predicate can protect an attempt-adopted row from it. The rollout is now protocol-versioned: migration 1033 adds `upload_protocol`; only activation-phase reserves (`ARTIFACT_UPLOAD_PROTOCOL_PHASE = "active"`) create `fenced_v2` rows, the only rows on which attempt-key adoption is enabled; legacy/compat rows are always uploaded through the legacy per-upload key by every version. Gradual old→compat and compat→active deploys are permitted; **gradual old→active is prohibited**. Executable expand → compatibility → verified drain → activate → enforce sequence documented in `migrations/1033_artifact_upload_ownership.sql` and `docs/runbooks/artifact-upload-ownership-rollout.md`. wrangler.toml pins the compat phase for the next deploy. Deterministic tests replay the exact 1e4d3a6 seal, mark-failed, and legacy-recovery SQL after new adoption and prove D1/R2 cannot split (12.17).
+**B — Orphan attempt governance:** content-free attempt journal (`artifact_upload_attempts`, migration 1035) written before every fenced R2 put; immediate post-loss cleanup deletes only the losing attempt's unique key after authoritative D1 proof, never on ambiguity; bounded crash-safe sweeper (wired into `reapExpiredArtifactUploads`) requires lease expiry plus a full write-lifetime grace window (15 min), never deletes the adopted attempt or a live attempt, and retires journal rows after authoritative cleanup (12.18).
+**C — Exact adoption-loss proof:** a losing writer now rereads the operation and returns a receipt only after `proveManagedArtifactCiphertext` verifies recorded key derivation, adopted token, object existence, exact size, and exact hash; authoritative mismatch fails closed as `ciphertext_invalid`; indeterminate proof fails as `invalid_state` without mutation. The former forged-key acceptance test now requires rejection (12.12).
+**D — Bounded reads/deletes:** `readManagedArtifactCiphertext` requires the exact expected byte length and rejects on `R2Object.size` before materializing anything; sealed replay and legacy recovery derive/require expectations; `deleteProvenManagedArtifact` requires exact key + size + hash when an identity was recorded and reads zero bytes otherwise; reaper passes recorded lengths. Zero-arrayBuffer proofs for sealed replay, legacy recovery, adopted-object deletion, and expired-operation reaping (12.19).
+**E — Integrity orthogonality:** `markChannelMediaIntegrityIncident` now touches only `integrity_status` and new first-writer-wins `integrity_recorded_at` (migration 1034 extended); it no longer clears `lease_token`/`lease_expires_at` or moves `updated_at`, so processing owners and delivery claimants can still commit finalized/delivered/rejected/unknown; affected-row result returned. Lease-preservation, idempotency, and content-free tests added (12.16).
+**F — Fenced failure:** `markUploadFailed` requires the exact attempt token, unexpired attempt lease, unexpired operation, no expiry claim, no finalization binding, reserved/failed only; exactly one changed row or the caller receives `ownership_lost` (12.18).
+**G — Canonical validator alignment:** shared `canonical-artifact-manifest.ts` contract (exactly one source, first, no parent, the only primary; every derivative parented to an earlier entry) now enforced by `toNormalizedArtifacts` and the canonical store write path in `canonical-postgres-repository.ts`, matching the artifact-intake finalization schema; canonical-layer tests added (12.20).
+**H — Suite-contamination repair:** the migration-overlap straggler test now uses a deterministic ancient interval no other fixture can enter plus exact before/after baseline deltas, proving bounded-at-deployment excludes only the inserted straggler and audit-time includes it, without weakening the tenant-global production audit SQL. Passes alone, in its file, and in the complete suite.
+**Validation:** complete suite run 1: 105 files passed, 694 tests passed / 1 skipped (695). Complete suite run 2: 105 files passed, 694 passed / 1 skipped (695) — no timing contamination. Focused artifact ownership/lifecycle/recovery/reaper/channel/integrity/migration-audit lanes green. `npm run postflight` green; `npx wrangler deploy --dry-run` OK (includes `ARTIFACT_UPLOAD_PROTOCOL_PHASE = "compat"`); `git diff --check e518817..HEAD` clean; worktree clean after commits.
+**TypeScript baseline comparison:** baseline at `e518817` = 152 diagnostics; after this correction 155 = 152 + 3 new instances of the pre-existing environmental `TS2307 cloudflare:test` diagnostic (one per new test file importing `cloudflare:test`; same class as 70+ existing instances). Zero new source diagnostics; no new diagnostic classes.
+**Correction of the prior entry:** the `e518817` claim below that the full suite passed (665/1 skip) was not reproducible and has been annotated in place; the reproducible result at `e518817` was 100 files passed / 1 failed, 664 passed / 1 failed / 1 skipped.
+**Remaining gates (original review session):** independent re-review of this continuation; deployment authorization; remote EXPAND of migrations 1033/1034/1035; compatibility deploy; verified drain; activation deploy; enforcement audit; live Telegram/Sendblue gates; legacy remediation approvals; Session 5 closeout.
+
+--
+
+## Session 5 final correction — artifact lifecycle, concurrency, retention, contract gaps - 2026-08-18
+
+**Scope:** Implementation-and-validation only, on `codex/session5-final-correction` in a dedicated worktree. Starting HEAD `1e4d3a6` (docs) over implementation `7106be9`, review baseline `d0fdf4e`. NOTHING WAS DEPLOYED: production remains on Worker version `bc5b4e08-6344-4df7-b7ae-a451371486a2`; migrations 1033/1034 were NOT applied remotely; no provider messages, no legacy R2 remediation, no category/digest approvals, no merge to master. Session 5 is NOT claimed complete.
+**Commits (logical):** `2acf72c` reaper canonical-body preservation + proof helper narrowing (C, I) · `684da77` one manifest contract at intake (D) · `6113f03` audit boundary contract (E) · `d9d8d89` fenced upload ownership + migration 1033 (A) · `d42e567` atomic child-first failed-parent repair (B) · `e6a5ee0` bounded persisted-manifest load/proof (F) · `3e17b4f` canonical-absence vs recovery deadline ordering (G) · `5995b1a` integrity_status separation + migration 1034 (H) · `ef3fa1e` postflight hygiene refactor · plus this docs commit.
+**Migrations added (NOT applied remotely):** `1033_artifact_upload_ownership.sql` (upload_attempt_token/expiry, adopted_attempt_token; expand-only) and `1034_channel_media_integrity_status.sql` (integrity_status; expand-only). Both safe under the currently deployed old Worker; expand → deploy → enforce sequencing documented in the migration and ADR.
+**Key files changed:** artifact-intake operations/storage(+storage-keys)/reaper/finalize/finalization-proof/schemas/config/proof-result/stale-finalization-recovery(+support)/migration-overlap-audit; channel-media canonical-recovery(+outcomes)/canonical-recovery-support/job-transitions/orchestrator-recovery/reaper/jobs; types/channel-media.
+**Fault-injection scenarios proven (deterministic, gated interleavings):** (1) dual uploaders → exactly one immutable ciphertext adopted, D1 hash/key match it, loser is a never-canonical orphan (12.12); (2) stale post-lease writer cannot overwrite or resurrect (12.12); (3) reaper-claim vs in-flight upload → live attempt defers reaper, late writer rejected (12.12); (4) failure writer and late adoption cannot downgrade a sealed finalization-bound operation (12.12); (5) failed-parent/sealed-child repair vs reaper claim → parent never finalized while child deletable; clean split repairs atomically (12.13); (6) generic reaper preserves canonical document bodies on stale pointers (12.13 + 12.3); (7) derivative-only/parentless/forward-ref/multi-source/multi-primary manifests rejected pre-persistence (12.11); (8) old-version write committing after workerDeployedAt is still found by the invariant-wide audit (12.3); (9) ≥9 stored ops, false low counts, oversized per-object/aggregate → bounded work, protected for review, zero R2 reads (12.14); (10) artifact-integrity failure after finalized/delivered history preserves delivery truth; genuine provider ambiguity still yields delivery_unknown; incident state is content-free (12.16, 12.8); plus recovery-deadline ±1 ms and live-lease-to-boundary ordering (12.15).
+**Validation:** ~~full suite 101 files, 665 passed, 1 intentional skip~~ **[CORRECTED 2026-08-18: this full-suite claim is not reproducible. Independent re-runs at `e518817` gave 100 test files passed / 1 failed, 664 tests passed / 1 failed / 1 skipped: the migration-overlap audit test passes alone but was contaminated in the complete suite by another fixture inside its Date.now-based interval. Fixed in the 2026-08-18 continuation entry above.]** (baseline was 631 passed / 1 skip — 34 tests added); `npm run postflight` green; `npx wrangler deploy --dry-run` OK; `git diff --check 1e4d3a6..HEAD` clean; worktree clean after each commit. Log review: the only added logs are content-free `ARTIFACT_INTEGRITY_INCIDENT { reason, finalizationId }` — no filenames, paths, URLs, bodies, ciphertext, or extracted content in code, logs, or persisted state.
+**TypeScript baseline comparison:** repo baseline at 1e4d3a6 = 148 pre-existing errors. After correction: 152 = 148 − 2 (this correction fixes the canonical-recovery-support union mismatches) + 6 new instances of the pre-existing environmental `TS2307 cloudflare:test` diagnostic that every test file in the repo carries (one per new test file; same class, 70+ existing instances). Zero new source errors; no new error classes.
+**Remaining gates (for the original review session):** independent re-review of this correction; deployment authorization; applying migrations 1033/1034 remotely (expand) before deploying the fenced Worker; post-drain enforcement decision; separately fenced orphan-attempt-object cleanup design; canonical-body orphan cleanup remains deliberately deferred; live Telegram/Sendblue gates; Session 5 closeout.
+
+--
+
 ## 14.4 Chat model swap + LLM classifier removal (research-driven) - 2026-07-06
 
 **Motivation:** 2026-07-06 incident postmortem + 5.6M-token deep-research pass (105 agents, 25 verified claims). Confirmed reasoning models legitimately return empty responses when hidden <think> tokens exhaust max_tokens (documented across OpenAI o-series, DeepSeek R1, Claude extended thinking, Gemini thinking - gemma-4-26b-a4b-it is the same class). Research also flagged the 3x amplification (intent + delegation + reply LLM classifiers) as an anti-pattern: semantic routing belongs at the front door of a general assistant, not inside a pipeline that already knows its intent.
@@ -1953,3 +1984,350 @@
 **Next:** Integrator validates `mission/m4-ops-ingress` (this repo + Fitness App), confirms brief render, moves spec to completed.
 
 ---
+
+## Session 3 - 2026-08-14
+
+**Plan:** Governed artifact intake — MCP and local coding-agent flow
+**Built:**
+- Registered `reserve_artifact_upload`, `finalize_artifact_capture`, and `artifact_intake_status` with server-derived tenant, delegated-client, and agent provenance.
+- Added the authenticated, tenant-scoped binary upload route with preflight authorization, streaming limits, MIME sniffing, TMK sealing, idempotent retry handling, and content-free failures.
+- Added the Node/PowerShell local upload helper plus install, repair, configuration, and live tool-discovery proof checks for Codex and Claude Code.
+- Enforced exact source/derivative manifests so an intentionally created derivative cannot be silently omitted.
+- Updated the Codex and Claude Code governed-file instructions only after both clients discovered all three live tools.
+
+**Decisions:**
+- Delegated client IDs map only to provenance labels; they never grant or change tenant access.
+- The transport rejects missing TMK or unresolved client identity before accepting content, and verifies tenant-scoped operation state before consuming a body.
+- Local paths and raw bytes stay local to the helper; D1 and error/log surfaces remain metadata-only.
+- Session 3 excludes hosted ChatGPT attachments, provider convergence, remote URL download, compiled-wiki work, and multi-user redesign.
+
+**Verification:**
+- `npx vitest run tests/12.6-artifact-intake-local-transport.test.ts` — 7 passed.
+- Focused artifact/auth/canonical regression lane — 66 passed.
+- `npm test` — 552 passed, 1 skipped across 90 files.
+- `npx wrangler deploy --dry-run` — passed; clean-commit production Worker version `214a968f-b997-4e69-b0a6-826be8f591b2` deployed.
+- `npx wrangler d1 migrations apply D1_US --remote` — migration `1030_artifact_intake_operations.sql` applied; final check reported no migrations pending.
+- `scripts/install-haetsal-artifact-upload.ps1 -Fix -Proof -Client both` — Codex and Claude each discovered all three artifact tools after final deploy.
+
+**Live Proof:**
+- Fresh Codex and Claude Code processes each completed image vision extraction, document text extraction, managed encrypted R2 upload, canonical finalize, search, and status receipt using distinct delegated credentials.
+- Both receipts resolved to tenant binding `c21ca228e1db365f4d6d4d5c`; provenance remained distinct as `Codex` / `codex-local` and `Claude Code` / `claude-code-local`.
+- Four captures produced six finalized artifacts; all six R2 objects verified as TMK envelopes with matching ciphertext hashes and bytes distinct from plaintext.
+- Canonical manifests round-tripped with correct source/derivative parent relationships, and all four unique extraction markers were searchable.
+- Live cross-tenant status/upload probes returned content-free not-found responses; retry reused upload/artifact/ciphertext identity; tests proved missing-key fail-closed, oversize rejection, and derivative-omission failure.
+
+**Limitations:** Repository-wide `npm audit --omit=dev --audit-level=high` still reports 13 pre-existing dependency advisories; Session 3 changed no package dependencies and does not use the affected middleware paths.
+**Next:** Session 4 only: implement and prove the ChatGPT hosted-attachment surface against this governed intake contract.
+
+---
+
+## Session 4 - 2026-08-14
+
+**Plan:** Governed artifact intake — ChatGPT hosted-attachment flow
+
+**Commit and deployment evidence:**
+- Accepted Sessions 1–3 baseline: `fa7eb3a50ce72de5df866649a1c1439c07d89671`.
+- Deployed Session 4 implementation tree: `0edf67bc933a9bfb722dfceb1601d35e4b7f1334`.
+- Authoritative Cloudflare history reconciles the Session 3 discrepancy: version `214a968f-b997-4e69-b0a6-826be8f591b2` was created at `2026-08-14T17:46:20.328Z`; version `0a064cb3-589a-4ed8-843d-a29f9d01a247` was created and deployed 77.866 seconds later at `2026-08-14T17:47:38.194Z`. Therefore `0a064cb3-589a-4ed8-843d-a29f9d01a247`, not `214a968f-b997-4e69-b0a6-826be8f591b2`, was the actual production version immediately before Session 4.
+- Final production deployment: Worker version `73f51c3d-75ae-4aca-9805-2366ce477f12`, created `2026-08-15T01:32:40.616Z`, serving 100%.
+
+**Built:**
+- Added `capture_artifact_file` with the current OpenAI hosted-file descriptor (`download_url`, `file_id`, optional `mime_type` and `file_name`) and required `_meta["openai/fileParams"] = ["file"]`.
+- Added HTTPS-only download policy with URL/hostname/literal-IP checks, public DNS validation before and around the connection attempt, redirect-by-redirect revalidation, private/link-local/loopback/metadata-range blocking, bounded redirects, abortable timeout, streaming byte cap, declared/detected MIME validation, and content-free errors/logs.
+- Used the Workers-supported isolated `fetch` path for HTTPS after public DNS validation; injected transports still require an exact verified peer address. No VPC/private-network egress binding exists on the Worker.
+- Routed downloaded bytes through the existing reserve, TMK seal, R2 upload, canonical finalize, status, and search path with one exact source artifact and no undeclared derivatives.
+- Added an authenticated stateless fast path for this sensitive tool so the Agents SDK cannot copy hosted descriptors or model extraction into its internal `cf-mcp-message` request header. Malformed or mixed capture batches now fail closed before Durable Object forwarding.
+- Kept the direct private ChatGPT developer-mode tool as the supported surface. The fallback picker UI remains available but is not counted as completion because the current ChatGPT host rejects component-initiated continuation calls.
+
+**Live ChatGPT proof:**
+- Direct image attachment required vision extraction and produced searchable `SUNLIT-CANARY-8417; three amber circles`. Finalized upload `30aaaaa0-a094-4652-aa1c-1c6c54d82de8`, artifact `e3d231cb-a4c8-42eb-9b8b-ac8d87933d1f`, capture `8acc6519-10ce-49e3-a2bd-87d12ecb0e05`, document `a11ef056-2bb4-4f2f-ac92-f7b67080b042`.
+- Direct PDF attachment required text extraction and produced searchable `GOVERNED-ORBIT-2964` plus `the archive shelf is labeled NORTH-6`. Finalized upload `eb4eec68-f4bd-4a5d-80a1-d3a67ca65397`, artifact `5cfc33db-27e0-4424-8e6b-5bb0332e4fc3`, capture `4e3ffbfe-2196-4b91-8339-5531421bc5bf`, document `ab33d312-a859-40d0-a6ee-ccb36811bf41`.
+- Both `artifact_intake_status` receipts returned `finalized` with no error. `search_memory` returned the same canonical capture/document pairs, `source_system: file`, evidence trust, the requested scopes/titles, and the model-generated extraction.
+- Each receipt contained exactly one primary `source` artifact, `parentArtifactId: null`, and zero derivatives. No intentional derivative was created in this session.
+- After the final deploy, an idempotent ChatGPT PDF canary returned `finalized` for capture `c7342e48-7667-4637-8114-494de745d10a` and document `d6c2a8e0-3f35-4e91-9545-36a2ce918434`.
+
+**Downloader and security proof:**
+- Live no-attachment prompt: content-free `invalid_arguments`; live indirect path reference: `UNREGISTERED_FILE_REFERENCE`.
+- Live manually injected private, DNS-rebinding, redirect-to-private, and expired descriptors: ChatGPT rejected each as `invalid_arguments` at its registered-file boundary, before HAETSAL received a descriptor.
+- Live intentionally mislabeled image: ChatGPT returned `blocked_by_safety_checks` before the tool call; the HAETSAL integration suite independently confirms `mime_mismatch` when a mismatched declared descriptor reaches the downloader.
+- Live directly attached 26,214,401-byte ChatGPT-hosted fixture: `bulk_import_required`, proving the production size gate on the supported attachment surface.
+- Live tenant-scoped unknown upload: content-free `not_found`; unauthenticated external MCP POST: HTTP 401 with no request echo.
+- Contract tests additionally exercised redirect-hop revalidation, private DNS, DNS-rebinding set changes, peer mismatch, streaming overflow cancellation, timeout abort, expired 410/unauthorized hosted URLs, declared/detected MIME mismatch, and malformed/mixed sensitive MCP batches.
+
+**Metadata and ciphertext audit:**
+- Remote D1 rows for both primary proofs contain only operational IDs, MIME categories, byte length, hashes, encryption family, and canonical IDs; the targeted prohibited-value scan returned `0`.
+- Downloaded managed R2 objects begin with `TMK1:`; object SHA-256 values exactly match the receipts (`c9050666eefa9a3caddbbe1ab00a97610c38065aba60dd1dab1cc5600292097d` image, `734abf04329d61ef64853aa4c132db919fd97fd11471f2848d4e9d90078b2d7c` PDF). Neither ciphertext contains either extraction marker.
+- Queue/log/D1 instrumentation found no temporary URL, provider file ID, local path, filename, caption, body, or extraction. Final production tail decoding showed only ordinary handshake forwarding (`descriptor=False`, `extraction=False`); the capture call itself stayed on the stateless fast path.
+- Upload, status, validation, and authentication failures remained content-free. Canonical provenance retains only `source_system: file`, null source reference/filename, `chatgpt_hosted_attachment`, and the authenticated ChatGPT client/agent identity.
+
+**Verification:**
+- `npx vitest run tests/12.6-artifact-intake-local-transport.test.ts tests/12.7-artifact-intake-chatgpt-hosted.test.ts` — 18 passed.
+- Exact committed-tree `npm test -- --run` — 559 passed, 1 skipped across 91 files.
+- `npm run postflight` — passed.
+- `npx wrangler deploy --dry-run` — passed.
+- Independent code/security review: no critical or high Session 4 findings after mixed-batch fail-closed and DNS-timeout hardening. `npm audit` could not run because this repository has no lockfile; Session 4 added no package dependencies.
+- Durable HAETSAL closeout queued as capture `d7604b4d-3f7b-4298-93e2-2dbf019e7d58`, document `5b75a395-b6ba-4ae9-b46c-8d4f517e826c`, canonical scope `general`.
+
+**Remaining limitations:**
+- ChatGPT intentionally does not allow a model to inject arbitrary hosted descriptor objects; unsafe/redirect/expired literal probes therefore stop at the OpenAI file-parameter boundary. HAETSAL's downstream branches are covered by the integration/security suite, while the supported real attachment surface passed end to end.
+- One unrelated ChatGPT schema-discovery mistake invoked `capture_memory` with the literal word `invalid`; it carried no attachment metadata/content and did not affect either artifact capture.
+
+**Next:** Session 5 only: converge Telegram/Sendblue on the common governed intake service and perform the separately authorized legacy media remediation. Do not broaden into compiled-wiki or multi-user redesign work.
+
+---
+
+## Session 5 - 2026-08-15
+
+**Status:** Deployed and committed-tree green; not complete. Fresh real Telegram and Sendblue image proofs are still required, and legacy remediation is stopped at the explicit approval boundary.
+
+**Commit and deployment evidence:**
+- Accepted Session 4 closeout HEAD: `48f6c5c375cb9ba3cc6131c5e1dafc65a961f208`.
+- Channel convergence implementation: `9d59e4728282986cea9d0de91238220cee24e206`.
+- Queue-consumer line-limit refactor: `ed22f82`.
+- Exact clean deployed tree: `25fda7d594680a718d8515943e39de0451384ec5`.
+- Production Worker version: `9f0d6768-dc99-4542-a25d-c15e920a2253`.
+- Remote D1 migration `1031_channel_media_intake.sql` applied successfully before deployment.
+
+**Implemented:**
+- Replaced both direct `telegram-media/*` and `sendblue-media/*` plaintext writes with one provider-neutral channel-media lifecycle.
+- Verified webhooks now create tenant/provider-scoped hashed idempotency jobs, KEK-seal locators/reply metadata into expiring managed handoffs, and queue only an opaque operation ID.
+- Queue consumers acquire bounded provider bytes, sniff MIME, perform adapter-side vision extraction, TMK-seal the exact original, finalize one primary source through the existing canonical Neon contract, verify artifact status, and only then claim a completion response.
+- Telegram uses fixed Bot API origins with redirect refusal. Sendblue re-fetches current attachment metadata by authenticated `message_handle`; its encrypted fallback URL uses the Session 4 SSRF/DNS/redirect/timeout/streaming controls.
+- Durable leases, deterministic upload/finalize identities, delivery claims, ambiguous-send suppression, and expiry reaping cover webhook/queue redelivery and partial failures without duplicate captures or replies.
+
+**Validation:**
+- Focused Session 5 contract lane: 66 passed; post-refactor focused lane: 36 passed.
+- Exact committed-tree `npm test`: 573 passed, 1 skipped across 95 files.
+- `npm run postflight`: passed.
+- `npx wrangler deploy --dry-run`: passed on the exact deployed tree.
+- Current production status reads for the Session 4 image/PDF canaries remain finalized and TMK-sealed, and the live canonical search surface still returns the Session 3 Codex/Claude proof record. No Session 3 or Session 4 control was weakened.
+
+**Read-only legacy inventory:**
+- Referenced Telegram: 2 objects / 136,114 bytes; referenced Sendblue: 0 / 0.
+- Orphan Telegram: 3 / 204,045; orphan Sendblue: 4 / 142,352.
+- Already encrypted: 0; already migrated: 0; ambiguous/unclassifiable: 0.
+- Two Neon-authoritative references are absent from stale D1 compatibility metadata; there are no D1-only references.
+- Canonical-content fingerprint: `284778f38937b3d25e7e3f9284775eaa638ad70374695efa782fe37c15cfeb6c`.
+- Frozen full-scope approval digest: `62a3ad605be33091628eecd0cb607396c96ea1030a4d3f8da692969518089559`.
+- Phase 2 has not run. No legacy object was migrated, overwritten, or deleted.
+
+**Open gates:**
+- Production `channel_media_jobs` was empty immediately after deploy. Matt must send one fresh non-sensitive image through Telegram and one through Sendblue so envelope/hash/manifest/status/search, redelivery, one-reply, and prohibited-value scans can be reconciled.
+- Matt must separately approve the exact remediation categories and frozen digest before any referenced original or orphan is touched. Ambiguous or changed items remain excluded even after approval.
+
+### Session 5 correction pass — 2026-08-15
+
+**Status:** Corrected implementation is deployed and committed-tree green; Session 5 remains open pending fresh Telegram and Sendblue image gates. Remediation Phase 2 remains prohibited.
+
+**Commit and deployment evidence:**
+- Accepted correction baseline: `56cdcde` with deployed code tree `25fda7d594680a718d8515943e39de0451384ec5`.
+- Correction implementation: `c702751a5e3d208d2b850249bc6e7f133a0ad3f8`.
+- Exact clean deployed tree: `e98ff79b2e9f6a2aa9d36df680c073874a2c93ce`.
+- Production deployment `86f235ea-14f0-4456-826b-a2b2d5c9799b`; Worker version `3f8ba9bb-6432-475b-bf38-f6fd562e7914`, serving 100%. No migration was added or applied.
+
+**Corrected controls:**
+- Retry processing now performs canonical-first recovery before provider fetch or vision. Every processing transition requires the current lease token and an exact one-row CAS; stale workers cannot renew, finalize, retry, or fail a job. Post-canonical extraction recovery exists only in a bounded TMK-encrypted R2 envelope.
+- Sendblue now requires both the current `sb-signing-secret` header and the existing path secret, and authenticated refetch must prove exact handle, sender, receiving line, and inbound direction. Temporary-URL-only media is rejected.
+- Legacy inventory reconciles the union of R2, Neon, and D1; missing, unreadable, unknown-envelope, incomplete, or ownership-conflicting entries are ambiguous and deletion-ineligible. Approval digests bind a sorted private exact-target HMAC manifest with object and ownership identities, bytes, version/hash/ETag, disposition, reconciliation state, inventory identity, canonical fingerprint, and executor commit.
+- The Phase 2 design preserves exactly one source artifact by atomically replacing the legacy source row and pointers under a rollback snapshot, and requires one source plus a valid primary pointer before any legacy-byte deletion. No destructive Phase 2 executor was implemented or run.
+- Provider locators, captions, reply targets, and encrypted handoff/recovery descriptors have strict length limits. Missing or expired Cron KEK returns retry before any D1 job or queue message; focused operational tests cover both cases.
+
+**Validation and production regressions:**
+- Exact committed-tree suite: 584 passed, 1 skipped across 95 files.
+- `npm run postflight`: passed on the exact committed tree.
+- `npx wrangler deploy --dry-run`: passed on the exact committed tree; upload 3,660.66 KiB, gzip 699.86 KiB.
+- All six Session 3 artifact receipts and both primary Session 4 receipts re-read as finalized and TMK-encrypted. Their six canonical documents still expose exactly one source and one primary pointer; the two Session 4 lexical canaries still resolve to their original documents.
+- The registered Sendblue receive webhook has a per-webhook signing secret. The deployed route returned 404 for missing/wrong signing headers and 200 for the configured signed request; no provider message was sent.
+
+**Remediation approval:**
+- The prior aggregate digest `62a3ad605be33091628eecd0cb607396c96ea1030a4d3f8da692969518089559` is revoked and cannot authorize Phase 2.
+- A fresh read-only exact-target inventory and corrected public approval packet will be generated only after the two live channel gates. No legacy object has been migrated, overwritten, or deleted.
+
+**Next:** Matt sends one fresh non-sensitive Telegram image and one fresh non-sensitive Sendblue image. Reconcile both live captures and redelivery/one-reply/privacy evidence, then generate the new exact-target remediation packet and stop for explicit category-and-digest approval. Do not begin Session 6.
+
+---
+
+### Session 5 final correction pass — 2026-08-15
+
+**Status:** Final correction is deployed and exact-tree green. This pass stopped before live image requests, exact-target packet generation, Session 6, or Phase 2 remediation.
+
+**Commit and deployment evidence:**
+- Accepted baseline: `047d2170da4bdf2e7199a5e05e8a3d1b54a73de3`; prior deployed code tree: `e98ff79b2e9f6a2aa9d36df680c073874a2c93ce`.
+- Independent correction review: capture `2b7986cc-93d9-4609-b065-5ac33fe063d9`.
+- Final correction implementation and exact clean deployed tree: `02b8f13d1c12f6cbafba975f89bc6a7b986f2280`.
+- Production deployment `7b4b1fed-9206-4b2b-8dd1-7caa24aa8462`; Worker version `8f559092-a708-4cc7-b322-3254572b2c1a`, created `2026-08-15T07:42:25.256976Z`, serving 100%. No migration was added or applied.
+
+**Final corrected controls:**
+- A queue delivery that finds an active processing lease returns an explicit lease-held outcome and schedules retry after the bounded remaining lease duration; it is never ACKed as completed. Real process-death coverage abandons the first invocation after canonical commit and proves the recovery path does not repeat provider acquisition, vision, managed artifacts, canonical captures/documents, or replies.
+- Expiry reaping preserves active processing leases and attempts authoritative canonical recovery before failing an abandoned processing job. Canonical success retains the encrypted handoff for one delivery and always wins over expiry failure.
+- Descriptor/provider compatibility and all bounds are validated before accepted D1 insertion, encrypted handoff creation, or queue publication.
+- Any non-singleton authoritative Neon reference set, duplicate D1 references, multi-owner/capture evidence, or reference disagreement is ambiguous and deletion-ineligible. Only zero Neon and zero D1 references can start as an orphan.
+- “Already migrated” now requires the exact legacy-key/tenant/capture relationship to a managed source selected by both capture and document primary pointers. Managed derivatives and unrelated artifacts do not qualify.
+- The remediation digest binds the exact named categories as well as the exact-target manifest; missing, different, duplicate, or unknown category approval is rejected. Phase 2 remains unimplemented and unapproved.
+
+**Validation and live regression evidence:**
+- Focused correction lane: 33 passed across governed channel intake, provider boundaries, legacy inventory, and approval-plan tests.
+- Exact committed-tree suite: 594 passed, 1 skipped across 95 files.
+- `npm run postflight`: passed. `npx wrangler deploy --dry-run`: passed; upload 3,663.52 KiB, gzip 700.38 KiB.
+- Diff review found no raw-content, live identifier, URL, or credential leakage. The first deploy attempt used an invalid inherited API token and was rejected before upload; deployment then succeeded through the existing local Wrangler OAuth profile.
+- All six Session 3 upload receipts and both primary Session 4 receipts re-read as `finalized`, `tmk`, with non-null ciphertext hashes and their original canonical capture/document IDs after deployment.
+
+**Stop boundary:** No Telegram or Sendblue image was requested in this pass. No fresh inventory or remediation packet was generated, and no legacy object was read for remediation, migrated, overwritten, or deleted.
+
+---
+
+### Session 5 final concurrency correction — 2026-08-15
+
+**Status:** Correction is committed, deployed, and exact-tree green. Session 5 remains open only for the fresh Telegram and Sendblue live image gates. Remediation Phase 2 remains unapproved and did not run.
+
+**Commit and deployment evidence:**
+- Reviewed baseline: `893cac3a4f43d0415bcdec2f43ab22e03ec53227`; implementation parent: `02b8f13d1c12f6cbafba975f89bc6a7b986f2280`.
+- Concurrency and managed-migration correction: `a00725aac0bf9cb32e73da4082a589abb0acb2ab`.
+- Production deployment `5146b665-0890-4b1e-af76-c18eeb54f178`; Worker version `207a36f4-fb0a-4a03-a326-9d1d23f0c0c2`, created `2026-08-15T16:56:01.376633Z`, serving 100%. No migration was added or applied.
+
+**Corrected invariants:**
+- Queue state is explicit: processing lease held, delivery claim held, actionable retryable, finalized/delivery-pending, failed/delivery-pending, and completed/terminal outcomes cannot collapse to `null`. Held/actionable states retry at a bounded boundary; only completed/terminal states ACK.
+- Delivery ownership uses a token and expiry on the existing lease fields. Redelivery inside the lease is delayed and does not call the provider. Expiry performs a guarded transition to terminal `delivery_unknown`, fences stale completion, and cleans encrypted handoff/recovery state without resend.
+- Canonical finalization recovery distinguishes recovered, in-progress, stably absent, failed, and inconsistent. A fresh reservation blocks expiry failure and deletion; a reservation is abandoned only after the 24-hour handoff window plus one Worker lease. Canonical proof repairs a competing pending failure by CAS and then delivers the success response exactly once.
+- The inventory SQL emits legacy-source and managed-primary cardinalities. Without explicit replacement provenance, only one legacy source row plus one canonical managed primary qualifies; multiple legacy keys in one capture are ambiguous and deletion-ineligible.
+
+**Validation:**
+- Focused channel-media and legacy lane: 36 passed across 3 files.
+- Exact committed-tree suite: 602 passed, 1 skipped across 95 files.
+- `npm run postflight`: passed. `npx wrangler deploy --dry-run`: passed; upload 3,673.81 KiB, gzip 701.82 KiB.
+- Adversarial coverage includes death immediately after a delivery claim, death during the provider call, redelivery inside the delivery lease, ambiguity-boundary cleanup, claim/read races into retryable and pending-delivery states, delayed canonical commit across lease expiry/reaping, and stale abandoned finalization.
+- The first deploy attempt inherited an invalid API token and was rejected before upload; deployment succeeded through the existing local Wrangler OAuth profile.
+
+**Stop boundary:** No Telegram or Sendblue live gate was run. No legacy inventory/remediation command was run, no approval was inferred, and no legacy object was migrated, overwritten, or deleted. The primary `codex/artifact-intake-session-1` branch was not advanced.
+
+---
+
+### Session 5 final lease-fence and legacy-role correction — 2026-08-15
+
+**Status:** Both independent re-review blockers are corrected, committed, deployed, and exact-tree green. Fresh Telegram/Sendblue live proof and all remediation remain outside this pass.
+
+**Commit and deployment evidence:**
+- Starting review HEAD: `ab478a57a58acfa8811b051ba4f0a1718cbdcc93`; reviewed implementation: `a00725aac0bf9cb32e73da4082a589abb0acb2ab`.
+- Final correction implementation: `6e9d4abf2444a3fef67997303a87ddfeef1f8be3`.
+- Production deployment `e7cfbea5-99da-4c64-b3a8-e36bcb39c5bb`; Worker version `9d15ba4a-b664-48da-9943-06ef39c28f1f`, created `2026-08-15T23:53:47.254663Z`, serving 100%. No migration was added or applied.
+
+**Corrected invariants:**
+- Generic artifact finalization now supports a reservation-boundary fence without changing existing callers. The reservation becomes visible first; channel media then renews the exact processing lease immediately before artifact-operation mutation or canonical write. A stale worker cannot begin canonical side effects after losing the lease.
+- The deterministic regression pauses the finalization INSERT, expires worker A, lets worker B claim the job and enter failure delivery, then releases A. A is fenced with no canonical capture/document; acquisition, vision, managed upload/operation, reservation, and provider response each remain single-instance, so canonical success and a failure reply cannot coexist.
+- Every reaper path that would clean a pending-delivery job now runs canonical recovery before deleting the KEK handoff or TMK recovery envelope. A failed/pending job with canonical proof repairs to finalized and retains both envelopes for the single success delivery.
+- Neon inventory evidence carries the explicit artifact role. D1 carries source provenance only when capture and document primary pointers select the same artifact; otherwise the role is unknown. Only one exact legacy role=`source` artifact plus one unique managed role=`source` primary can be already migrated. Derivative, missing, unknown, conflicting, multiple, or mixed roles are `exclude_ambiguous`, migration-ineligible, and deletion-ineligible.
+
+**Validation:**
+- Focused channel-media and legacy suites: 37 passed across 2 files.
+- Supplemental generic-finalization + focused suites: 41 passed across 3 files.
+- Exact committed-tree suite: 606 passed, 1 skipped across 95 files (607 total).
+- `npm.cmd run postflight`: passed. `npx.cmd wrangler deploy --dry-run`: passed; upload 3,674.26 KiB, gzip 701.92 KiB.
+- Complete diff against `ab478a5` reviewed; cached diff check passed. The first production deploy attempt inherited the known-invalid API token and was rejected before upload; deployment then succeeded through the existing local Wrangler OAuth profile.
+
+**Stop boundary:** No Telegram or Sendblue live gate ran. No live legacy inventory, remediation, or approval workflow ran. No legacy object was read for remediation, migrated, overwritten, or deleted. `codex/artifact-intake-session-1` was not merged or advanced.
+
+---
+
+### Session 5 final artifact-lifecycle correction — 2026-08-15
+
+**Status:** The artifact-finalization/reaper lifecycle blocker is corrected, independently approved, migrated, deployed, and exact-tree green. Fresh Telegram/Sendblue live proof and all legacy remediation remain outside this pass.
+
+**Commit and deployment evidence:**
+- Starting HEAD: `051ef2062cfd7f0244d2798df4201e6d125e9c89`; reviewed implementation: `6e9d4abf2444a3fef67997303a87ddfeef1f8be3`.
+- Artifact lifecycle and executable SQL correction: `f43ef97`.
+- Remote D1 migration `1032_artifact_finalization_lifecycle.sql` applied successfully to `D1_US` / `brain-us` before Worker deployment.
+- Production deployment `32ae3fa1-cc53-458a-a623-37d0f07c66b4`; Worker version `bc5b4e08-6344-4df7-b7ae-a451371486a2`, created `2026-08-16T02:30:17.650738Z`, serving 100%.
+
+**Final lifecycle invariants:**
+- Finalization uses a 2-minute owner lease and one 30-minute recovery/protection window. Taking ownership atomically binds the exact expected operation set, records the exact ordered manifest identity, and extends every declared source/derivative beyond the original 15-minute upload TTL.
+- Before canonical write, after canonical write, during recovery, and before success repair, the service verifies exact operation membership/ownership, canonical capture/document/operation and primary pointers, ordered role/parent/MIME manifest identity, deterministic managed R2 key, ciphertext byte length, ciphertext SHA-256, and encryption family.
+- Expiry reaping first wins an independent 2-minute CAS claim and deletes only after ownership succeeds. A reserved finalization blocks that claim. At the stale boundary, full raw/canonical proof permits one proof-backed takeover; missing or mismatched proof fails/releases the reservation and normal cleanup removes the managed object. Capture presence alone never repairs success.
+- Pre-migration sealed/finalized rows receive deterministic ciphertext-length, finalization ownership, and expected-count backfills. An idempotent replay safely upgrades the new manifest proof from the already-matching original reservation fingerprint.
+
+**Adversarial and query-boundary proof:**
+- Process death after operation protection survives beyond the 15-minute upload TTL and resumes after the bounded lease with one acquisition, vision extraction, managed artifact, canonical capture/document, and success response.
+- Tests cover expiry-versus-finalization ownership, expiry during canonical write, multi-artifact zero-partial CAS, proof-backed repair beyond the recovery deadline, capture-with-missing-raw cleanup, missing/tampered R2 recovery, abandoned reservation cleanup, and role/parent/MIME manifest corruption.
+- The exported D1 compatibility query executes against the migrated local D1 schema. The exported PostgreSQL replacement query executes and `EXPLAIN`s under ephemeral PGlite; singleton legitimate source/primary qualifies and derivative, mixed, missing, conflicting, duplicate, and foreign-capture cases fail closed.
+
+**Validation:**
+- Focused artifact-finalization, channel-media, provider, reaper, and legacy-inventory lane: 76 passed across 6 files.
+- Exact full suite: 618 passed, 1 skipped across 95 files (619 total).
+- `npm.cmd run postflight`, `npx.cmd wrangler deploy --dry-run`, and `git diff --check`: passed. Dry-run upload was 3,723.10 KiB / gzip 713.59 KiB.
+- Independent architecture, security, and quality reviews: approved with no remaining blocking findings.
+- The first remote migration attempt inherited a known-invalid API token and was rejected before state change; migration and deployment then used the existing verified local Wrangler OAuth profile.
+
+**Stop boundary:** No Telegram or Sendblue live gate ran. No legacy inventory, approval, or remediation command ran. No legacy object was read, migrated, overwritten, or deleted. Neither the primary branch nor `codex/artifact-intake-session-1` was merged or advanced.
+
+---
+
+### Session 5 artifact-lifecycle correctness correction — 2026-08-17
+
+**Status:** The correction is committed and independently approved on `codex/session5-final-correction`, but it is not deployed. The required production overlap audit and fix-forward deployment are blocked by invalid Cloudflare authentication, so this work is not described as final or fully production-validated.
+
+**Commit and scope:**
+- Review baseline: `051ef20`; live implementation under correction: `f43ef97`; correction implementation: `7106be9e7d44c5f97c2e1aacf5635a65d48aea40`.
+- Proof is tri-state (`verified`, bounded `authoritative_mismatch`, or bounded `indeterminate`). Storage, D1, canonical-store, transport, and platform exceptions defer without releasing bindings, raw bytes, recovery protection, or channel work.
+- Finalized parent/child history is monotonic. Later authoritative failure records a content-free integrity incident and preserves remaining evidence. Split parent/child acknowledgements are re-proved and can move only toward finalized.
+- A finalization lease is rejected unless its recovery deadline covers the entire lease. Stale selection, failure CAS, channel recovery, and both reapers exclude live leases.
+- Normal proof is sequential and bounded to 8 manifest entries and 64 MiB aggregate plaintext. Exceeding either limit returns `bulk_import_required`; declared derivatives remain mandatory.
+- Historical defaulted `source` values are not treated as provenance. Exact capture/document primary-pointer proof is required; otherwise the row remains ambiguous and deletion-ineligible.
+
+**Validation:**
+- Focused lifecycle, channel-media, provider, and executable legacy-inventory lane: 84 passed across 6 files.
+- Full suite on the postflight-clean implementation: 631 passed, 1 skipped across 95 files (632 total).
+- `npm run postflight`: passed. `npx wrangler deploy --dry-run`: passed; upload 3,733.30 KiB / gzip 715.31 KiB.
+- `git diff --check 051ef20`: passed.
+- Independent architecture/concurrency, security/privacy, and test/acceptance re-reviews all approved the reviewed implementation diff. Reviewer-driven regressions cover protected channel-reaper evidence, null-deadline lease bounds, finalized operation-set corruption, direct finalized replay incidents, and stale failed-parent/finalized-child repair.
+
+**Production overlap audit and deployment:**
+- The aggregate-only audit query is preserved in `src/services/artifact-intake/migration-overlap-audit.ts`. It reports only four counts for the directly verified migration-to-deployment interval and has executable coverage for an old writer inserting after the backfill.
+- `npx wrangler whoami` failed before any production query or mutation with Cloudflare API code `9109` (`Invalid access token`). No alternate configured Cloudflare credential source was available in the workspace.
+- Therefore the overlap result is **unknown**, not zero. No remote D1 query, migration, Worker deployment, production version verification, health check, Telegram/Sendblue gate, legacy inventory, or remediation was run.
+
+**Required production continuation:** Restore a valid secure Cloudflare credential; directly verify the migration-1032 application timestamp and the currently serving Worker boundary; run the aggregate-only overlap audit. If any count is nonzero, stop and obtain approval for a proof-backed reconciliation plan. If all counts are zero, deploy the exact correction commit fix-forward, verify the deployment ID/Worker version and D1 migration state, and run only content-free state-machine health checks.
+
+**Schema rollout rule:** Future lifecycle schema changes use expand → deploy compatible readers/writers → read-only interval audit → bounded idempotent backfill → verify → enforce in a later change. A one-time backfill must not be followed by a deployment window in which an old writer can recreate invalid rows.
+
+**Stop boundary:** The primary branch was not merged or advanced. Production state was not mutated.
+
+---
+
+## 2026-08-19 — Session 5 final correction: rollout boundary, orphan tombstones, reaper scheduling
+
+**Branch:** `codex/session5-final-correction`. Baseline `c50b0cb`; commits: red tests `a2c4995`, implementation `166355c`, plus this documentation commit. No prior commits amended.
+
+**Finding 1 (compat shared-key race) — resolved without a request-lifetime assumption.** The rollout no longer claims any drain can be proven from time, analytics, or deployment state. Safety comes from plaintext-verified sealed-identity convergence (`src/services/artifact-intake/sealed-convergence.ts`): every writer proves the row's exact plaintext hash before writing, so a sealed row whose recorded ciphertext identity authoritatively disagrees with the object at its one legitimate key is CAS-repaired onto the object's actual identity — never onto different content, never on finalized/bound/claimed rows. Every old/new interleaving (including an old request resuming arbitrarily later, and a fenced row clobbered by the old seal SQL) converges; a split can never finalize. A content-free, fail-closed operator upload-admission gate (migration 1036) refuses all new reserve/upload mutations during the cutover boundary, and the runbook now requires atomic (non-gradual) deploys for the cutover. Deterministic proof: `tests/12.20-artifact-shared-key-split-convergence.test.ts` separates each writer's R2 put from its D1 mutation and was red at `c50b0cb`; `tests/12.23-artifact-upload-admission.test.ts` proves refuse/fail-closed/reopen.
+
+**Finding 2 (unsafe orphan-journal retirement) — tombstone protocol.** Migration 1035 (never applied anywhere; edited in place while pending) adds content-free `swept_at`/`sweep_count`/`resolved_at`. The sweeper (`attempt-sweep.ts`) retires a journal row only when the attempt was adopted, or when an object at the exact key was observed, deleted, and confirmed absent on a later sweep; absence during one check never retires the durable pointer, so an arbitrarily late R2 put is always found and deleted. Bounded batches, zero body reads, idempotent, D1/R2 ambiguity always retains state. Unresolved tombstones are retained indefinitely pending a separately gated R2 lifecycle rule. Proof: `tests/12.21-artifact-late-put-orphan-tombstone.test.ts` (red at `c50b0cb`) and updated `tests/12.18`.
+
+**Finding 3 (reaper not scheduled) — production wiring.** `handleBrainScheduled` now runs `reapExpiredArtifactUploads` in the `*/15` cron slot via `ctx.waitUntil` with its own catch (failure isolation, bounded batches, aggregate-only results). Expiry deletion re-reads the claimed row under its expiry-claim token and deletes from authoritative post-claim metadata, not the pre-claim selection. Proof: `tests/12.22-artifact-reaper-scheduling.test.ts` (red at `c50b0cb`).
+
+**Validation.** Focused artifact/rollout/orphan/scheduling lane: 28 passed across 6 files. Full suite twice from clean processes: run 1 — 109 files passed, 708 passed / 1 skipped (709); run 2 — identical counts. `npm run postflight`: passed. `npx wrangler deploy --dry-run`: passed. `git diff --check c50b0cb..HEAD`: clean. TypeScript: no new source diagnostics; the only new entries are the four new test files' pre-existing environmental `cloudflare:test` module error shared by every test file.
+
+**Production state (read-only).** No deployment, remote migration, R2 lifecycle change, provider message, or remediation was performed. Migrations 1033–1036 remain pending.
+
+---
+
+## 2026-08-20 — Session 5 terminal concurrency correction
+
+**Status:** Implemented and verified locally on `codex/session5-final-correction`; production remains unchanged.
+
+- Legacy shared-key artifacts are plaintext-proved and promoted to immutable attempt keys before canonical write. The terminal D1 transition CAS-checks the exact key, adopted token, ciphertext hash/length, and encryption family, so a late old D1 mutation cannot slip between final proof and finalization.
+- Expired attempt cleanup atomically revokes the exact upload token before deleting R2 and rereads ownership. A delayed adoption statement that bound an earlier timestamp therefore changes zero rows.
+- Migration 1037 atomically aborts if any mutable operation is already bound or finalized, then blocks old legacy binding before canonical side effects and requires exact new-code authorization for terminal finalization. Permanent content-free tombstones repeatedly clean abandoned legacy keys and later old puts.
+- Normal completion, completed-parent repair, stale/channel recovery, and failed-parent repair all CAS-check the proven key, adopted token, ciphertext hash/length, and encryption family. An R2 promotion put that throws ambiguously retains both its D1 token and durable cleanup journal.
+- Regression tests cover a late old put after finalization, an old D1 seal after final proof with repair-on-retry, delayed adoption after cleanup fencing, identity changes between proof and recovery, and commit-then-throw promotion ambiguity.
+- Validation: focused affected lane 75/75; full suite 109 files, 715 passed / 1 skipped; postflight clean; deploy dry-run clean; no diagnostics in modified source files (repository TypeScript baseline still exits 2). Independent final review: APPROVE, no HIGH/CRITICAL blockers.
+- Stop boundary: migrations 1033–1037 remain pending; no deployment, remote migration, provider message, remediation, approval, or merge.
+
+---
+
+## 2026-08-29 — Session 6 artifact observability, canary, dream proof, and operations
+
+**Status:** Implemented and locally verified on `codex/session5-final-correction`; production remains unchanged pending the governed Session 7 rollout.
+
+- Migration 1038 adds an idempotent, content-free artifact lifecycle ledger for `reserved`, `sealed`, `finalized`, `failed`, `expired`, and `reaped`. Events contain only tenant/operation/upload IDs, timestamps, states, and fixed failure codes. Explicit side writes preserve the lifecycle state machine's exact D1 mutation-count/CAS semantics.
+- The hourly/on-demand canary now has a seventh `artifact` probe. It runs a tiny daily generated fixture through reserve, KEK seal, canonical finalize, exact R2 hash/length proof, manifest/body read, lexical marker search, cross-tenant isolation, and expired-reservation cleanup. Persisted output is metadata-only with fixed stage codes.
+- The dream stage now reads the authorized canonical Neon chunk window directly, so KEK-backed overnight work can consume TMK-authored artifact extraction without decrypting raw or archival R2. A bounded distinct-key-family regression proves the extraction reaches the dream model while the raw R2 source does not; compiled pages are not involved.
+- Feeding, security, operations, and client guides now describe the actual managed-file flow, 25 MiB/Telegram 20 MiB limits, stable errors, retention distinctions, telemetry, and recovery. `docs/runbooks/artifact-intake-operations.md` covers stuck uploads, expiry, orphan proof, legacy remediation, key-family failure, rollout, and rollback.
+- Validation: focused affected lane 81/81; full suite 109 files, 716 passed / 1 skipped (717); `npm run postflight` and `git diff --check` passed. No production migration, deploy, live provider message, or legacy deletion/remediation was performed.

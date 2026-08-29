@@ -7,11 +7,10 @@ import type {
 export interface PersistedCanonicalPayloads {
   documentR2Key: string
   documentSha256: string
-  artifactR2Key: string | null
-  artifactSha256: string | null
+  artifacts: Record<string, { r2Key: string | null; sha256: string | null }>
 }
 
-function canonicalR2Key(tenantId: string, lane: string, id: string): string {
+export function canonicalR2Key(tenantId: string, lane: string, id: string): string {
   return `canonical/${tenantId}/${lane}/${id}.enc`
 }
 
@@ -55,11 +54,13 @@ export async function persistCanonicalPayloads(
 ): Promise<PersistedCanonicalPayloads> {
   const documentR2Key = canonicalR2Key(capture.tenantId, 'documents', capture.documentId)
   await persistEncryptedObject(env, documentR2Key, capture.bodyEncrypted)
-  const { artifactR2Key, artifactSha256 } = await persistArtifactPayload(env, capture.tenantId, capture.artifact)
+  const artifacts = Object.fromEntries(await Promise.all(capture.artifacts.map(async artifact => {
+    const persisted = await persistArtifactPayload(env, capture.tenantId, artifact)
+    return [artifact.id, { r2Key: persisted.artifactR2Key, sha256: persisted.artifactSha256 }]
+  })))
   return {
     documentR2Key,
     documentSha256: await sha256Hex(capture.body),
-    artifactR2Key,
-    artifactSha256,
+    artifacts,
   }
 }

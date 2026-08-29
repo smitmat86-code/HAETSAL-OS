@@ -29,6 +29,10 @@ export async function captureThroughCanonicalPipeline(
     body: input.body,
     bodyEncrypted: input.bodyEncrypted ?? null,
     artifactRef: input.artifactRef ?? null,
+    artifactRefs: input.artifactRefs ?? null,
+    captureId: input.canonicalCaptureId ?? null,
+    documentId: input.canonicalDocumentId ?? null,
+    operationId: input.canonicalOperationId ?? null,
     capturedAt: input.capturedAt ?? null,
     projectionKinds: input.projectionKinds ?? null,
     governance: {

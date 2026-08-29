@@ -3,6 +3,7 @@ import type {
   CanonicalCaptureInput,
   CanonicalProjectionKind,
 } from '../types/canonical-memory'
+import { assertCanonicalArtifactManifestShape } from './canonical-artifact-manifest'
 
 export interface CanonicalChunkPlan {
   id: string
@@ -15,6 +16,9 @@ export interface CanonicalChunkPlan {
 export interface CanonicalArtifactPlan {
   id: string
   ref: CanonicalArtifactRef
+  role: 'source' | 'derivative'
+  parentArtifactId: string | null
+  primary: boolean
 }
 
 export interface NormalizedCanonicalCapture {
@@ -29,7 +33,8 @@ export interface NormalizedCanonicalCapture {
   title: string | null
   body: string
   bodyEncrypted: string
-  artifact: CanonicalArtifactPlan | null
+  artifacts: CanonicalArtifactPlan[]
+  primaryArtifact: CanonicalArtifactPlan | null
   capturedAt: number
 }
 
@@ -43,9 +48,25 @@ export interface CanonicalShadowCaptureArgs {
   bodyEncrypted?: string | null
 }
 
-export function toNormalizedArtifact(
-  artifactRef?: CanonicalCaptureInput['artifactRef'],
-): CanonicalArtifactPlan | null {
-  if (!artifactRef) return null
-  return { id: crypto.randomUUID(), ref: artifactRef }
+export function toNormalizedArtifacts(input: Pick<CanonicalCaptureInput, 'artifactRef' | 'artifactRefs'>): CanonicalArtifactPlan[] {
+  const refs = input.artifactRefs?.length
+    ? input.artifactRefs
+    : input.artifactRef
+      ? [input.artifactRef]
+      : []
+  const plans = refs.map((ref, index) => ({
+    id: ref.artifactId?.trim() || crypto.randomUUID(),
+    ref,
+    role: ref.role ?? ('source' as const),
+    parentArtifactId: ref.parentArtifactId ?? null,
+    primary: ref.primary ?? index === 0,
+  }))
+  if (plans.length === 0) return plans
+  assertCanonicalArtifactManifestShape(plans.map(plan => ({
+    id: plan.id,
+    role: plan.role,
+    parentId: plan.parentArtifactId,
+    primary: plan.primary,
+  })))
+  return plans
 }

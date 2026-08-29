@@ -57,6 +57,18 @@ command = "npx"
 args = ["-y", "mcp-remote", "https://haetsalos.specialdarksystems.com/mcp"]
 ```
 
+For a local file, use the installed `haetsal-artifact-upload.ps1` helper. It
+streams one exact file directly to the governed upload endpoint and prints a
+content-free receipt. The agent then supplies extraction plus the exact
+manifest to `finalize_artifact_capture` and verifies every upload with
+`artifact_intake_status`. If the helper cannot access the bytes, report
+`raw_bytes_unavailable`; a `capture_memory` reference is not proof of retention.
+
+ChatGPT uses the official hosted file descriptor with `capture_artifact_file`.
+The temporary URL and file ID are download-only and are not persisted or
+logged. HTTPS, redirects, resolved addresses, MIME, timeout, and byte limits
+are validated before sealing. The same 25 MiB limit and stable errors apply.
+
 ## Anything else that speaks MCP
 
 Same URL, same rule. Cursor, Windsurf, custom agents — if it supports
@@ -74,6 +86,9 @@ the brain with the scoped tool surface: `capture_memory` to write,
   [chapter 11](11-working-with-claude-code.md) for exactly what gets
   saved (short version: only what's explicitly captured; there is no
   ambient collection).
+- `capture_memory` stores durable meaning. Managed artifact tools additionally
+  retain exact raw bytes and derivatives. These are complementary operations,
+  not interchangeable claims.
 
 ## Service tokens (automation/CI only)
 

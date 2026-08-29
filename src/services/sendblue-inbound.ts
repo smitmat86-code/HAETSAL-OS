@@ -1,17 +1,19 @@
 // Sendblue inbound processing (mission Phase 4).
 // Text: memory-grounded reply via the retrieval broker + canonical capture
 // through the ingestion queue (TMK lives in the DO, not the webhook).
-// Photo: media -> R2 raw artifact -> vision description -> queued capture.
+// Photo: durable governed operation -> opaque queue locator -> shared intake.
 // Law 2: no message content or media in logs; AI calls via gateway with
 // collectLog:false; captures encrypt through the standard retain path.
 
 import type { Env } from '../types/env'
 import type { IngestionQueueMessage } from '../types/ingestion'
 import { sendSendblueMessage } from './delivery/sendblue'
-import { buildGroundedReply, describeInboundPhoto } from './messaging-helpers'
+import { buildGroundedReply } from './messaging-helpers'
+import { acceptChannelMedia } from './channel-media/intake'
 import { maybeDelegateExecutionTask } from './agents/delegation'
 import { maybeHandleAutomationChat } from './agents/automation-chat'
 import { fetchSessionBlock, recordSessionExchange } from './session/client'
+import { ArtifactIntakeContractError, ARTIFACT_INTAKE_ERROR } from './artifact-intake/contracts'
 
 export interface SendblueInboundBody {
   content?: string
@@ -21,6 +23,7 @@ export interface SendblueInboundBody {
   to_number?: string
   number?: string
   date_sent?: string
+  message_handle?: string
 }
 
 export async function resolveSendblueTenant(fromNumber: string, env: Env): Promise<string | null> {
@@ -39,40 +42,31 @@ export async function processSendblueInbound(
   const tenantId = await resolveSendblueTenant(body.from_number, env)
   if (!tenantId) {
     // Shared line: unknown senders are never trusted or replied to.
-    console.warn('SENDBLUE_UNKNOWN_SENDER', { suffix: body.from_number.slice(-4) })
+    console.warn('SENDBLUE_UNKNOWN_SENDER')
     return { handled: false, kind: 'ignored' }
   }
   const occurredAt = body.date_sent ? Date.parse(body.date_sent) || Date.now() : Date.now()
 
   if (body.media_url) {
-    const media = await fetch(body.media_url)
-    if (!media.ok) throw new Error(`Sendblue media fetch failed: ${media.status}`)
-    const mediaType = media.headers.get('content-type') ?? 'image/jpeg'
-    const bytes = await media.arrayBuffer()
-    const storageKey = `sendblue-media/${tenantId}/${occurredAt}-${crypto.randomUUID()}`
-    await env.R2_ARTIFACTS.put(storageKey, bytes, { httpMetadata: { contentType: mediaType } })
-    const description = await describeInboundPhoto(env, bytes, mediaType)
-
-    const message: IngestionQueueMessage = {
-      type: 'sendblue_media',
+    const stableHandle = body.message_handle?.trim()
+    if (
+      !stableHandle || body.is_outbound !== false ||
+      !body.to_number || body.to_number !== env.SENDBLUE_PHONE_NUMBER
+    ) throw new ArtifactIntakeContractError(ARTIFACT_INTAKE_ERROR.PROVIDER_LOCATOR_INVALID)
+    await acceptChannelMedia({
       tenantId,
-      payload: {
-        from: body.from_number,
-        description,
+      provider: 'sendblue',
+      eventIdentity: `message:${stableHandle}`,
+      descriptor: {
+        version: 1,
+        provider: 'sendblue',
+        locatorKind: 'sendblue_message_handle',
+        locator: stableHandle,
+        replyTarget: body.from_number,
         caption: body.content ?? null,
-        storageKey,
-        mediaType,
-        byteLength: bytes.byteLength,
         occurredAt,
       },
-      enqueuedAt: Date.now(),
-    }
-    ctx.waitUntil(env.QUEUE_HIGH.send(message))
-    ctx.waitUntil(sendSendblueMessage(
-      body.from_number,
-      `Captured that photo: ${description}`,
-      env,
-    ).then(() => undefined))
+    }, env)
     return { handled: true, kind: 'media' }
   }
 
@@ -99,7 +93,7 @@ export async function processSendblueInbound(
   recordSessionExchange(env, tenantId, sessionKey, text, reply, ctx)
   const sent = await sendSendblueMessage(body.from_number, reply, env)
   if (!sent.success) {
-    console.warn('SENDBLUE_REPLY_NOT_DELIVERED', { status: sent.status, errorCode: sent.errorCode ?? null })
+    console.warn('SENDBLUE_REPLY_NOT_DELIVERED', { status: sent.status })
   }
   return { handled: true, kind: 'text' }
 }

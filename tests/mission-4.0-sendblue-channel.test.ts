@@ -1,14 +1,13 @@
 // Mission Phase 4: Sendblue iMessage channel contracts — webhook path-secret
 // auth (constant time), line validation, text -> grounded reply + queued
-// capture, photo -> R2 + vision + queued capture, outbound client shape.
+// capture, governed opaque photo intake, outbound client shape.
 
 import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import { env } from 'cloudflare:test'
 import { Hono } from 'hono'
 import { registerPublicWebhooks } from '../src/workers/mcpagent/public-webhooks'
-import { handleSendblueMedia } from '../src/workers/ingestion/handlers'
 import { sendSendblueMessage } from '../src/services/delivery/sendblue'
-import { getCanonicalMemoryStore, installCanonicalMemoryTestStore } from '../src/services/canonical-postgres'
+import { installCanonicalMemoryTestStore } from '../src/services/canonical-postgres'
 import type { Env } from '../src/types/env'
 
 const SUITE_ID = crypto.randomUUID()
@@ -16,18 +15,9 @@ const TENANT_ID = `test-tenant-mission-40-${SUITE_ID}`
 const MATT_PHONE = '+15550001111'
 const LINE_NUMBER = '+16452067656'
 const PATH_SECRET = 'test-sendblue-path-secret'
+const SIGNING_SECRET = 'test-sendblue-signing-secret'
 
 installCanonicalMemoryTestStore(env)
-
-async function deriveTestTmk(): Promise<CryptoKey> {
-  const material = await crypto.subtle.importKey(
-    'raw', new TextEncoder().encode(`mission-40-${SUITE_ID}`), { name: 'HKDF' }, false, ['deriveKey'],
-  )
-  return crypto.subtle.deriveKey(
-    { name: 'HKDF', hash: 'SHA-256', salt: new TextEncoder().encode('m40-salt'), info: new TextEncoder().encode('m40-info') },
-    material, { name: 'AES-GCM', length: 256 }, false, ['encrypt', 'decrypt'],
-  )
-}
 
 type SentRequest = { url: string; init?: RequestInit }
 
@@ -38,6 +28,7 @@ function makeSendblueEnv(sent: SentRequest[], queue: unknown[]) {
     SENDBLUE_API_SECRET_KEY: 'test-secret-key',
     SENDBLUE_PHONE_NUMBER: LINE_NUMBER,
     SENDBLUE_WEBHOOK_PATH_SECRET: PATH_SECRET,
+    SENDBLUE_WEBHOOK_SIGNING_SECRET: SIGNING_SECRET,
     AI: {
       // Vision calls carry an image_url content part; replies are plain text.
       // Vision answers in the OpenAI shape, text in the legacy {response}
@@ -73,9 +64,9 @@ function makeApp(testEnv: Env) {
   const app = new Hono<{ Bindings: Env; Variables: { tenantId: string; jwtSub: string; traceId: string } }>()
   registerPublicWebhooks(app as never)
   return {
-    post: (path: string, body: unknown) => app.request(path, {
+    post: (path: string, body: unknown, signingSecret = SIGNING_SECRET) => app.request(path, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', 'sb-signing-secret': signingSecret },
       body: JSON.stringify(body),
     }, testEnv),
   }
@@ -103,6 +94,11 @@ beforeAll(async () => {
     `INSERT OR IGNORE INTO tenant_phone_numbers (id, tenant_id, phone_e164, label, created_at)
      VALUES (?, ?, ?, 'primary', ?)`,
   ).bind(crypto.randomUUID(), TENANT_ID, MATT_PHONE, now).run()
+  const raw = crypto.getRandomValues(new Uint8Array(32))
+  await env.KV_SESSION.put(`cron_kek:${TENANT_ID}`, btoa(String.fromCharCode(...raw)))
+  await env.D1_US.prepare(
+    'UPDATE tenants SET cron_kek_expires_at = ? WHERE id = ?',
+  ).bind(now + 3_600_000, TENANT_ID).run()
 })
 
 beforeEach(() => {
@@ -120,6 +116,16 @@ describe('mission 4.0 — webhook authentication', () => {
     expect(response.status).toBe(404)
     expect(queue).toHaveLength(0)
     expect(sent.filter((request) => request.url.includes('sendblue'))).toHaveLength(0)
+  })
+
+  it('rejects a missing or wrong Sendblue signing-secret header', async () => {
+    const sent: SentRequest[] = []
+    const queue: unknown[] = []
+    stubFetch(sent)
+    const app = makeApp(makeSendblueEnv(sent, queue))
+    expect((await app.post(`/webhooks/sendblue/${PATH_SECRET}`, inbound(), '')).status).toBe(404)
+    expect((await app.post(`/webhooks/sendblue/${PATH_SECRET}`, inbound(), 'wrong')).status).toBe(404)
+    expect(queue).toHaveLength(0)
   })
 
   it('ignores messages addressed to a different line', async () => {
@@ -186,7 +192,7 @@ describe('mission 4.0 — inbound text flow', () => {
 })
 
 describe('mission 4.0 — photo flow', () => {
-  it('stores media in R2, captures a vision description, and confirms by reply', async () => {
+  it('accepts one durable opaque job without fetching the temporary URL or replying inline', async () => {
     const sent: SentRequest[] = []
     const queue: unknown[] = []
     const bytes = new TextEncoder().encode('fake-jpeg-bytes').buffer as ArrayBuffer
@@ -195,49 +201,72 @@ describe('mission 4.0 — photo flow', () => {
     const response = await app.post(`/webhooks/sendblue/${PATH_SECRET}`, inbound({
       content: 'whiteboard from today',
       media_url: 'https://media.example/photo.jpg',
+      message_handle: 'stable-sendblue-message-handle',
     }))
 
     expect(await response.json()).toMatchObject({ status: 'processed', kind: 'media' })
     const message = queue[0] as { type: string; payload: Record<string, unknown> }
-    expect(message.type).toBe('sendblue_media')
-    expect(String(message.payload.description)).toContain('whiteboard')
-    expect(String(message.payload.storageKey)).toContain(`sendblue-media/${TENANT_ID}/`)
-
-    const stored = await env.R2_ARTIFACTS.get(String(message.payload.storageKey))
-    expect(stored).not.toBeNull()
-
-    const send = sent.find((request) => request.url.includes('api.sendblue.co'))
-    expect(send).toBeTruthy()
+    expect(message.type).toBe('channel_media')
+    expect(Object.keys(message.payload)).toEqual(['operationId'])
+    expect(JSON.stringify(message)).not.toContain('https://media.example/photo.jpg')
+    expect(JSON.stringify(message)).not.toContain('stable-sendblue-message-handle')
+    expect(JSON.stringify(message)).not.toContain('whiteboard from today')
+    expect(JSON.stringify(message)).not.toContain(MATT_PHONE)
+    expect(sent.some((request) => request.url.includes('media.example'))).toBe(false)
+    expect(sent.some((request) => request.url.includes('/api/send-message'))).toBe(false)
+    expect((await env.R2_ARTIFACTS.list({ prefix: `sendblue-media/${TENANT_ID}/` })).objects).toHaveLength(0)
   })
 
-  it('handleSendblueMedia retains a governed capture with photo provenance and artifact ref', async () => {
-    const tmk = await deriveTestTmk()
-    const queue: unknown[] = []
+  it('returns retry without accepting work when the Cron KEK is unavailable', async () => {
     const sent: SentRequest[] = []
+    const queue: unknown[] = []
+    stubFetch(sent)
     const testEnv = makeSendblueEnv(sent, queue)
-    const storageKey = `sendblue-media/${TENANT_ID}/${Date.now()}-artifact-test`
-    await env.R2_ARTIFACTS.put(storageKey, 'raw-bytes')
+    testEnv.KV_SESSION = { get: async () => null } as unknown as KVNamespace
+    const response = await makeApp(testEnv).post(`/webhooks/sendblue/${PATH_SECRET}`, inbound({
+      media_url: 'https://media.example/photo.jpg',
+      message_handle: 'kek-unavailable-handle',
+    }))
+    expect(response.status).toBe(503)
+    expect(await response.json()).toEqual({ status: 'retry' })
+    expect(queue).toHaveLength(0)
+  })
 
-    await handleSendblueMedia(TENANT_ID, {
-      description: 'A whiteboard covered in project notes.',
-      caption: 'planning session',
-      storageKey,
-      mediaType: 'image/jpeg',
-      byteLength: 9,
-      occurredAt: Date.now(),
-      from: MATT_PHONE,
-    }, tmk, testEnv, { waitUntil: () => {}, passThroughOnException: () => {} } as unknown as ExecutionContext)
+  it('returns retry without accepting work when the Cron KEK is expired', async () => {
+    const sent: SentRequest[] = []
+    const queue: unknown[] = []
+    stubFetch(sent)
+    await env.D1_US.prepare('UPDATE tenants SET cron_kek_expires_at = ? WHERE id = ?')
+      .bind(Date.now() - 1, TENANT_ID).run()
+    try {
+      const response = await makeApp(makeSendblueEnv(sent, queue)).post(
+        `/webhooks/sendblue/${PATH_SECRET}`,
+        inbound({ media_url: 'https://media.example/photo.jpg', message_handle: 'expired-kek-handle' }),
+      )
+      expect(response.status).toBe(503)
+      expect(queue).toHaveLength(0)
+    } finally {
+      await env.D1_US.prepare('UPDATE tenants SET cron_kek_expires_at = ? WHERE id = ?')
+        .bind(Date.now() + 3_600_000, TENANT_ID).run()
+    }
+  })
 
-    const store = getCanonicalMemoryStore(testEnv)
-    const docs = await store.listRecentDocuments(TENANT_ID, null, 10)
-    const captureId = docs[0]?.capture_id
-    expect(captureId).toBeTruthy()
-    const capture = await store.getCapture(TENANT_ID, captureId!)
-    expect(capture?.source_system).toBe('sendblue')
-    expect(capture?.provenance_note).toBe('sendblue_photo')
-    expect(capture?.author_kind).toBe('user')
-    expect(capture?.memory_class).toBe('episode')
-    expect(capture?.artifact_id).toBeTruthy()
+  it('rejects media without the authoritative handle or inbound binding fields', async () => {
+    const sent: SentRequest[] = []
+    const queue: unknown[] = []
+    stubFetch(sent)
+    const app = makeApp(makeSendblueEnv(sent, queue))
+    for (const override of [
+      { message_handle: undefined },
+      { message_handle: 'bound', is_outbound: undefined },
+      { message_handle: 'bound', to_number: undefined },
+    ]) {
+      const response = await app.post(`/webhooks/sendblue/${PATH_SECRET}`, inbound({
+        media_url: 'https://media.example/photo.jpg', ...override,
+      }))
+      expect(response.status).toBe(503)
+    }
+    expect(queue).toHaveLength(0)
   })
 })
 

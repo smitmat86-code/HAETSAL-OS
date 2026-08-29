@@ -30,6 +30,11 @@
 | KV | Session material and the short-lived Cron KEK (24 h TTL) |
 | Logs / Analytics / AI Gateway | Shape-only: counts, statuses, fixed-vocabulary errors — never content previews |
 
+Managed artifact lifecycle events in D1 record only tenant/operation/upload
+IDs, timestamps, the fixed states `reserved`, `sealed`, `finalized`, `failed`,
+`expired`, and `reaped`, plus fixed-vocabulary failure codes. Names, local
+paths, hosted URLs, captions, extraction text, and file bytes are excluded.
+
 ### The two key families (and why there are two)
 
 - **TMK (Tenant Master Key)** — derived *per request* from your
@@ -120,6 +125,11 @@ deliberately deferred follow-up (runbook ADR #1).
   gets fixed-vocabulary strings (`sanitizeExecutionError`,
   `GATEWAY_CHAT_EMPTY` shape-only logging) — Law 2 applies to *error
   paths* too, which is where content classically leaks.
+- **Managed files**: raw sources and derivatives are AES-GCM envelopes tagged
+  `TMK1` or `KEK1`; the canonical extraction is the only searchable plaintext.
+  Exact R2 key, ciphertext length, and ciphertext hash are proven again before
+  finalization. Cross-tenant status, finalization, document, and search reads
+  fail closed.
 - **Audit**: security-relevant operations write content-free rows to the
   audit ledger (`memory_audit` and friends) — tenant created, KEK
   provisioned/renewed, action approved, decay completed — which is also

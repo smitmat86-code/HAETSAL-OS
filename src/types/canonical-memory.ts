@@ -8,13 +8,21 @@ export type CanonicalProjectionKind = string
 export type CanonicalArtifactMode = 'inline_encrypted' | 'stored_r2'
 
 export interface CanonicalArtifactRef {
+  /** Stable managed-artifact id. Omitted for legacy inline/reference captures. */
+  artifactId?: string | null
   mode?: CanonicalArtifactMode
+  storageKind?: 'managed_r2' | 'external_reference' | null
   filename?: string | null
   mediaType?: string | null
   storageKey?: string | null
   contentEncrypted?: string | null
   byteLength?: number | null
   sha256?: string | null
+  cipherSha256?: string | null
+  encryptionFamily?: 'tmk' | 'kek' | 'legacy_unsealed' | null
+  role?: 'source' | 'derivative'
+  parentArtifactId?: string | null
+  primary?: boolean
 }
 
 export interface CanonicalCaptureGovernanceInput {
@@ -34,6 +42,9 @@ export interface CanonicalCaptureGovernanceInput {
 
 export interface CanonicalCaptureInput {
   tenantId: string
+  captureId?: string | null
+  documentId?: string | null
+  operationId?: string | null
   sourceSystem: string
   sourceRef?: string | null
   scope: string
@@ -41,6 +52,7 @@ export interface CanonicalCaptureInput {
   body: string
   bodyEncrypted?: string | null
   artifactRef?: CanonicalArtifactRef | null
+  artifactRefs?: CanonicalArtifactRef[] | null
   capturedAt?: number | null
   projectionKinds?: CanonicalProjectionKind[] | null
   governance?: CanonicalCaptureGovernanceInput | null
@@ -50,6 +62,7 @@ export interface CanonicalCaptureResult {
   captureId: string
   documentId: string
   artifactId: string | null
+  artifactIds: string[]
   chunkIds: string[]
   operationId: string
   projectionJobIds: string[]

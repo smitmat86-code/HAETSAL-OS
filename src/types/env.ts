@@ -6,6 +6,7 @@ export interface Env extends Cloudflare.Env {
   CF_ACCESS_AUD: string
   CF_ACCESS_TEAM: string
   CF_ACCESS_DELEGATED_PRINCIPALS?: string
+  CF_ACCESS_CLIENT_IDENTITIES?: string
   HMAC_SECRET: string
   TELNYX_PUBLIC_KEY: string
   TELEGRAM_BOT_TOKEN: string
@@ -16,6 +17,7 @@ export interface Env extends Cloudflare.Env {
   SENDBLUE_API_SECRET_KEY: string
   SENDBLUE_PHONE_NUMBER: string
   SENDBLUE_WEBHOOK_PATH_SECRET: string
+  SENDBLUE_WEBHOOK_SIGNING_SECRET: string
   NEON_CONNECTION_STRING: string
   CANONICAL_POSTGRES_CONNECTION_STRING?: string
   AI_GATEWAY_TOKEN: string
@@ -28,4 +30,9 @@ export interface Env extends Cloudflare.Env {
 
   // Optional local/runtime configuration not emitted by wrangler types.
   CANONICAL_MEMORY_SHADOW_WRITES?: string
+
+  // Artifact upload ownership rollout phase ("compat" | "active"); see
+  // migration 1033 and src/services/artifact-intake/upload-protocol.ts.
+  // Unset defaults to "compat".
+  ARTIFACT_UPLOAD_PROTOCOL_PHASE?: string
 }

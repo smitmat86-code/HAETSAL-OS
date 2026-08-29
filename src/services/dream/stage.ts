@@ -9,7 +9,7 @@
 import type { Env } from '../../types/env'
 import { fetchAndValidateKek } from '../../cron/kek'
 import { getCanonicalGovernanceStore } from '../canonical-governance-postgres'
-import { listRecentCanonicalMemories } from '../canonical-memory-query'
+import { getCanonicalMemoryStore } from '../canonical-postgres'
 import { buildWindowBlock, extractDreamFindings, type DreamWindowItem } from './extract'
 import { writeDreamProposals } from './proposals'
 import { composeDreamReport, persistDreamReport } from './report'
@@ -27,15 +27,18 @@ export async function executeDreamStage(
   const kek = await fetchAndValidateKek(tenantId, env)
   if (!kek) return { deferred: true }
 
-  const recent = await listRecentCanonicalMemories(
-    { tenantId, limit: DREAM_WINDOW_EVENT_LIMIT }, env, tenantId,
+  // Canonical chunk text is the authorized Neon plaintext surface. Reading it
+  // here avoids both compiled-page coupling and cross-family R2 decryption:
+  // interactive TMK captures remain visible to the KEK-backed nightly job.
+  const recent = await getCanonicalMemoryStore(env).listRecentChunks(
+    tenantId, DREAM_WINDOW_EVENT_LIMIT,
   )
-  const items: DreamWindowItem[] = recent.items
-    .filter(item => item.sourceSystem !== 'cron:dream') // never dream about dream reports
+  const items: DreamWindowItem[] = recent
+    .filter(item => item.source_system !== 'cron:dream') // never dream about dream reports
     .map((item, index) => ({
-      ref: item.captureId?.slice(0, 8) ?? `item-${index}`,
-      when: item.capturedAt ?? Date.now(),
-      text: item.preview || item.title || '',
+      ref: item.capture_id?.slice(0, 8) ?? `item-${index}`,
+      when: item.captured_at ?? Date.now(),
+      text: item.chunk_text || item.title || '',
     }))
     .filter(item => item.text.length > 0)
 

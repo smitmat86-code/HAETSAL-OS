@@ -1,6 +1,6 @@
 {
   "name": "the-brain",
-  "version": "0.0.0",
+  "version": "0.1.0",
   "private": true,
   "type": "module",
   "scripts": {
@@ -24,6 +24,7 @@
   "devDependencies": {
     "@cloudflare/vitest-pool-workers": "^0.16.10",
     "@cloudflare/workers-types": "^4.20260601.1",
+    "@electric-sql/pglite": "^0.5.5",
     "@types/node": "^22.0.0",
     "@types/pg": "^8.20.0",
     "@vitest/snapshot": "^4.1.4",

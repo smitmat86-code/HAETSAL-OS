@@ -11,9 +11,8 @@ import { processCanonicalProjectionDispatch } from './canonical-projection-consu
 import { processQueuedRetainArtifact } from './retain-consumer'
 import { processOpsAlertMemory } from './ops-alert-memory-consumer'
 import { processChatInbound } from './chat-consumer'
+import { processChannelMediaMessage } from './channel-media-consumer'
 import {
-  handleSendblueMedia,
-  handleTelegramMedia,
   handleSmsInbound,
   handleGmailThread,
   handleCalendarEvent,
@@ -112,15 +111,14 @@ async function processIngestionMessage(
     return
   }
 
+  if (type === 'channel_media') {
+    await processChannelMediaMessage(msg, tmk, env)
+    return
+  }
+
   switch (type) {
     case 'sms_inbound':
       await handleSmsInbound(tenantId, payload, tmk, env, ctx)
-      break
-    case 'sendblue_media':
-      await handleSendblueMedia(tenantId, payload, tmk, env, ctx)
-      break
-    case 'telegram_media':
-      await handleTelegramMedia(tenantId, payload, tmk, env, ctx)
       break
     case 'gmail_thread':
       await handleGmailThread(tenantId, payload, tmk, env, ctx)

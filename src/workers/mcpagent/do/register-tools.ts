@@ -5,6 +5,7 @@ import type { InterviewState } from '../../../types/bootstrap'
 import { recallSchema, retainSchema } from '../../../types/tools'
 import { writeAuditLog } from '../../../middleware/audit'
 import { registerBrainMemorySurface } from '../../../tools/brain-memory-surface'
+import { registerArtifactIntakeTools } from '../../../tools/artifact-intake'
 import { registerBootstrapTools } from '../../../tools/bootstrap'
 import { registerMemoryTools } from '../../../tools/memory'
 import { registerAutomationTools } from './register-automation-tools'
@@ -99,6 +100,7 @@ export function registerAllDoTools(options: {
   server: McpServer
   getTenantId: () => string
   getTmk: () => CryptoKey | null
+  getClientIdentity: () => { clientName: string | null; agentIdentity: string | null }
   waitUntil: (promise: Promise<unknown>) => void
   getInterviewState: () => InterviewState | null
   setInterviewState: (s: InterviewState | null) => void
@@ -117,6 +119,10 @@ export function registerAllDoTools(options: {
     getExecutionContext: () => ({ waitUntil }),
   }
   registerBrainMemorySurface(server, ctx)
+  registerArtifactIntakeTools(server, {
+    ...ctx,
+    getClientIdentity: options.getClientIdentity,
+  })
   registerMemoryTools(server, ctx)
   registerBootstrapTools(server, {
     getEnv: () => env, getTenantId, getTmk,

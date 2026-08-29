@@ -15,6 +15,7 @@ import { settings } from '../src/workers/mcpagent/routes/settings'
 import { audit } from '../src/workers/mcpagent/routes/audit'
 import { canary } from '../src/workers/mcpagent/routes/canary'
 import { auth } from '../src/workers/mcpagent/routes/auth'
+import { artifactContent } from '../src/workers/mcpagent/routes/artifact-content'
 import type { Env } from '../src/types/env'
 
 type Variables = {
@@ -51,6 +52,7 @@ app.route('/api/actions', actions)
 app.route('/api/actions', approval)
 app.route('/api/settings', settings)
 app.route('/api/audit', audit)
+app.route('/api/artifacts', artifactContent)
 app.route('/auth', auth)
 
 // Stub routes for testing middleware chain

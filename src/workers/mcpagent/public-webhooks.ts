@@ -24,13 +24,18 @@ export function registerPublicWebhooks(
 ): void {
   // M4 ops-alert ingress — Law 1 exception, per-source token (spec M4).
   registerOpsAlertWebhook(app)
-  // Sendblue iMessage inbound (mission Phase 4). Law 1 exception path with a
-  // CF Access bypass app; Sendblue does NOT sign webhooks, so auth is the
-  // bearer path segment compared in constant time, plus a to_number check.
+  // Sendblue iMessage inbound. The provider signing-secret header is the
+  // primary verifier; the bearer path segment remains defense in depth.
   app.post('/webhooks/sendblue/:pathSecret', async (c) => {
     const provided = c.req.param('pathSecret')
     const expected = c.env.SENDBLUE_WEBHOOK_PATH_SECRET
-    if (!expected?.trim() || !timingSafeEqualStrings(provided, expected)) {
+    const providedSigningSecret = c.req.header('sb-signing-secret') ?? ''
+    const expectedSigningSecret = c.env.SENDBLUE_WEBHOOK_SIGNING_SECRET
+    if (
+      !expected?.trim() || !timingSafeEqualStrings(provided, expected) ||
+      !expectedSigningSecret?.trim() ||
+      !timingSafeEqualStrings(providedSigningSecret, expectedSigningSecret)
+    ) {
       return c.json({ error: 'not found' }, 404)
     }
     let body: SendblueInboundBody
@@ -41,8 +46,10 @@ export function registerPublicWebhooks(
     }
     const lineNumber = body.to_number ?? body.number
     if (!lineNumber || lineNumber !== c.env.SENDBLUE_PHONE_NUMBER) {
-      console.warn('SENDBLUE_WEBHOOK_WRONG_LINE', { suffix: (lineNumber ?? '').slice(-4) })
-      return c.json({ status: 'ignored' }, 200)
+      console.warn('SENDBLUE_WEBHOOK_WRONG_LINE')
+      return body.media_url
+        ? c.json({ status: 'retry' }, 503)
+        : c.json({ status: 'ignored' }, 200)
     }
     let ctx: Pick<ExecutionContext, 'waitUntil'>
     try {
@@ -55,16 +62,16 @@ export function registerPublicWebhooks(
       const outcome = await processSendblueInbound(body, c.env, ctx)
       return c.json({ status: outcome.handled ? 'processed' : 'ignored', kind: outcome.kind }, 200)
     } catch (error) {
-      console.error('SENDBLUE_WEBHOOK_FAILED', {
-        error: error instanceof Error ? error.message : String(error),
-      })
-      return c.json({ status: 'error' }, 200)
+      console.error('SENDBLUE_WEBHOOK_FAILED')
+      return body.media_url
+        ? c.json({ status: 'retry' }, 503)
+        : c.json({ status: 'error' }, 200)
     }
   })
   // 14.3 queue-side chat: processTelegramInbound is enqueue-only for text
   // (two durable jobs, awaited so they exist before Telegram gets its 200)
-  // and detaches the photo pipeline internally — so awaiting here is
-  // milliseconds and the 14.2 timeout class (inline model calls blowing
+  // and durably accepts an opaque governed photo job — so awaiting here has
+  // no provider download or model call and the 14.2 timeout class (inline calls blowing
   // Telegram's ~60s read window → cancel + redelivery storm) cannot recur.
   app.post('/telegram/webhook', async (c) => {
     const secret = c.req.header('X-Telegram-Bot-Api-Secret-Token')
@@ -77,10 +84,11 @@ export function registerPublicWebhooks(
     }
     try {
       await processTelegramInbound(update, c.env, ctx)
-    } catch (err) {
-      console.error('TELEGRAM_WEBHOOK_FAILED', {
-        error: err instanceof Error ? err.message : String(err),
-      })
+    } catch {
+      console.error('TELEGRAM_WEBHOOK_FAILED')
+      if (Array.isArray(update.message?.photo) && update.message.photo.length > 0) {
+        return c.json({ ok: false }, 503)
+      }
     }
     return c.json({ ok: true })
   })

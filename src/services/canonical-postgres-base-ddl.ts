@@ -31,10 +31,22 @@ export const CANONICAL_BASE_DDL: string[] = [
     filename TEXT,
     byte_length BIGINT,
     sha256 TEXT,
+    cipher_sha256 TEXT,
+    encryption_family TEXT NOT NULL DEFAULT 'legacy_unsealed',
+    role TEXT NOT NULL DEFAULT 'source',
+    parent_artifact_id TEXT,
+    ordinal INTEGER NOT NULL DEFAULT 0,
     created_at BIGINT NOT NULL
   )`,
+  `ALTER TABLE ${S}.canonical_artifacts ADD COLUMN IF NOT EXISTS cipher_sha256 TEXT`,
+  `ALTER TABLE ${S}.canonical_artifacts ADD COLUMN IF NOT EXISTS encryption_family TEXT NOT NULL DEFAULT 'legacy_unsealed'`,
+  `ALTER TABLE ${S}.canonical_artifacts ADD COLUMN IF NOT EXISTS role TEXT NOT NULL DEFAULT 'source'`,
+  `ALTER TABLE ${S}.canonical_artifacts ADD COLUMN IF NOT EXISTS parent_artifact_id TEXT`,
+  `ALTER TABLE ${S}.canonical_artifacts ADD COLUMN IF NOT EXISTS ordinal INTEGER NOT NULL DEFAULT 0`,
   `CREATE INDEX IF NOT EXISTS idx_pg_canonical_artifacts_tenant_created
     ON ${S}.canonical_artifacts(tenant_id, created_at DESC)`,
+  `CREATE INDEX IF NOT EXISTS idx_pg_canonical_artifacts_capture_manifest
+    ON ${S}.canonical_artifacts(tenant_id, capture_id, ordinal ASC)`,
   `CREATE TABLE IF NOT EXISTS ${S}.canonical_documents (
     id TEXT PRIMARY KEY,
     tenant_id TEXT NOT NULL,

@@ -26,7 +26,7 @@ export async function listRecentCanonicalMemories(input: CanonicalRecentInput, e
 export async function getCanonicalDocument(input: CanonicalDocumentInput, env: Env, tenantId: string, options: CanonicalMemoryReadOptions = {}): Promise<CanonicalDocumentResult> {
   if (!options.tmk) throw new Error('Active session key required for canonical document reads')
   const row = await getCanonicalMemoryStore(env).getDocument(tenantId, input.documentId) as CanonicalDocumentRow | null
-  if (!row) throw new Error(`Canonical document not found: ${input.documentId}`)
+  if (!row) throw new Error('Canonical document not found')
   return {
     captureId: row.capture_id,
     documentId: row.document_id,
@@ -57,5 +57,18 @@ export async function getCanonicalDocument(input: CanonicalDocumentInput, env: E
         storageKey: row.r2_key,
       }
       : null,
+    artifacts: row.artifact_manifest.map(artifact => ({
+      artifactId: artifact.artifact_id,
+      role: artifact.role,
+      parentArtifactId: artifact.parent_artifact_id,
+      primary: artifact.primary,
+      storageKind: artifact.storage_kind,
+      filename: artifact.filename,
+      mediaType: artifact.media_type,
+      byteLength: artifact.byte_length,
+      plaintextSha256: artifact.sha256,
+      ciphertextSha256: artifact.cipher_sha256,
+      encryptionFamily: artifact.encryption_family,
+    })),
   }
 }

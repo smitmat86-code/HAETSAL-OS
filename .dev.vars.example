@@ -26,10 +26,10 @@ GOOGLE_CLIENT_ID=xxxxxxxxxxxx.apps.googleusercontent.com
 GOOGLE_CLIENT_SECRET=GOCSPX-xxxxxxxxxxxx
 
 # ─── Sendblue iMessage integration (mission Phase 4) ─────────────────────────
-# Sendblue does NOT sign webhooks. Authentication uses a bearer path segment:
-# webhook URL registered with Sendblue includes SENDBLUE_WEBHOOK_PATH_SECRET.
+# Sendblue sends sb-signing-secret. The bearer path segment remains a second layer.
 # Free Tier: shared number, up to 10 verified contacts, must-text-first, 24h reply window.
 SENDBLUE_API_KEY_ID=00000000000000000000000000000000
 SENDBLUE_API_SECRET_KEY=00000000000000000000000000000000
 SENDBLUE_PHONE_NUMBER=+1XXXXXXXXXX
 SENDBLUE_WEBHOOK_PATH_SECRET=generate-with-openssl-rand-hex-32
+SENDBLUE_WEBHOOK_SIGNING_SECRET=copy-from-sendblue-webhook-signing-secret

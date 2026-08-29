@@ -1,6 +1,6 @@
 // src/services/dream/extract.ts
 // Dream-cycle signal extraction: one bounded MODEL_DEEP pass over the recent
-// canonical window (previews only, hard char cap) producing new facts,
+// canonical window (authorized Neon chunk text, hard char cap) producing new facts,
 // contradictions, supersessions, promotion candidates, entity links, and
 // gaps. G4: AI Gateway with collectLog:false — the prompt carries tenant
 // content. Output parsing is defensive; a malformed model reply degrades to

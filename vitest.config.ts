@@ -54,6 +54,9 @@ export default defineConfig(async () => {
             TELNYX_PUBLIC_KEY: 'test-telnyx-public-key-hex',
             GOOGLE_CLIENT_ID: 'test-google-client-id',
             GOOGLE_CLIENT_SECRET: 'test-google-client-secret',
+            // Tests exercise the post-activation fenced upload protocol by
+            // default; mixed-version tests override to 'compat' per call.
+            ARTIFACT_UPLOAD_PROTOCOL_PHASE: 'active',
           },
         },
       }),
@@ -79,6 +82,7 @@ export default defineConfig(async () => {
         'Second-Brain/**',
       ],
       setupFiles: ['./tests/apply-migrations.ts'],
+      globalSetup: ['./tests/legacy-postgres-global-setup.ts'],
       fileParallelism: false,
       maxWorkers: 1,
       minWorkers: 1,

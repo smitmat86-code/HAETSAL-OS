@@ -4,11 +4,14 @@
 //         Routes without auditMiddleware must access c.get('tenantId') directly.
 
 import type { Env } from '../types/env'
-import { deriveAccessPrincipalId, validateCfAccessJwt } from './cf-access'
+import { resolveAccessPrincipal, resolveDelegatedClientIdentity, validateCfAccessJwt } from './cf-access'
 
 type AuthVariables = {
   tenantId: string
   jwtSub: string
+  clientName: string | null
+  agentIdentity: string | null
+  actorKind: 'human' | 'service'
 }
 
 // HKDF-SHA256: JWT sub → tenant_id
@@ -77,10 +80,17 @@ export function authMiddleware() {
       // Support comma-separated AUDs: "worker-aud,pages-aud"
       const audiences = c.env.CF_ACCESS_AUD.split(',').map((s: string) => s.trim())
       const payload = await validateCfAccessJwt(jwt, jwksUrl, audiences)
-      const principalId = deriveAccessPrincipalId(payload)
-      const tenantId = await deriveTenantId(principalId, audiences[0])
+      const principal = resolveAccessPrincipal(payload, c.env.CF_ACCESS_DELEGATED_PRINCIPALS)
+      const clientIdentity = resolveDelegatedClientIdentity(payload, c.env.CF_ACCESS_CLIENT_IDENTITIES)
+      const serviceActor = payload.type === 'app' && !payload.sub?.trim() && Boolean(payload.common_name?.trim())
+      const tenantId = await deriveTenantId(principal.tenantPrincipalId, audiences[0])
       c.set('tenantId', tenantId)
-      c.set('jwtSub', principalId)
+      // Downstream tenant/TMK derivation must use the delegated owner subject,
+      // not the service-token actor, so delegated clients reach the same brain.
+      c.set('jwtSub', principal.tenantPrincipalId)
+      c.set('clientName', clientIdentity?.clientName ?? null)
+      c.set('agentIdentity', clientIdentity?.agentIdentity ?? null)
+      c.set('actorKind', serviceActor ? 'service' : 'human')
     } catch {
       // LESSON: waitUntil for audit — don't block rejection on audit write
       c.executionCtx.waitUntil(writeFailedAuthAudit(c.env))

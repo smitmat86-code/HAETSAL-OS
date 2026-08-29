@@ -18,6 +18,7 @@ import { dream } from './routes/dream' // Phase 8
 import { session } from './routes/session' // Phase 9
 import { compiled } from './routes/compiled' // Phase 10
 import { dashboardData } from './routes/dashboard-data' // Phase 11 feeds
+import { artifactContent } from './routes/artifact-content'
 import type { Env } from '../../types/env'
 import { getMcpAgentObjectName } from './do/identity'
 import { registerPublicWebhooks } from './public-webhooks'
@@ -25,12 +26,10 @@ import { registerPhoneQuery, registerTelegramQuery } from './self-registration'
 import { renderMemoryInventory } from './debug-inventory'
 import { renderGoogleSourceSync } from './routes/debug-google-source-sync'
 import { handleBrainQueue, handleBrainScheduled } from './runtime'
-
-type Variables = { tenantId: string; jwtSub: string; traceId: string }
-
+import { tryHandleArtifactMcpFastPath } from './artifact-mcp-fast-path'
+type Variables = { tenantId: string; jwtSub: string; traceId: string; clientName?: string | null; agentIdentity?: string | null; actorKind?: 'human' | 'service' }
 const app = new Hono<{ Bindings: Env; Variables: Variables }>()
 const mcpHandler = McpAgentDO.serve('/mcp', { binding: 'MCPAGENT' })
-
 // Security headers — skip on WebSocket 101 (immutable in workerd; mutating throws)
 app.use('*', async (c, next) => {
   const isWebSocket = c.req.header('Upgrade') === 'websocket'
@@ -44,18 +43,15 @@ app.use('*', async (c, next) => {
     }
   }
 })
-
 // SMS ingest route — Law 1 exception: NOT behind CF Access
 app.route('/ingest', ingest)
 registerPublicWebhooks(app)
 app.route('/_canary', canary)
-
 // Auth on all remaining routes — Law 1: no route bypasses JWT validation
 app.use('*', authMiddleware())
 app.use('*', auditMiddleware())
 app.use('/mcp/*', dlpMiddleware())
 app.use('/mcp', dlpMiddleware())
-
 // Auth routes (Google OAuth - 2.2) + action routes (undo - 2.3)
 app.route('/auth', auth)
 app.route('/actions', actions)
@@ -70,10 +66,10 @@ app.route('/api/automations', automations)
 app.route('/api/dream', dream)
 app.route('/api/session', session)
 app.route('/api/compiled', compiled)
+app.route('/api/artifacts', artifactContent)
 app.route('/api', dashboardData)
 app.get('/debug/memory-inventory', renderMemoryInventory)
 app.get('/debug/google-source-sync', renderGoogleSourceSync)
-
 // Root status page - doubles as a session/KEK refresh: opening it after CF
 // Access login initializes the tenant session + provisions the 24h Cron KEK.
 app.get('/', async (c) => {
@@ -93,7 +89,6 @@ app.get('/', async (c) => {
   const phoneNote = phone ? await registerPhoneQuery(c.env, tenantId, phone) : ''
   const tg = c.req.query('telegram_chat_id')?.trim()
   const telegramNote = tg ? await registerTelegramQuery(c.env, tenantId, tg) : ''
-
   return c.html(`<!doctype html><html><head><title>HAETSAL</title></head>
 <body style="font-family:system-ui;max-width:36rem;margin:4rem auto;line-height:1.6">
 <h1>HAETSAL brain is running</h1>
@@ -103,17 +98,24 @@ ${phoneNote}
 ${telegramNote}
 </body></html>`)
 })
-
 // MCP Streamable HTTP — delegate to DO
 app.all('/mcp', async (c) => {
   const tenantId = c.get('tenantId')
   const jwtSub = c.get('jwtSub')
 
   try {
+    const artifactResponse = await tryHandleArtifactMcpFastPath(c.req.raw, c.env, {
+      tenantId,
+      jwtSub,
+      clientName: c.get('clientName') ?? null,
+      agentIdentity: c.get('agentIdentity') ?? null,
+      actorKind: c.get('actorKind') ?? 'service',
+    })
+    if (artifactResponse) return artifactResponse
     return await mcpHandler.fetch(c.req.raw, c.env, {
       waitUntil: c.executionCtx.waitUntil.bind(c.executionCtx),
       passThroughOnException: c.executionCtx.passThroughOnException.bind(c.executionCtx),
-      props: { tenantId, jwtSub },
+      props: { tenantId, jwtSub, clientName: c.get('clientName'), agentIdentity: c.get('agentIdentity'), actorKind: c.get('actorKind') },
     } as ExecutionContext<Record<string, unknown>>)
   } catch (error) {
     const detail = error instanceof Error ? error.message : String(error)
@@ -121,7 +123,6 @@ app.all('/mcp', async (c) => {
     return c.json({ error: 'mcp_fetch_failed', detail }, 500)
   }
 })
-
 // WebSocket upgrade — delegate to DO
 // LESSON: Use new Request(url, c.req.raw) to preserve upgrade semantics
 app.get('/ws', async (c) => {

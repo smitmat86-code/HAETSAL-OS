@@ -5,6 +5,7 @@ import { getArtifactIntakeOperation, type ArtifactIntakeOperationRow } from './o
 import { recoverOrFailStaleArtifactFinalizations } from './stale-finalization-recovery'
 import { deleteProvenManagedArtifact } from './storage'
 import { sweepRetiredLegacyArtifactKeys } from './legacy-key-sweep'
+import { recordArtifactIntakeEvent } from './events'
 
 export interface ArtifactReaperResult {
   inspected: number
@@ -103,6 +104,8 @@ export async function reapExpiredArtifactUploads(
          WHERE tenant_id = ? AND upload_id = ? AND status != 'finalized' AND expiry_claim_token = ?`,
       ).bind(now, row.tenant_id, row.upload_id, claimToken).run()
       if (Number(expired.meta.changes ?? 0) !== 1) throw new Error('artifact expiry claim lost')
+      await recordArtifactIntakeEvent(env, claimedRow, 'expired', now).catch(() => undefined)
+      await recordArtifactIntakeEvent(env, claimedRow, 'reaped', now).catch(() => undefined)
       result.reaped += 1
     } catch {
       // The claim remains. Once its short lease expires, a later reaper retries

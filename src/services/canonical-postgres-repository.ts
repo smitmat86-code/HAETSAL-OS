@@ -33,6 +33,8 @@ export interface CanonicalMemoryStore {
   searchChunksSemantic(tenantId: string, embedding: number[], scope: string | null, limit: number): Promise<CanonicalRetrievalRow[]>
   updateChunkEmbeddings(tenantId: string, updates: Array<{ chunkId: string; embedding: number[] }>): Promise<void>
   listCapturesBetween(tenantId: string, fromMs: number, toMs: number, scope: string | null, limit: number): Promise<CanonicalRetrievalRow[]>
+  /** Internal canonical-content window for governed background synthesis. */
+  listRecentChunks(tenantId: string, limit: number): Promise<CanonicalRetrievalRow[]>
   vectorSearchAvailable(): Promise<boolean>
   getCapture(tenantId: string, captureId: string): Promise<CanonicalCaptureRecord | null>
   getCaptureBodyKey(tenantId: string, captureId: string): Promise<string | null>
@@ -326,6 +328,13 @@ export class InMemoryCanonicalMemoryStore implements CanonicalMemoryStore {
 
   async vectorSearchAvailable(): Promise<boolean> {
     return true
+  }
+
+  async listRecentChunks(tenantId: string, limit: number): Promise<CanonicalRetrievalRow[]> {
+    return this.chunkJoin(tenantId, null)
+      .map(({ chunk, capture, document }) => this.retrievalRow(chunk, capture, document, null))
+      .sort((left, right) => right.captured_at - left.captured_at || (left.chunk_id ?? '').localeCompare(right.chunk_id ?? ''))
+      .slice(0, limit)
   }
 
   async getCapture(tenantId: string, captureId: string): Promise<CanonicalCaptureRecord | null> {
@@ -797,6 +806,20 @@ export class PostgresCanonicalMemoryStore implements CanonicalMemoryStore {
         AND c.captured_at >= ${fromMs} AND c.captured_at <= ${toMs}
         AND (${scope}::text IS NULL OR c.scope = ${scope})
       ORDER BY c.captured_at DESC
+      LIMIT ${limit}
+    `)
+  }
+
+  async listRecentChunks(tenantId: string, limit: number): Promise<CanonicalRetrievalRow[]> {
+    return this.rows<CanonicalRetrievalRow>(this.sql`
+      SELECT c.id AS capture_id, d.id AS document_id, ch.id AS chunk_id, c.title, c.scope,
+             c.source_system, c.source_ref, c.captured_at, ch.chunk_text, NULL::float8 AS score,
+             c.trust_state, c.use_policy, c.memory_class, c.author_kind
+      FROM haetsal_canonical.canonical_chunks ch
+      INNER JOIN haetsal_canonical.canonical_documents d ON d.id = ch.document_id AND d.tenant_id = ch.tenant_id
+      INNER JOIN haetsal_canonical.canonical_captures c ON c.id = d.capture_id AND c.tenant_id = d.tenant_id
+      WHERE ch.tenant_id = ${tenantId} AND ch.chunk_text IS NOT NULL
+      ORDER BY c.captured_at DESC, ch.ordinal ASC
       LIMIT ${limit}
     `)
   }

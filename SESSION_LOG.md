@@ -2319,3 +2319,15 @@
 - Regression tests cover a late old put after finalization, an old D1 seal after final proof with repair-on-retry, delayed adoption after cleanup fencing, identity changes between proof and recovery, and commit-then-throw promotion ambiguity.
 - Validation: focused affected lane 75/75; full suite 109 files, 715 passed / 1 skipped; postflight clean; deploy dry-run clean; no diagnostics in modified source files (repository TypeScript baseline still exits 2). Independent final review: APPROVE, no HIGH/CRITICAL blockers.
 - Stop boundary: migrations 1033–1037 remain pending; no deployment, remote migration, provider message, remediation, approval, or merge.
+
+---
+
+## 2026-08-29 — Session 6 artifact observability, canary, dream proof, and operations
+
+**Status:** Implemented and locally verified on `codex/session5-final-correction`; production remains unchanged pending the governed Session 7 rollout.
+
+- Migration 1038 adds an idempotent, content-free artifact lifecycle ledger for `reserved`, `sealed`, `finalized`, `failed`, `expired`, and `reaped`. Events contain only tenant/operation/upload IDs, timestamps, states, and fixed failure codes. Explicit side writes preserve the lifecycle state machine's exact D1 mutation-count/CAS semantics.
+- The hourly/on-demand canary now has a seventh `artifact` probe. It runs a tiny daily generated fixture through reserve, KEK seal, canonical finalize, exact R2 hash/length proof, manifest/body read, lexical marker search, cross-tenant isolation, and expired-reservation cleanup. Persisted output is metadata-only with fixed stage codes.
+- The dream stage now reads the authorized canonical Neon chunk window directly, so KEK-backed overnight work can consume TMK-authored artifact extraction without decrypting raw or archival R2. A bounded distinct-key-family regression proves the extraction reaches the dream model while the raw R2 source does not; compiled pages are not involved.
+- Feeding, security, operations, and client guides now describe the actual managed-file flow, 25 MiB/Telegram 20 MiB limits, stable errors, retention distinctions, telemetry, and recovery. `docs/runbooks/artifact-intake-operations.md` covers stuck uploads, expiry, orphan proof, legacy remediation, key-family failure, rollout, and rollback.
+- Validation: focused affected lane 81/81; full suite 109 files, 716 passed / 1 skipped (717); `npm run postflight` and `git diff --check` passed. No production migration, deploy, live provider message, or legacy deletion/remediation was performed.

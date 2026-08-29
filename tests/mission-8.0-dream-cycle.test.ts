@@ -16,6 +16,9 @@ import { installCanonicalGovernanceTestStore } from '../src/services/canonical-g
 import { installCanonicalMemoryTestStore } from '../src/services/canonical-postgres'
 import type { DreamCounts, DreamFindings } from '../src/services/dream/types'
 import type { Env } from '../src/types/env'
+import { reserveArtifactUpload, uploadArtifactBytes } from '../src/services/artifact-intake/operations'
+import { finalizeArtifactCapture } from '../src/services/artifact-intake/finalize'
+import { sha256Bytes } from '../src/services/artifact-intake/crypto'
 
 const SUITE = crypto.randomUUID()
 const TENANT = `test-tenant-mission-80-${SUITE}`
@@ -168,6 +171,51 @@ describe('mission 8.0 — stage KEK discipline (Law 2 corollary)', () => {
       expect(result.counts.proposalsWritten).toBeGreaterThanOrEqual(1)
       expect(result.captureId).not.toBeNull()
     }
+  })
+
+  it('reads managed-artifact extraction from canonical memory, never compiled pages or raw R2', async () => {
+    const now = Date.now()
+    const raw = crypto.getRandomValues(new Uint8Array(32))
+    const tmk = await crypto.subtle.generateKey(
+      { name: 'AES-GCM', length: 256 }, false, ['encrypt', 'decrypt'],
+    ) as CryptoKey
+    await env.D1_US.prepare('UPDATE tenants SET cron_kek_expires_at = ? WHERE id = ?')
+      .bind(now + 3600_000, TENANT).run()
+    await env.KV_SESSION.put(`cron_kek:${TENANT}`, btoa(String.fromCharCode(...raw)))
+    const source = new TextEncoder().encode('raw bytes must not enter the dream prompt')
+    const hash = await sha256Bytes(source)
+    const upload = await reserveArtifactUpload({
+      tenantId: TENANT, idempotencyKey: `dream-artifact-upload-${SUITE}`,
+      byteLength: source.byteLength, plaintextSha256: hash, declaredMimeType: 'text/plain',
+    }, env)
+    await uploadArtifactBytes({
+      tenantId: TENANT, uploadId: upload.uploadId, bytes: source,
+      declaredMimeType: 'text/plain', detectedMimeType: 'text/plain', encryptionFamily: 'tmk', key: tmk,
+    }, env)
+    const marker = `canonical-artifact-dream-marker-${SUITE}`
+    await finalizeArtifactCapture({
+      tenantId: TENANT, content: marker, title: 'Dream artifact proof', scope: 'proof',
+      provenance: 'dream_artifact_test', clientName: 'test',
+      sourceRef: `dream-artifact:${SUITE}`, idempotencyKey: `dream-artifact-finalize-${SUITE}`,
+      artifacts: [{
+        uploadId: upload.uploadId, role: 'source', primary: true,
+        detectedMimeType: 'text/plain', byteLength: source.byteLength, plaintextSha256: hash,
+      }],
+    }, tmk, env)
+    let modelInput = ''
+    const fakeEnv = {
+      ...env,
+      AI_GATEWAY_ID: 'g',
+      AI: { run: async (_model: string, input: unknown) => {
+        const serialized = JSON.stringify(input)
+        if (serialized.includes('Recent memory window')) modelInput = serialized
+        return { response: '{"facts":[],"contradictions":[],"supersessions":[],"promotions":[],"entity_links":[],"gaps":[]}' }
+      } },
+    } as unknown as Env
+    const result = await executeDreamStage(fakeEnv, TENANT, '2026-07-07')
+    expect(result.deferred).toBe(false)
+    expect(modelInput).toContain(marker)
+    expect(modelInput).not.toContain('raw bytes must not enter the dream prompt')
   })
 })
 

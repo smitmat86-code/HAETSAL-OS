@@ -12,7 +12,7 @@ Last updated: 2026-04-18 | Session: 7.1 (Hindsight Projection Adapter)
 
 <!-- AUTO-GENERATED MODULE REGISTRY - DO NOT EDIT -->
 
-*Auto-generated: 2026-08-20*
+*Auto-generated: 2026-08-29*
 
 ### src/
 
@@ -79,6 +79,7 @@ Last updated: 2026-04-18 | Session: 7.1 (Hindsight Projection Adapter)
 | src\services\artifact-intake\download-policy.ts | 117 | normalizeArtifactIpAddress, isBlockedArtifactAddress, assertArtifactResolvedAddressAllowed... | ✅ |
 | src\services\artifact-intake\download-types.ts | 42 | HostedArtifactFileDescriptor, ArtifactDownloadResponse, ArtifactDownloadNetwork... | ✅ |
 | src\services\artifact-intake\download.ts | 150 | — | ✅ |
+| src\services\artifact-intake\events.ts | 39 | ArtifactIntakeEventType, ArtifactIntakeEventSubject | ✅ |
 | src\services\artifact-intake\finalization-immutable-proof.ts | 41 | — | ✅ |
 | src\services\artifact-intake\finalization-promotion.ts | 150 | — | ✅ |
 | src\services\artifact-intake\finalization-proof.ts | 141 | — | ✅ |
@@ -93,10 +94,10 @@ Last updated: 2026-04-18 | Session: 7.1 (Hindsight Projection Adapter)
 | src\services\artifact-intake\manifest-identity.ts | 26 | ArtifactManifestIdentityItem | ✅ |
 | src\services\artifact-intake\migration-overlap-audit.ts | 76 | ArtifactFinalizationOverlapAudit, ArtifactOverlapAuditBoundary, ARTIFACT_FINALIZATION_OVERLAP_AUDIT_SQL | ✅ |
 | src\services\artifact-intake\mime.ts | 41 | detectArtifactMimeType | ✅ |
-| src\services\artifact-intake\operations.ts | 886 | ArtifactIntakeOperationRow | ⚠️ OVER LIMIT |
+| src\services\artifact-intake\operations.ts | 896 | ArtifactIntakeOperationRow | ⚠️ OVER LIMIT |
 | src\services\artifact-intake\promotion-cleanup.ts | 25 | — | ✅ |
 | src\services\artifact-intake\proof-result.ts | 41 | ArtifactProofMismatchReason, ArtifactProofUnavailableReason, ArtifactProofResult... | ✅ |
-| src\services\artifact-intake\reaper.ts | 115 | ArtifactReaperResult | ✅ |
+| src\services\artifact-intake\reaper.ts | 118 | ArtifactReaperResult | ✅ |
 | src\services\artifact-intake\schemas.ts | 142 | reserveArtifactUploadSchema, openAIFileDescriptorSchema, telegramArtifactFileDescriptorSchema... | ✅ |
 | src\services\artifact-intake\sealed-convergence.ts | 74 | — | ✅ |
 | src\services\artifact-intake\stale-finalization-recovery.ts | 121 | — | ✅ |
@@ -110,7 +111,8 @@ Last updated: 2026-04-18 | Session: 7.1 (Hindsight Projection Adapter)
 | src\services\automations\recurrence.ts | 84 | RecurrenceKind, RecurrenceSpec, DEFAULT_TZ... | ✅ |
 | src\services\bootstrap\historical-import.ts | 140 | historicalSalienceMultiplier | ✅ |
 | src\services\bootstrap\interview.ts | 76 | createInitialState, currentQuestion, currentDomain... | ✅ |
-| src\services\canary\sweep.ts | 104 | CanaryResult | ✅ |
+| src\services\canary\artifact.ts | 101 | ArtifactCanaryStage, ArtifactCanaryFailure | ✅ |
+| src\services\canary\sweep.ts | 111 | CanaryResult | ✅ |
 | src\services\canonical-artifact-manifest.ts | 45 | CanonicalArtifactManifestEntryShape, assertCanonicalArtifactManifestShape | ✅ |
 | src\services\canonical-broker-shadow.ts | 122 | summaryOf, statusOf, traceOf... | ✅ |
 | src\services\canonical-broker-trace-read.ts | 63 | — | ✅ |
@@ -140,7 +142,7 @@ Last updated: 2026-04-18 | Session: 7.1 (Hindsight Projection Adapter)
 | src\services\canonical-memory-types.ts | 73 | CanonicalChunkPlan, CanonicalArtifactPlan, NormalizedCanonicalCapture... | ✅ |
 | src\services\canonical-memory.ts | 231 | — | ⚠️ OVER LIMIT |
 | src\services\canonical-postgres-base-ddl.ts | 133 | CANONICAL_BASE_DDL | ✅ |
-| src\services\canonical-postgres-repository.ts | 1062 | CanonicalMemoryStore, InMemoryCanonicalMemoryStore, PostgresCanonicalMemoryStore | ⚠️ OVER LIMIT |
+| src\services\canonical-postgres-repository.ts | 1085 | CanonicalMemoryStore, InMemoryCanonicalMemoryStore, PostgresCanonicalMemoryStore | ⚠️ OVER LIMIT |
 | src\services\canonical-postgres-schema.ts | 299 | CanonicalGraphIdentityKind, CanonicalGraphIdentityMapping, CANONICAL_POSTGRES_SCHEMA... | ⚠️ OVER LIMIT |
 | src\services\canonical-postgres.ts | 34 | installCanonicalMemoryStore, installCanonicalMemoryTestStore, getCanonicalMemoryStore | ✅ |
 | src\services\canonical-projection-dispatch.ts | 51 | — | ✅ |
@@ -219,7 +221,7 @@ Last updated: 2026-04-18 | Session: 7.1 (Hindsight Projection Adapter)
 | src\services\dream\extract.ts | 107 | DreamWindowItem, buildWindowBlock, DREAM_EXTRACT_PROMPT... | ✅ |
 | src\services\dream\proposals.ts | 70 | DREAM_REVIEW_TYPE, allFindings | ✅ |
 | src\services\dream\report.ts | 118 | composeDreamReport | ✅ |
-| src\services\dream\stage.ts | 65 | DreamStageResult | ✅ |
+| src\services\dream\stage.ts | 68 | DreamStageResult | ✅ |
 | src\services\dream\types.ts | 65 | DreamFindingKind, DreamFinding, DreamFindings... | ✅ |
 | src\services\external-brain-contract.ts | 123 | EXTERNAL_BRAIN_SURFACES, EXTERNAL_BRAIN_CLIENT_MAPPINGS, EXTERNAL_CLIENT_FIXTURES... | ✅ |
 | src\services\external-client-memory-write.ts | 48 | — | ✅ |

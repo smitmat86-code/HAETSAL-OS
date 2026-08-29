@@ -9,9 +9,9 @@
 
 ## Is it healthy right now?
 
-1. **Canary check**: `GET /api/dream/canary/latest` — 6/6 probes ok within
+1. **Canary check**: `GET /api/dream/canary/latest` — 7/7 probes ok within
    the last hour means capture, recall, graph, review-surface, compiled
-   reads, and session evidence all work end-to-end.
+   reads, session evidence, and governed artifact intake all work end-to-end.
 2. **Dashboard sanity**: Memory panel returns recent captures; Agents
    panel loads runs. If the dashboard is up, Access + Worker + D1 + Neon
    are all answering.
@@ -28,6 +28,7 @@
 | Dashboard 404s | Asset paths must be exact (`/dashboard.html`); directory URLs are deliberately not served |
 | Gmail anything | Expected: `GmailNotConnectedError` until OAuth is provisioned |
 | Something deeper | `npx wrangler tail`, or the Cloudflare observability MCP tools; logs are content-free by design, so grep for operation names and fixed-vocabulary errors |
+| Artifact upload is stuck or expired | Follow the [artifact intake operator runbook](../runbooks/artifact-intake-operations.md); do not delete an R2 object without exact ownership/hash proof |
 
 ## Rollback
 
@@ -97,6 +98,8 @@ inside try/catch, or workerd's unhandled-rejection tracker fails the run.
 | Audit feed | `src/workers/mcpagent/routes/audit.ts` |
 | Deploy memos / runbook / lessons | `docs/lessons/` (the project's institutional memory) |
 | Session log | `SESSION_LOG.md` (append-only; last 3 entries read at session start) |
+| Artifact lifecycle telemetry | D1 `artifact_intake_events` (content-free states/codes only) |
+| Artifact recovery | `docs/runbooks/artifact-intake-operations.md` |
 
 ## Why it's built this way
 

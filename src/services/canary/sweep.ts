@@ -1,5 +1,5 @@
 // src/services/canary/sweep.ts
-// Phase 13 canary sweep: six live probes over the core memory paths —
+// Core canary sweep: seven live probes over memory and artifact paths —
 // capture, recall (lexical), graph traversal, contradiction surfacing (dream
 // review inbox reachable), compiled regen readability, session evidence
 // (session-source captures retrievable). Content is synthetic canary text;
@@ -12,10 +12,11 @@ import { searchCanonicalMemory } from '../canonical-memory-query'
 import { getCanonicalGovernanceStore } from '../canonical-governance-postgres'
 import { listCompiledPages } from '../compiled/page'
 import { fetchAndValidateKek } from '../../cron/kek'
+import { ArtifactCanaryFailure, runArtifactCanary } from './artifact'
 
 // note carries synthetic probe-status strings / error class names ONLY (never
 // tenant content) — kept out of the persisted detail_json regardless.
-export interface CanaryResult { probe: string; ok: boolean; ms: number; note: string }
+export interface CanaryResult { probe: string; ok: boolean; ms: number; note: string; code?: string }
 
 const CANARY_DDL = `CREATE TABLE IF NOT EXISTS canary_runs (
   id TEXT PRIMARY KEY, tenant_id TEXT NOT NULL, at INTEGER NOT NULL,
@@ -29,7 +30,8 @@ async function probe(name: string, fn: () => Promise<string>): Promise<CanaryRes
   } catch (error) {
     return {
       probe: name, ok: false, ms: Date.now() - started,
-      note: (error instanceof Error ? error.constructor.name : 'error'),
+      note: error instanceof ArtifactCanaryFailure ? error.message : 'probe_failed',
+      code: error instanceof ArtifactCanaryFailure ? error.message : 'probe_failed',
     }
   }
 }
@@ -80,13 +82,18 @@ export async function runCanarySweep(env: Env, tenantId: string): Promise<Canary
     return `status=${r.status}`
   }))
 
+  results.push(await probe('artifact', async () => {
+    if (!kek) throw new Error('KekUnavailable')
+    return runArtifactCanary(env, tenantId, kek)
+  }))
+
   await env.D1_US.prepare(CANARY_DDL).run()
   await env.D1_US.prepare(
     `INSERT INTO canary_runs (id, tenant_id, at, ok_count, total, detail_json) VALUES (?, ?, ?, ?, ?, ?)`,
   ).bind(
     crypto.randomUUID(), tenantId, Date.now(),
     results.filter(r => r.ok).length, results.length,
-    JSON.stringify(results.map(r => ({ probe: r.probe, ok: r.ok, ms: r.ms }))),
+    JSON.stringify(results.map(r => ({ probe: r.probe, ok: r.ok, ms: r.ms, code: r.code ?? null }))),
   ).run()
   return results
 }

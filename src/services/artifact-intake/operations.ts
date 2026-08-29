@@ -35,6 +35,7 @@ import {
 import { isFencedUploadProtocol, reservedUploadProtocol } from './upload-protocol'
 import { requireArtifactUploadAdmission } from './upload-admission'
 import { convergeSealedCiphertextIdentity } from './sealed-convergence'
+import { recordArtifactIntakeEvent, recordArtifactIntakeEvents } from './events'
 
 export interface ArtifactIntakeOperationRow {
   id: string
@@ -169,6 +170,7 @@ export async function reserveArtifactUpload(args: {
   ).bind(args.tenantId, idempotencyHash).first<ArtifactIntakeOperationRow>()
   if (!row) throw new ArtifactIntakeContractError(ARTIFACT_INTAKE_ERROR.INVALID_STATE)
   assertOperationMatches(row, args)
+  await recordArtifactIntakeEvent(env, row, 'reserved', now).catch(() => undefined)
   return toReceipt(row)
 }
 
@@ -203,7 +205,9 @@ export async function markUploadFailed(
        AND expires_at > ?
        AND expiry_claim_token IS NULL AND finalization_id IS NULL`,
   ).bind(errorCode, now, row.tenant_id, row.upload_id, attemptToken, now, now).run()
-  return changed(result) === 1 ? 'failed_recorded' : 'ownership_lost'
+  if (changed(result) !== 1) return 'ownership_lost'
+  await recordArtifactIntakeEvent(env, row, 'failed', now, errorCode).catch(() => undefined)
+  return 'failed_recorded'
 }
 
 interface AdoptCiphertextArgs {
@@ -240,7 +244,9 @@ async function adoptUploadedCiphertext(args: AdoptCiphertextArgs): Promise<boole
     args.adoptedKey, args.adoptedKey === null ? null : args.attemptToken,
     now, args.row.tenant_id, args.row.upload_id, args.attemptToken, now, now,
   ).run()
-  return changed(result) === 1
+  if (changed(result) !== 1) return false
+  await recordArtifactIntakeEvent(args.env, args.row, 'sealed', now).catch(() => undefined)
+  return true
 }
 
 /**
@@ -711,6 +717,7 @@ export async function markArtifactOperationsFinalized(args: {
   if (changed(result) !== uploadIds.length) {
     throw new ArtifactIntakeContractError(ARTIFACT_INTAKE_ERROR.INVALID_STATE)
   }
+  await recordArtifactIntakeEvents(env, args.operations, 'finalized', args.now)
 }
 
 /**
@@ -755,6 +762,7 @@ export async function markArtifactOperationsFinalizedForCompletedFinalization(ar
   if (changed(result) !== uploadIds.length) {
     throw new ArtifactIntakeContractError(ARTIFACT_INTAKE_ERROR.INVALID_STATE)
   }
+  await recordArtifactIntakeEvents(env, args.operations, 'finalized', args.now)
 }
 
 /**
@@ -833,7 +841,9 @@ export async function repairFailedFinalizationWithProvenChildren(args: {
       args.tenantId, args.finalizationId, ...exactIdentityBindings, uploadIds.length,
     ),
   ])
-  return changed(results[1]!) === 1 ? 'repaired' : 'retry'
+  if (changed(results[1]!) !== 1) return 'retry'
+  await recordArtifactIntakeEvents(env, args.operations, 'finalized', args.now)
+  return 'repaired'
 }
 
 export async function failArtifactFinalizationAndReleaseOperations(args: {

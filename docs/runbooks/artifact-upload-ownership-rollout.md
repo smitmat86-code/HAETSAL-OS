@@ -1,8 +1,8 @@
-# Artifact upload ownership rollout (migrations 1033–1037, fenced_v2)
+# Artifact upload ownership rollout (migrations 1033–1038, fenced_v2)
 
 Status: NOT executed. Production remains on Worker version
 `bc5b4e08-6344-4df7-b7ae-a451371486a2` (old Worker, 1e4d3a6 behavior).
-Migrations 1033, 1034, 1035, 1036, and 1037 are pending and were not applied
+Migrations 1033, 1034, 1035, 1036, 1037, and 1038 are pending and were not applied
 remotely.
 
 ## The actual safety guarantee (no request-lifetime assumption)

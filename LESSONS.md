@@ -700,3 +700,12 @@
   candidates, then resolve the authoritative match through canonical metadata
   and apply scope filtering locally.
   Ref: Session 9.x - brain-memory Hindsight semantic repair.
+
+- **Do Not Put Observability Triggers on D1 Rows Whose Writers Validate Exact Change Counts.**
+  D1 reports trigger side effects in mutation metadata used by this repository's
+  compare-and-swap guards. An `AFTER UPDATE` telemetry trigger can therefore
+  make a correct one-row transition appear to have changed multiple rows and
+  fail the safety protocol. Record content-free lifecycle events explicitly
+  after the guarded mutation, make the event insert idempotent, and keep its
+  failure isolated from the authoritative state transition.
+  Ref: Session 6 governed artifact lifecycle telemetry.

@@ -21,11 +21,18 @@ through vision extraction, and the *description + extracted content*
 becomes a governed memory linking back to the artifact. Whiteboards,
 receipts, book pages.
 
-### 3. From Claude Code / Codex (`capture_memory`)
+### 3. From Claude Code / Codex (`capture_memory` + managed files)
 In any MCP-connected session: capture decisions, findings, and context.
 The capture is tagged `external_client` authorship with the client
 identity — so later you know a memory came from a coding session, not
 from your own mouth.
+
+For an image or document, the coding agent inspects it locally, uploads the
+exact original with `~/.haetsal/bin/haetsal-artifact-upload.ps1`, then calls
+`finalize_artifact_capture` with its searchable extraction and the complete
+source/derivative manifest. File bytes and local paths never travel through an
+MCP argument. The raw original and every intentional derivative are retained;
+omitting a declared derivative makes finalization fail.
 
 ### 4. Obsidian vault
 Two cron-driven paths (see [chapter 4](04-nights-and-weekends.md)):
@@ -99,7 +106,7 @@ Every inlet converges on **`retainContent()`**
 (`src/services/ingestion/retain.ts`) → the canonical capture pipeline
 (`src/services/canonical-capture-pipeline.ts`). One capture produces:
 
-1. A **document + chunks** in canonical Postgres (the one plaintext copy),
+1. A **document + chunks** in canonical Postgres (the one searchable plaintext copy),
    with `source_system`, `source_ref`, `scope`, and `captured_at`.
 2. A **governance envelope** (see [chapter 6](06-memory-model.md)):
    memory class (`raw_source` … `fact` … `compiled_view`), trust state
@@ -114,6 +121,13 @@ Every inlet converges on **`retainContent()`**
    AI Gateway) written to pgvector for semantic search.
 5. A **dedup hash** so re-feeding the same content converges instead of
    duplicating.
+
+Managed files add a separate, tenant-scoped R2 ciphertext object for each raw
+source and derivative. Canonical artifact rows hold hashes, sizes, media types,
+roles, and parent links; tool receipts expose stable IDs, never public URLs.
+Interactive files are capped at 25 MiB (Telegram at 20 MiB); larger inputs
+return `bulk_import_required`. Expired or interrupted uploads are swept every
+15 minutes, while finalized artifacts are immutable.
 
 Bulk inlets (Obsidian scans, future Gmail) ride the priority **queues**
 (`brain-priority-high/normal/bulk`) so a vault import can't starve a live

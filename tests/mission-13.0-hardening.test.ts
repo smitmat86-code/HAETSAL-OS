@@ -103,14 +103,20 @@ describe('mission 13.0 — key-family-tagged approved payloads', () => {
 })
 
 describe('mission 13.0 — canary sweep', () => {
-  it('runs six probes and records a content-free run row', async () => {
+  it('runs seven probes and records content-free canary and artifact lifecycle rows', async () => {
     const results = await runCanarySweep(env as unknown as Env, TENANT)
     expect(results.map(r => r.probe)).toEqual([
-      'capture', 'recall', 'graph', 'contradiction-surface', 'compiled-regen', 'session-evidence',
+      'capture', 'recall', 'graph', 'contradiction-surface', 'compiled-regen', 'session-evidence', 'artifact',
     ])
     expect(results.filter(r => r.ok).length).toBeGreaterThanOrEqual(5) // capture requires the KEK (present here)
     const latest = await latestCanary(env as unknown as Env, TENANT)
-    expect(latest?.total).toBe(6)
+    expect(latest?.total).toBe(7)
     expect(JSON.stringify(latest?.detail)).not.toContain('Canary heartbeat') // content-free detail
+    const eventTypes = await env.D1_US.prepare(
+      `SELECT DISTINCT event_type FROM artifact_intake_events WHERE tenant_id = ? ORDER BY event_type`,
+    ).bind(TENANT).all<{ event_type: string }>()
+    expect(eventTypes.results.map(row => row.event_type)).toEqual([
+      'expired', 'finalized', 'reaped', 'reserved', 'sealed',
+    ])
   })
 })
